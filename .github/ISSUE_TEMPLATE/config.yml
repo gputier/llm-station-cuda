@@ -3,6 +3,3 @@ contact_links:
   - name: Security vulnerability
     url: https://github.com/gputier/llm-station-cuda/security/advisories/new
     about: Do not open a public issue. Report privately through the Security tab.
-  - name: Question or discussion
-    url: https://github.com/gputier/llm-station-cuda/discussions
-    about: For usage questions and open-ended discussion.
