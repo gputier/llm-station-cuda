@@ -1,0 +1,109 @@
+#!/usr/bin/env bash
+# qwen - launch Claude Code against the local Qwen3.8-27B server.
+#
+# Sibling of `muse`. Same mechanism: the llama.cpp build serving both models
+# exposes a native Anthropic-compatible /v1/messages endpoint, including SSE
+# streaming, count_tokens and tool_use blocks. Only the base URL is redirected,
+# no translation proxy involved.
+#
+# Scope: the exported variables live in this process only. A plain `claude` in
+# another shell keeps talking to Anthropic.
+
+set -euo pipefail
+
+HOST="${LLM_HOST:-llm-server.local}"
+PORT="8080"
+BASE="http://${HOST}:${PORT}"
+SSH_TARGET="${LLM_SSH_USER:-youruser}@${HOST}"
+CTL='D:\LLM-Setup\llm-ctl.ps1'
+LOAD_TIMEOUT=180
+
+err() { printf '%s\n' "$*" >&2; }
+
+is_up() { curl -sS -m 3 "${BASE}/health" 2>/dev/null | grep -q '"status":"ok"'; }
+
+# The server is single-slot: whichever model sits on port 8080 answers every
+# request, whatever model id the client asks for. Checking health is therefore
+# not enough, we must confirm Qwen itself is the one loaded.
+loaded_model() {
+  curl -sS -m 3 "${BASE}/props" 2>/dev/null \
+    | sed -n 's/.*"model_path":"\([^"]*\)".*/\1/p'
+}
+
+# Both the aligned and the uncensored builds carry "qwen3.8" in their path, so a
+# bare substring match would treat the uncensored model as if it were this one
+# and skip the reload. The aligned build is the one WITHOUT "uncensored".
+is_qwen() {
+  local m; m=$(loaded_model)
+  printf '%s' "$m" | grep -qi 'qwen3.8' && ! printf '%s' "$m" | grep -qi 'uncensored'
+}
+
+load_qwen() {
+  err "Loading Qwen3.8-27B on ${HOST}..."
+  ssh -o ConnectTimeout=10 "$SSH_TARGET" \
+    "powershell -NoProfile -ExecutionPolicy Bypass -File ${CTL} -Action qwen" >&2
+
+  local waited=0
+  while (( waited < LOAD_TIMEOUT )); do
+    if is_up && is_qwen; then
+      err "Qwen3.8-27B ready."
+      return 0
+    fi
+    sleep 5
+    waited=$(( waited + 5 ))
+  done
+
+  err "Failed: the model did not answer within ${LOAD_TIMEOUT}s."
+  err "See D:\\LLM-Setup\\llm-err-qwen.log on ${HOST}."
+  return 1
+}
+
+if ! is_up; then
+  load_qwen
+elif ! is_qwen; then
+  err "Port ${PORT} is serving $(loaded_model | sed 's/.*\\//'), not Qwen3.8-27B."
+  read -r -p "Replace it with Qwen3.8-27B? [y/N] " answer
+  [[ "$answer" =~ ^[yY]$ ]] || { err "Aborted."; exit 1; }
+  load_qwen
+fi
+
+# AUTH_TOKEN and not API_KEY: the latter triggers Claude Code's custom-key
+# approval prompt. llama-server started without --api-key accepts any bearer.
+export ANTHROPIC_AUTH_TOKEN="local"
+export ANTHROPIC_BASE_URL="$BASE"
+
+# Every model id resolves to the single loaded model, but naming them keeps the
+# UI honest and stops Claude Code from reaching for a real Anthropic model.
+export ANTHROPIC_MODEL="qwen3.8-27b"
+export ANTHROPIC_DEFAULT_OPUS_MODEL="qwen3.8-27b"
+export ANTHROPIC_DEFAULT_SONNET_MODEL="qwen3.8-27b"
+export ANTHROPIC_DEFAULT_HAIKU_MODEL="qwen3.8-27b"
+export ANTHROPIC_SMALL_FAST_MODEL="qwen3.8-27b"
+
+# The server serves the model's native 262k window, not the 200k Claude Code
+# assumes for an unknown model id. Without this it would compact early while the
+# server still had a quarter of its window free.
+#
+# This MUST match what the server actually serves, and 262144 is a hard ceiling
+# here: the GGUF declares context_length=262144, so llama.cpp caps the window at
+# that value no matter what --ctx-size asks for, in a single log line. The value
+# was briefly set to 524288 on 2026-08-28; that promised the client twice the
+# window the server can deliver, and a session crossing 262144 tokens would have
+# been truncated server-side with no warning. Raising it for real requires
+# --override-kv qwen35.context_length on the server, exactly like muse's 1M, and
+# recall must then be proven by measurement, not assumed: a window the server
+# accepts says nothing about what the model still finds in it. Expect that to
+# cost most of the NVFP4 speed gain, since 512k-sized buffers put the card back
+# into the saturation regime (23% of decode and 72% of prefill, measured).
+export CLAUDE_CODE_MAX_CONTEXT_TOKENS=262144
+export CLAUDE_CODE_MAX_OUTPUT_TOKENS=16384
+
+# Telemetry and update pings would otherwise be aimed at the local server.
+export CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=0
+
+# MCP servers are dropped, and this is not cosmetic. Measured on `muse`, the full
+# Claude Code prompt is 109_738 tokens, 70 tool schemas weighing 108 KB on their
+# own. That overhead buys little here and costs a much slower first turn, and it
+# bites harder on a 262k window than it did on 1M.
+# Skills, commands, memory and CLAUDE.md are untouched.
+exec claude --strict-mcp-config --mcp-config '{"mcpServers":{}}' "$@"

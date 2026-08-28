@@ -1,0 +1,95 @@
+#!/usr/bin/env bash
+# muse - launch Claude Code against the local Muse Glimmer 30B server.
+#
+# No translation proxy involved: the llama.cpp build serving Muse Glimmer exposes
+# a native Anthropic-compatible /v1/messages endpoint, including SSE streaming,
+# count_tokens and tool_use blocks. Only the base URL is redirected.
+#
+# Scope: the exported variables live in this process only. A plain `claude` in
+# another shell keeps talking to Anthropic.
+
+set -euo pipefail
+
+HOST="${LLM_HOST:-llm-server.local}"
+PORT="8080"
+BASE="http://${HOST}:${PORT}"
+SSH_TARGET="${LLM_SSH_USER:-youruser}@${HOST}"
+CTL='D:\LLM-Setup\llm-ctl.ps1'
+LOAD_TIMEOUT=180
+
+err() { printf '%s\n' "$*" >&2; }
+
+is_up() { curl -sS -m 3 "${BASE}/health" 2>/dev/null | grep -q '"status":"ok"'; }
+
+# The server is single-slot: whichever model sits on port 8080 answers every
+# request, whatever model id the client asks for. Checking health is therefore
+# not enough, we must confirm Muse Glimmer itself is the one loaded.
+loaded_model() {
+  curl -sS -m 3 "${BASE}/props" 2>/dev/null \
+    | sed -n 's/.*"model_path":"\([^"]*\)".*/\1/p'
+}
+
+is_muse() { loaded_model | grep -qi 'muse-glimmer'; }
+
+load_muse() {
+  err "Loading Muse Glimmer on ${HOST}..."
+  ssh -o ConnectTimeout=10 "$SSH_TARGET" \
+    "powershell -NoProfile -ExecutionPolicy Bypass -File ${CTL} -Action muse" >&2
+
+  local waited=0
+  while (( waited < LOAD_TIMEOUT )); do
+    if is_up && is_muse; then
+      err "Muse Glimmer ready."
+      return 0
+    fi
+    sleep 5
+    waited=$(( waited + 5 ))
+  done
+
+  err "Failed: the model did not answer within ${LOAD_TIMEOUT}s."
+  err "See D:\\LLM-Setup\\llm-err-muse.log on ${HOST}."
+  return 1
+}
+
+if ! is_up; then
+  load_muse
+elif ! is_muse; then
+  err "Port ${PORT} is serving $(loaded_model | sed 's/.*\\//'), not Muse Glimmer."
+  read -r -p "Replace it with Muse Glimmer? [y/N] " answer
+  [[ "$answer" =~ ^[yY]$ ]] || { err "Aborted."; exit 1; }
+  load_muse
+fi
+
+# AUTH_TOKEN and not API_KEY: the latter triggers Claude Code's custom-key
+# approval prompt. llama-server started without --api-key accepts any bearer.
+export ANTHROPIC_AUTH_TOKEN="local"
+export ANTHROPIC_BASE_URL="$BASE"
+
+# Every model id resolves to the single loaded model, but naming them keeps the
+# UI honest and stops Claude Code from reaching for a real Anthropic model.
+export ANTHROPIC_MODEL="muse-glimmer-30b"
+export ANTHROPIC_DEFAULT_OPUS_MODEL="muse-glimmer-30b"
+export ANTHROPIC_DEFAULT_SONNET_MODEL="muse-glimmer-30b"
+export ANTHROPIC_DEFAULT_HAIKU_MODEL="muse-glimmer-30b"
+export ANTHROPIC_SMALL_FAST_MODEL="muse-glimmer-30b"
+
+# The server holds a 1M context, not the 200k Claude Code assumes for an unknown
+# model id. Without this it would compact at 200k while the server still had four
+# fifths of its window free.
+#
+# The window comes from overriding the GGUF's context_length, not from YaRN: the
+# three YaRN flags were dropped on 2026-08-12 as useless. The global layers carry
+# no positional encoding, so there is no position to stretch. Recall was measured
+# at 556_390 tokens without them.
+export CLAUDE_CODE_MAX_CONTEXT_TOKENS=1048576
+export CLAUDE_CODE_MAX_OUTPUT_TOKENS=8192
+
+# Telemetry and update pings would otherwise be aimed at the local server.
+export CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1
+
+# MCP servers are dropped, and this is not cosmetic. Measured on this machine, the
+# full Claude Code prompt is 109_738 tokens: 70 tool schemas alone weigh 108 KB.
+# Without MCP it falls to ~44_000, which against the 1_048_576 window is noise.
+# Kept anyway: those schemas buy little here and cost a slower first turn.
+# Skills, commands, memory and CLAUDE.md are untouched.
+exec claude --strict-mcp-config --mcp-config '{"mcpServers":{}}' "$@"
