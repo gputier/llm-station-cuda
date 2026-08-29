@@ -83,6 +83,70 @@ function Kill-Pid($procId) {
   if ($p) { $p | Stop-Process -Force }
 }
 
+# Wait for the graphics card to actually hand its memory back.
+#
+# Stop-Process returns as soon as the process is marked dead, but Windows frees
+# device memory ASYNCHRONOUSLY. An instance relaunched before that hand-back
+# completes sees a card that is still occupied. A FIXED delay cannot cover this
+# properly: it is either too short or wasted time. So we wait for the processes
+# to actually disappear, then for the card's usage to settle, with a 30 s guard
+# rail.
+#
+# Verified by execution on 2026-08-28: 1.69 s when the card is already free, so
+# LESS than the 2 fixed seconds it replaces; 2.51 s falling back when nvidia-smi
+# is missing, instead of burning the timeout; and it does keep waiting while
+# usage is still falling.
+#
+# WHAT THIS CODE IS *NOT* FOR, having first been believed so and measured wrong.
+# The process holds ~2.9 GB of SHARED memory, meaning host RAM presented as
+# graphics memory, on top of its ~25.7 GB dedicated. That is NOT an overflow
+# caused by relaunching too fast: after a clean restart on 2026-08-29 the split
+# came back identical to within one percent, while 5.7 GB of VRAM sat FREE, and
+# throughput stayed nominal (median 118.35 tok/s over five seeds against a 123.4
+# baseline). A genuine spill does not trigger with 5.7 GB free, and would not
+# reproduce to the percent. The likely explanation is pinned host memory
+# allocated by CUDA, which WDDM accounts under "Shared Usage". THIS IS UNPROVEN:
+# do not build on it without measuring.
+#
+# To diagnose, only one path works: under WDDM nvidia-smi reports [N/A] per
+# process and sees nothing. Only the Windows counters
+# "\GPU Process Memory(pid_<PID>*)\Dedicated Usage" and its "Shared Usage"
+# sibling give the split.
+
+function Get-VramUsedMb {
+  try {
+    $raw = & nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits 2>$null
+  } catch {
+    return -1
+  }
+  if (-not $raw) { return -1 }
+  $parsed = 0
+  if (-not [int]::TryParse((@($raw)[0]).ToString().Trim(), [ref]$parsed)) { return -1 }
+  return $parsed
+}
+
+function Wait-VramReleased($timeoutSec = 30) {
+  $deadline = (Get-Date).AddSeconds($timeoutSec)
+
+  while ((Get-Date) -lt $deadline -and (Get-Process -Name llama-server -ErrorAction SilentlyContinue)) {
+    Start-Sleep -Milliseconds 250
+  }
+
+  Start-Sleep -Milliseconds 500
+  $previous = -1
+  $stable   = 0
+  while ((Get-Date) -lt $deadline) {
+    $used = Get-VramUsedMb
+    # nvidia-smi unavailable: fall back to the old fixed delay rather than
+    # burning the whole timeout. Control must not depend on that one tool.
+    if ($used -lt 0) { Start-Sleep -Seconds 2; return }
+    if ($used -eq $previous) { $stable++ } else { $stable = 0 }
+    if ($stable -ge 2) { return }
+    $previous = $used
+    Start-Sleep -Milliseconds 500
+  }
+}
+
 function Stop-One($name) {
   $f = Join-Path $instDir "$name.json"
   if (Test-Path $f) {
@@ -97,7 +161,7 @@ function Stop-One($name) {
 
 function Stop-All {
   $procs = Get-Process -Name llama-server -ErrorAction SilentlyContinue
-  if ($procs) { $procs | Stop-Process -Force; Start-Sleep -Milliseconds 500; Write-Output "STOPPED all" }
+  if ($procs) { $procs | Stop-Process -Force; Wait-VramReleased; Write-Output "STOPPED all" }
   else { Write-Output "NOT_RUNNING" }
   Get-ChildItem $instDir -Filter '*.json' -ErrorAction SilentlyContinue | Remove-Item -Force
 }
@@ -142,7 +206,7 @@ function Start-LLM($name, $modelArgs, $cudaDevices = $null, $exePath = $null, $w
     Select-Object -ExpandProperty OwningProcess -Unique |
     Where-Object { $killed -notcontains $_ -and (Get-Process -Id $_ -ErrorAction SilentlyContinue).ProcessName -eq 'llama-server' } |
     ForEach-Object { Write-Output "KILLED_ORPHAN pid=$_ port=$port"; Kill-Pid $_ }
-  Start-Sleep -Seconds 2
+  Wait-VramReleased
 
   $outLog = "$RootDir\llm-out-$name.log"
   $errLog = "$RootDir\llm-err-$name.log"
@@ -353,6 +417,24 @@ switch ($Action) {
       # The q4 cache does not cost recall: needle in a haystack found at 207,067
       # tokens of prompt, verified by execution and not deduced.
       '--cache-type-k','q4_0','--cache-type-v','q4_0',
+      # -cram 49152 rather than the 8192 default. This flag does NOT size the KV
+      # cache, it sizes the PROMPT cache in host RAM, where --cache-idle-slots,
+      # on by default, parks a context that has gone idle before a new task
+      # overwrites it. This, and not the slot count, decides whether coming back
+      # to a conversation costs nothing or a full minute.
+      # Measured on three disjoint ~150k-token contexts, replayed A, A, B, C, A:
+      #                            default 8192      -cram 49152
+      #   A cold ................. 139,810 / 61.3 s  139,810 / 61.5 s
+      #   A replayed at once .....       4 /  0.3 s        4 /  0.3 s
+      #   A after B and C ........ 139,810 / 62.6 s        4 /  0.3 s
+      # A 140k context weighs 2,461 MB in that cache, so 8 GB does not hold three
+      # of them: TWO interleaved contexts are enough to lose one entirely. Cost is
+      # host RAM only, 11,732 to 16,946 MB for the process with 91,866 MB still
+      # free, and VRAM is untouched.
+      # MEASUREMENT TRAP: a cache test whose contexts all fit in the budget does
+      # not measure the cache, it measures that nothing had to be evicted. Our
+      # first attempt, at 8k per context, wrongly concluded interleaving was free.
+      '-cram','49152',
       # Qwen thinking-mode calibration values. top-k is 20 here and 64 on muse.
       # --min-p 0 is also a calibration value: llama.cpp imposes 0.05 by default
       # when nothing sets it, which clips the tail of the distribution ON TOP OF
@@ -410,6 +492,10 @@ switch ($Action) {
       '--host','0.0.0.0','--port','8080','--ctx-size','262144',
       '--parallel','1','-b','4096','-ub','2048',
       '--cache-type-k','q4_0','--cache-type-v','q4_0',
+      # -cram 49152: prompt cache in host RAM, see the 'qwen' block for the
+      # measurement. Carried over as part of the identical profile, not re-measured
+      # on this quant.
+      '-cram','49152',
       '--temp','1.0','--top-p','0.95','--top-k','20','--min-p','0'
     ) $null $exeUp $workDirUp $cudaBinUp
   }

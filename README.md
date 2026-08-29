@@ -87,7 +87,7 @@ portable.
 | [models/](models/) | One page per model: profile, measurements, model-specific traps |
 | [clients/](clients/) | The launcher scripts and how they decide to reload |
 
-## Five findings that cost the most to establish
+## Seven findings that cost the most to establish
 
 Each is documented in full where it belongs; this is the short list for anyone
 running llama.cpp on similar hardware.
@@ -118,6 +118,35 @@ We first blamed the context window. That was wrong.
 **5. A dead end is only dead under the assumptions you tested it with.** A build
 was measured, found to gain nothing, and written off. Three weeks later the model
 format changed to NVFP4 and that same build became the only one able to serve it.
+
+**6. "The model is running in RAM" is almost always the wrong diagnosis, and the
+test that settles it is throughput on a SHORT prompt.** A box reported as slow
+showed 25,707 MB of dedicated VRAM and 2,940 MB of *shared* memory, host RAM
+presented as graphics memory, while 5.7 GB of VRAM sat free. That reads exactly
+like a spill. It was not one: throughput was nominal, a 118.35 tok/s median over
+five seeds against a 123.4 baseline, and the split reproduced to within one
+percent across a clean restart. Weights genuinely served from host RAM collapse
+*every* request; here only the long ones were slow, and they were slow for an
+ordinary reason, attention cost. Two things generalise. Under WDDM `nvidia-smi`
+reports `[N/A]` per process and cannot see this at all, so the Windows
+`GPU Process Memory` counters are the only instrument. And a fixed sleep between
+killing one instance and starting the next is unsound whatever the cause, since
+Windows frees device memory asynchronously; this repository waits for usage to
+settle instead, which costs 1.69 s against the 2 s it replaces.
+
+**7. The prompt cache in host RAM is capped at 8 GB, and two interleaved
+conversations are enough to lose a third.** `--cache-ram` defaults to 8192 MB and
+nothing here was setting it. A 140k-token context weighs 2,461 MB in that cache,
+so three of them do not fit. Replaying the same three disjoint ~150k contexts as
+A, A, B, C, A: returning to A cost **139,810 re-prefilled tokens and 62.6 s**
+with the default, and **4 tokens and 0.3 s** at `-cram 49152`. Everything else
+was identical. The cost is host RAM only, 11,732 to 16,946 MB for the process out
+of 128 GB, VRAM untouched and decode throughput unchanged. Two things generalise.
+This flag, not the slot count, is what decides whether returning to a conversation
+is free: a single-slot server keeps several contexts alive as long as they fit the
+budget. And **a cache test whose contexts all fit in the budget does not measure
+the cache, it measures that nothing had to be evicted**: our first attempt used
+8k contexts and wrongly concluded that interleaving was free.
 
 ## Security
 
