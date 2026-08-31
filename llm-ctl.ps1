@@ -395,6 +395,26 @@ switch ($Action) {
       '--spec-type','draft-mtp','--spec-draft-n-max','4',
       '--n-gpu-layers','99','--load-mode','mlock','--flash-attn','on',
       '--jinja',
+      # TWO flags deliberately ABSENT, both tried and measured on 2026-08-31. Documented here
+      # because the server suggests one of them at EVERY startup, and nothing else stops the next
+      # reader from redoing the test.
+      #
+      # --reasoning-preserve: the log prints "chat template supports preserving reasoning,
+      # consider enabling it". Tested across all FOUR combinations, same 3-turn conversation, same
+      # seed, measuring the turn-3 prompt:
+      #   client resends reasoning + flag on ..... 2,846 tokens
+      #   client resends reasoning + flag off .... 2,846
+      #   client resends nothing   + flag on ......... 219
+      #   client resends nothing   + flag off ........ 219
+      # The flag changes nothing in either direction. What carries reasoning across turns is the
+      # CLIENT resending reasoning_content, not the server. Do not raise it again.
+      #
+      # --cache-reuse: looks like the obvious lever for long contexts, since it recovers cached KV
+      # by shifting when the prompt changes in its MIDDLE, which is what an agentic client does on
+      # every turn. It does not apply to this model. Qwen3.8 is hybrid, 48 Gated DeltaNet layers
+      # with a recurrent state against 16 full-attention layers, and a recurrent state can neither
+      # be truncated nor shifted. llama.cpp disables the flag SILENTLY on such architectures.
+
       # Chat template DERIVED from the embedded one, a single line changed. The
       # original raises 'System message must be at the beginning' as soon as a
       # system message arrives after a user message. Agentic clients inject those
