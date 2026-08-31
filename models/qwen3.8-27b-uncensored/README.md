@@ -12,11 +12,28 @@ legitimate task.
 | | |
 |---|---|
 | Weights | `Qwen3.8-27B-Uncensored-Q5_K_M.gguf`, 18.19 GiB |
-| Vision projector | `Qwen3.8-27B-Uncensored-vision-f16.gguf`, 0.86 GiB |
+| Vision projector | `mmproj-Qwen3.8-27B-Uncensored-F16.gguf`, 0.86 GiB |
 | Context | 262,144 |
 | VRAM | 29,019 MB of 32,607 |
 | Throughput | 125.21 tok/s decode, 3,354 tok/s prefill |
 | Build | upstream 2026-08-11 |
+
+## The vision projector was renamed upstream, and the script still expects the old name
+
+Checked on 2026-08-31. On 2026-08-28 at 20:04 the repository renamed
+`Qwen3.8-27B-Uncensored-vision-f16.gguf` to
+`mmproj-Qwen3.8-27B-Uncensored-F16.gguf`, so that llama.cpp discovers it from
+the `mmproj-` prefix. Same content, 927,606,912 bytes, and the table above
+carries the current upstream name.
+
+**`llm-ctl.ps1` still passes the old name to `--mmproj`.** That is deliberate
+here, because the weights on this box were downloaded before the rename and the
+path is explicit. **If you are setting this up now, you will download the new
+name and the action will fail on a missing file**: either rename your local copy
+or edit the `--mmproj` line. Nothing else in the profile depends on it.
+
+The three commits of 2026-08-29 on that repository touch the README only, so
+checksums taken before it are still valid.
 
 ## The launch profile is copied verbatim, on purpose
 
