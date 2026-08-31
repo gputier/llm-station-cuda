@@ -54,10 +54,15 @@ model at all**. The `blk.*.nextn.*` tensors are already inside the quant;
 llama.cpp loads them and **ignores them** unless you pass `--spec-type
 draft-mtp`. One flag enables speculation, no second file to fetch.
 
-`--spec-draft-n-max 3` is the retained depth. A community benchmark recommended
-4 for this exact card and quant: measured here, 108.66 tok/s against 123.03 at
-3. A setting published for the same hardware and the same model transposes no
-better than any other.
+`--spec-draft-n-max 4` is the retained depth since 2026-08-31. Every earlier
+sweep had been run on a single 10,608-token prompt; re-swept at both empty and
+full (150k) context, the ranking inverts and 4 wins three cases out of four, by
+7.6 to 11.4%. The full table is in [../../docs/tuning-log.md](../../docs/tuning-log.md).
+
+The published community setting that recommended 4 was still not transposable:
+on the short prompt it was measured on, it gave 108.66 tok/s against 123.03 at
+3. It happened to name the value this box later settled on, for a reason its
+own benchmark could not see.
 
 ### 2. The embedded chat template blocks agentic clients
 

@@ -18,13 +18,17 @@ legitimate task.
 | Throughput | 125.21 tok/s decode, 3,354 tok/s prefill |
 | Build | upstream 2026-08-11 |
 
-## The vision projector was renamed upstream, and the script still expects the old name
+## The vision projector was renamed upstream, and the local file follows
 
 Checked on 2026-08-31. On 2026-08-28 at 20:04 the repository renamed
 `Qwen3.8-27B-Uncensored-vision-f16.gguf` to
 `mmproj-Qwen3.8-27B-Uncensored-F16.gguf`, so that llama.cpp discovers it from
 the `mmproj-` prefix. Same content, 927,606,912 bytes, and the table above
 carries the current upstream name.
+
+The local weights were renamed to match on 2026-08-31, size verified identical
+to the byte, and `llm-ctl.ps1` now points at the new name. A fresh download and
+an existing install therefore land on the same filename.
 
 **`llm-ctl.ps1` still passes the old name to `--mmproj`.** That is deliberate
 here, because the weights on this box were downloaded before the rename and the
@@ -40,6 +44,11 @@ checksums taken before it are still valid.
 MTP `n-max 3`, `q4_0` cache, `-ub 2048`, `top_k 20`, `--min-p 0`. Every
 measurement that justifies these lives in [../qwen3.8-27b/](../qwen3.8-27b/).
 Do not re-derive them here.
+
+One value now differs, and deliberately: `qwen` moved to `n-max 4` on
+2026-08-31 after a sweep at full context. This profile stays at 3 because it was
+not re-swept, and it is the fallback rather than the daily driver. Re-sweep it
+before assuming 4 transposes.
 
 Retuning was nonetheless **measured separately rather than transposed**, and it
 gave 120.90 to 125.21 tok/s decode (+3.6%) and 3,210 to 3,354 tok/s prefill

@@ -283,7 +283,7 @@ switch ($Action) {
       '--spec-type','draft-dflash',
       '--spec-draft-model',"$ModelsDir\muse-glimmer-30b\dflash-kquant.gguf",
       '--spec-draft-ngl','99',
-      '--n-gpu-layers','99','--no-mmap','--mlock','--flash-attn','on',
+      '--n-gpu-layers','99','--load-mode','mlock','--flash-attn','on',
       '--jinja',
       # 1M context. ONE lock, and it is not YaRN: llama.cpp caps the slot on the
       # context_length written IN THE GGUF ("the slot context exceeds the training
@@ -297,8 +297,8 @@ switch ($Action) {
       # only the sliding-window layers use RoPE, the global layers have no
       # positional encoding at all, so there is no position to stretch. The 1M
       # context did not work thanks to YaRN, it worked despite it.
-      '--override-kv','muse-glimmer.context_length=int:1048576',
-      '--host','0.0.0.0','--port','8080','--ctx-size','1048576',
+      '--override-kv','muse-glimmer.context_length=int:262144',
+      '--host','0.0.0.0','--port','8080','--ctx-size','262144',
       # -ub 512, NOT 4096. This is the critical setting of this profile and it
       # carries TWO failures on its own, discovered in this order:
       #  1. with --mmproj the prompt goes through the multimodal pipeline, whose
@@ -314,6 +314,12 @@ switch ($Action) {
       # 4096, outside any memory constraint), not on this card. 512 is kept
       # because it is proven HERE by the two failures above, not by transposition.
       '--parallel','1','-b','2048','-ub','512',
+      # -cram 49152 and NOT the 8192 default. This flag sizes the host-RAM PROMPT cache, where
+      # --cache-idle-slots parks a context that went idle before a new task overwrites it. It was
+      # set on 'qwen' after measurement and never carried over here, although this profile runs
+      # the same 262144 window. At this profile's own logged prefill rate, 3284 tok/s, losing a
+      # 150k context to the cache costs 46 s of recompute. Costs host RAM only, no VRAM.
+      '-cram','49152',
       '--cache-type-k','q8_0','--cache-type-v','q8_0',
       '--temp','1.0','--top-p','0.95','--top-k','64'
     ) $null $exeUp $workDirUp $cudaBinUp
@@ -365,8 +371,29 @@ switch ($Action) {
       # useful depth, drafted tokens grow faster than kept tokens and the gain
       # inverts. A speculation sweep without a fixed seed measures nothing: the
       # 2-3-4 neighbourhood fits entirely inside the noise.
-      '--spec-type','draft-mtp','--spec-draft-n-max','3',
-      '--n-gpu-layers','99','--no-mmap','--mlock','--flash-attn','on',
+      # --image-min-tokens 1024 is requested by the server itself at load time: "Qwen-VL models
+      # require at minimum 1024 image tokens to function correctly on grounding tasks". Without
+      # it the model reads values correctly but mislabels what they point at. It only costs
+      # tokens when an image is actually sent.
+      '--image-min-tokens','1024',
+      # n-max 4 and NOT 3. The earlier sweep concluded 3, but it ran on a 10608-token prompt
+      # only. Re-swept on 2026-08-31 at both empty and full (150k) context, two distinct tasks,
+      # 3 seeds, median decode tok/s:
+      #                       n-max 2   n-max 3   n-max 4   n-max 5   n-max 6   n-max 8
+      #   reasoning / empty      .       152.50    169.83    165.28    159.20    125.22
+      #   reasoning / 150k     71.01      76.90     83.03     79.81     79.38     69.10
+      #   code / empty           .       139.24    129.88    125.47    118.33    100.58
+      #   code / 150k          65.06      66.19     71.21     73.82     61.05     60.92
+      # 4 wins 3 cases out of 4, by 7.6 to 11.4 %, and only loses on code at empty context
+      # (-6.7 %), the least representative case: under an agentic client the context is never
+      # empty, the system prompt alone exceeds ten thousand tokens on the first turn.
+      # WHY the law inverts: at full context decoding ONE token costs far more, since attention
+      # sweeps the whole context. Verifying several tokens in a single pass therefore amortises a
+      # longer draft, whereas at short context the draft dominates the cost. Acceptance rate
+      # falls monotonically with n-max and is NOT the criterion; only throughput is. At 63.3 %
+      # acceptance n-max 3 yields less than n-max 4 at 55.1 %.
+      '--spec-type','draft-mtp','--spec-draft-n-max','4',
+      '--n-gpu-layers','99','--load-mode','mlock','--flash-attn','on',
       '--jinja',
       # Chat template DERIVED from the embedded one, a single line changed. The
       # original raises 'System message must be at the beginning' as soon as a
@@ -471,9 +498,9 @@ switch ($Action) {
     #    the timings of a response.
     Start-LLM 'qwenu' @(
       '-m',"$ModelsDir\qwen3.8-27b-uncensored\Qwen3.8-27B-Uncensored-Q5_K_M.gguf",
-      '--mmproj',"$ModelsDir\qwen3.8-27b-uncensored\Qwen3.8-27B-Uncensored-vision-f16.gguf",
+      '--mmproj',"$ModelsDir\qwen3.8-27b-uncensored\mmproj-Qwen3.8-27B-Uncensored-F16.gguf",
       '--spec-type','draft-mtp','--spec-draft-n-max','3',
-      '--n-gpu-layers','99','--no-mmap','--mlock','--flash-attn','on',
+      '--n-gpu-layers','99','--load-mode','mlock','--flash-attn','on',
       '--jinja',
       # Chat template SHARED with 'qwen', and that is a choice, not a shortcut.
       # The two GGUFs do not embed the same one: the aligned build carries a
@@ -504,9 +531,9 @@ switch ($Action) {
     Start-LLM 'embed' @(
       '-m',"$ModelsDir\nomic-embed-text-v1.5\nomic-embed-text-v1.5.Q8_0.gguf",
       '--embeddings','--pooling','mean',
-      '--n-gpu-layers','99','--no-mmap','--mlock','--flash-attn','on',
+      '--n-gpu-layers','99','--load-mode','mlock','--flash-attn','on',
       '--host','0.0.0.0','--port','8080','--ctx-size','131072',
-      '--parallel','4','-b','2048','-ub','2048'
+      '--parallel','1','-b','2048','-ub','2048'
     )
   }
 }

@@ -48,13 +48,13 @@ cosmetic here and can be ignored.
 
 ### A CUDA OOM can come from host RAM, not from VRAM
 
-Models are loaded through host RAM (`--no-mmap --mlock`) before populating VRAM.
+Models are loaded through host RAM (`--load-mode mlock`) before populating VRAM.
 If the host is saturated, the failure surfaces as `cudaMalloc failed: out of
 memory` **while `nvidia-smi` shows VRAM free**. Read available host RAM before
 concluding anything about the GPU. This cost us an afternoon when a WSL instance
 had been allowed to reserve 120 GB.
 
-Counter-intuitively, `--no-mmap --mlock` **preserves** host RAM rather than
+Counter-intuitively, `--load-mode mlock` **preserves** host RAM rather than
 consuming it: with those flags the process falls back to about 1.1 GB of working
 set once the weights are copied to VRAM. Without them, the GGUF stays in the
 file cache inside the working set, 16.3 GB measured. Do not remove them believing

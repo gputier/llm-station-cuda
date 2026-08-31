@@ -9,6 +9,88 @@ hardware listed in [prerequisites.md](prerequisites.md).
 
 ---
 
+## 2026-08-31: the n-max sweep was measured on short prompts only
+
+### Every sweep before this one used a single, short prompt
+
+The 2026-08-27 entry below settled on `--spec-draft-n-max 3`, and the 2026-08-18
+entry settled on 2. Both were measured on one prompt of 10,608 tokens. Neither
+asked what happens at the context length this box actually serves.
+
+Re-swept at **both** empty and full (150k) context, on two distinct workloads,
+3 seeds, median decode tok/s:
+
+| n-max | reasoning / empty | reasoning / 150k | code / empty | code / 150k |
+|---|---|---|---|---|
+| 2 | . | 71.01 | . | 65.06 |
+| 3 | 152.50 | 76.90 | **139.24** | 66.19 |
+| **4** | **169.83** | **83.03** | 129.88 | **71.21** |
+| 5 | 165.28 | 79.81 | 125.47 | 73.82 |
+| 6 | 159.20 | 79.38 | 118.33 | 61.05 |
+| 8 | 125.22 | 69.10 | 100.58 | 60.92 |
+
+`n-max 4` wins three cases out of four, by 7.6 to 11.4%, and loses only on code
+at empty context. That is the least representative case here: under an agentic
+client the context is never empty, the system prompt alone exceeds ten thousand
+tokens on the first turn. Applied to the `qwen` profile. `qwenu` was left at 3,
+it has not been re-swept.
+
+Why the law inverts: at full context, decoding **one** token costs far more,
+since attention sweeps the whole context. Verifying several tokens in a single
+pass therefore amortises a longer draft, whereas at short context the draft
+dominates the cost.
+
+> Acceptance rate falls monotonically as n-max rises, so it is not the criterion.
+> Only throughput is. At 63.3% acceptance, n-max 3 yields less than n-max 4 at
+> 55.1%.
+
+### `iq4_nl` on the KV cache: same size, 150x slower prefill
+
+`iq4_nl` occupies exactly as much as `q4_0`, 4.5 bits per element, with a
+non-linear table and therefore better fidelity on paper. It was applied to both
+Qwen profiles and caught mid-benchmark:
+
+| KV cache type | Prefill at 150k |
+|---|---|
+| `q4_0` | ~4,000 tok/s |
+| `iq4_nl` | **25.9 tok/s** |
+
+The Flash Attention CUDA kernels do not cover this type and the engine falls
+back to a slow path. Reverted the same session.
+
+> Cache size tells you nothing about cache speed. Only the compiled kernel set
+> decides. Check FA support before trading one quant type for another.
+
+### `--reasoning-preserve` does nothing here
+
+The server suggests it at load time: `chat template supports preserving
+reasoning`. Tested across all four combinations, same 3-turn conversation, same
+seed:
+
+| Client resends reasoning | Server flag | Prompt at turn 3 |
+|---|---|---|
+| yes | off | 2,846 |
+| yes | on | 2,846 |
+| no | on | 219 |
+| no | off | 219 |
+
+The flag changes nothing in either direction. What carries the reasoning across
+turns is the client resending `reasoning_content`, not the server. Not retained.
+
+### Reference figures that were missing: context length dominates everything
+
+| Workload | Empty context | 150k context |
+|---|---|---|
+| reasoning | 169.83 tok/s | 83.03 tok/s |
+| code | 129.88 tok/s | 71.21 tok/s |
+
+Prompt length roughly halves throughput, far beyond what any flag returns. The
+counterpart is that the prompt cache earns its keep: switching workload on the
+same 150k context re-prefilled **2,046 tokens instead of 149,706**, about 70
+seconds saved.
+
+---
+
 ## 2026-08-28: the NVFP4 migration and two settings that were wrong all along
 
 ### NVFP4 replaces Q5_K_XL
@@ -94,6 +176,9 @@ predicts by replaying the context. `ngram-cache` was worse still, 69.85 tok/s.
 A community benchmark recommended `--spec-draft-n-max 4` on this exact quant.
 Measured here: **108.66 tok/s against 123.03 at n-max 3.**
 
+That holds for the short prompt it was measured on. At full context the ranking
+reverses and n-max 4 wins; see the 2026-08-31 entry above.
+
 ---
 
 ## 2026-08-27: retuning, two hypotheses disproved
@@ -114,6 +199,9 @@ return rigorously identical speculation counters, which makes the A/B readable.
 | **3** | **117.75 tok/s** | **54% (495/907)** |
 | 4 | 113.53 tok/s | 45% (516/1128) |
 | 6 | 97.76 tok/s | 33% (534/1575) |
+
+Measured on a single 10,608-token prompt. Superseded for the `qwen` profile by
+the 2026-08-31 sweep above, which found the ranking inverts at full context.
 
 ### Removing the vision projector does NOT gain throughput
 
