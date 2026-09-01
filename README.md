@@ -36,7 +36,7 @@ unloads the others.
 | Action | Model | Context | Role |
 |---|---|---|---|
 | `muse` | Muse Glimmer 30B, UD-Q4_K_XL | 1,048,576 | Agentic multi-turn, vision, faithful OCR |
-| `qwen` | Qwen3.8-27B, NVFP4 LOW | 262,144 | Reasoning and coding |
+| `qwen` | Qwen3.8-27B, NVFP4 LOW | 393,216 | Reasoning and coding |
 | `qwenu` | Qwen3.8-27B Uncensored, Q5_K_M | 262,144 | Used only when the aligned model refuses a legitimate task |
 | `embed` | nomic-embed-text-v1.5, Q8_0 | 131,072 | 768-dimension embeddings |
 
@@ -97,7 +97,9 @@ The GGUF declares the real ceiling. Ask for more and llama.cpp caps the window
 in one log line, then allocates buffers for the value you asked for anyway. We
 paid the memory cost of a 512k window while only ever having 262k: 23% of decode
 and 72% of prefill lost for nothing. This is one notch beyond the known capping
-trap, which is about the window and not about memory.
+trap, which is about the window and not about memory. Lifting the ceiling for
+real takes `--override-kv`, and then the cost is not linear: 384k is free on this
+card and 512k is not.
 
 **2. Forcing speculative depth collapses acceptance.** The DFlash block is 16
 tokens, so `--spec-draft-n-max 15` looks like the obvious setting. It gives
@@ -139,9 +141,11 @@ conversations are enough to lose a third.** `--cache-ram` defaults to 8192 MB an
 nothing here was setting it. A 140k-token context weighs 2,461 MB in that cache,
 so three of them do not fit. Replaying the same three disjoint ~150k contexts as
 A, A, B, C, A: returning to A cost **139,810 re-prefilled tokens and 62.6 s**
-with the default, and **4 tokens and 0.3 s** at `-cram 49152`. Everything else
+with the default, and **4 tokens and 0.3 s** at a raised `-cram`. Everything else
 was identical. The cost is host RAM only, 11,732 to 16,946 MB for the process out
-of 128 GB, VRAM untouched and decode throughput unchanged. Two things generalise.
+of 128 GB, VRAM untouched and decode throughput unchanged. The A/B was run at
+`-cram 49152`; the ceiling in `llm-ctl.ps1` is now 24576 MB, which still holds
+about ten 140k contexts. Two things generalise.
 This flag, not the slot count, is what decides whether returning to a conversation
 is free: a single-slot server keeps several contexts alive as long as they fit the
 budget. And **a cache test whose contexts all fit in the budget does not measure

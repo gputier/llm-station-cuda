@@ -1,5 +1,5 @@
 param(
-  [ValidateSet('embed','muse','qwen','qwenu','stop','status','logs')]
+  [ValidateSet('embed','muse','ornith','qwen','qwenu','tiel','stop','status','logs')]
   [string]$Action,
   [string]$Name,  # optional: for 'stop' and 'logs', targets a named instance
   [int]$Tail = 40 # for 'logs': history lines to show before following live
@@ -64,7 +64,7 @@ New-Item -ItemType Directory -Force -Path $instDir | Out-Null
 
 # embed/muse/qwen/qwenu all sit on port 8080 and are mutually exclusive on the
 # GPU: starting one unloads the others.
-$ports = @{ embed = 8080; muse = 8080; qwen = 8080; qwenu = 8080 }
+$ports = @{ embed = 8080; muse = 8080; ornith = 8080; qwen = 8080; qwenu = 8080; tiel = 8080 }
 
 function Quote($s) {
   if ($s -match '[\s"]') { return '"' + ($s -replace '"','\"') + '"' }
@@ -214,10 +214,24 @@ function Start-LLM($name, $modelArgs, $cudaDevices = $null, $exePath = $null, $w
   Clear-Content $errLog -ErrorAction SilentlyContinue
 
   $quoted = ($modelArgs | ForEach-Object { Quote $_ }) -join ' '
+  # No `set` inside the cmd line, and this is not a style choice. cmd /c strips
+  # the outer quotes of the whole line, after which `set PATH=<value> && <rest>`
+  # swallows ` && <rest>` INTO the value: nothing after it ever runs, no log file
+  # is even created, and Win32_Process.Create still returns 0. Measured on this
+  # machine 2026-09-01, on every quoting variant tried, including /s and a extra
+  # wrapping pair. The environment is therefore set on THIS process before the
+  # call and restored right after; the child inherits it. `cd /d` is still
+  # required, dropping it makes the launch fail.
+  $savedPath = $env:PATH
+  $savedCuda = $env:CUDA_VISIBLE_DEVICES
+  $env:PATH = "$cudaBinPath;$env:PATH"
   # CPU-only instances: hide the GPU to avoid a pointless CUDA init.
-  $cudaSet = if ($null -ne $cudaDevices) { "set `"CUDA_VISIBLE_DEVICES=$cudaDevices`" && " } else { "" }
-  $inner  = "${cudaSet}set `"PATH=$cudaBinPath;%PATH%`" && cd /d `"$workDirPath`" && `"$exePath`" $quoted > `"$outLog`" 2> `"$errLog`""
+  if ($null -ne $cudaDevices) { $env:CUDA_VISIBLE_DEVICES = $cudaDevices }
+  $inner = "cd /d `"$workDirPath`" && `"$exePath`" $quoted > `"$outLog`" 2> `"$errLog`""
   $r = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{ CommandLine = "cmd.exe /c $inner"; CurrentDirectory = $workDirPath }
+  $env:PATH = $savedPath
+  if ($null -eq $savedCuda) { Remove-Item Env:\CUDA_VISIBLE_DEVICES -ErrorAction SilentlyContinue }
+  else { $env:CUDA_VISIBLE_DEVICES = $savedCuda }
   if ($r.ReturnValue -ne 0) { Write-Output "ERROR Win32_Process.Create rc=$($r.ReturnValue)"; return }
 
   # Resolve the real llama-server PID (child of the cmd.exe we launched).
@@ -314,12 +328,12 @@ switch ($Action) {
       # 4096, outside any memory constraint), not on this card. 512 is kept
       # because it is proven HERE by the two failures above, not by transposition.
       '--parallel','1','-b','2048','-ub','512',
-      # -cram 49152 and NOT the 8192 default. This flag sizes the host-RAM PROMPT cache, where
+      # -cram 24576 and NOT the 8192 default. This flag sizes the host-RAM PROMPT cache, where
       # --cache-idle-slots parks a context that went idle before a new task overwrites it. It was
       # set on 'qwen' after measurement and never carried over here, although this profile runs
       # the same 262144 window. At this profile's own logged prefill rate, 3284 tok/s, losing a
       # 150k context to the cache costs 46 s of recompute. Costs host RAM only, no VRAM.
-      '-cram','49152',
+      '-cram','24576',
       '--cache-type-k','q8_0','--cache-type-v','q8_0',
       '--temp','1.0','--top-p','0.95','--top-k','64'
     ) $null $exeUp $workDirUp $cudaBinUp
@@ -423,19 +437,41 @@ switch ($Action) {
       # a late system message as an ordinary ChatML system turn, which the format
       # supports natively, instead of raising.
       '--chat-template-file',"$ModelsDir\qwen3.8-27b\chat-template-system-anywhere.jinja",
-      # 262144, NOT 524288. The GGUF declares a context_length of 262144:
-      # llama.cpp caps the window at that value, in a single log line, BUT it
-      # still SIZES ITS BUFFERS on the requested value. We were paying the memory
-      # cost of 512k while never having it. This is one notch beyond the known
-      # capping trap, which was about the window and not about memory.
-      # Measured 2026-08-28, identical model and flags, only --ctx-size changing:
-      #   262144 requested ... VRAM 27.2 GB ... decode 123.03 tok/s ... prefill 4,241
-      #   524288 requested ... VRAM 31.9 GB ... decode  99.76 tok/s ... prefill 2,462
-      # 23% of decode and 72% of prefill lost for nothing, the window being the
-      # same in both cases. Past ~29 GB the card throttles; see the q8_0 cache
-      # figures below, it is the same wall. Only raise this with an --override-kv
-      # that actually extends the window, and then re-prove recall by measurement.
-      '--host','0.0.0.0','--port','8080','--ctx-size','262144',
+      # 393216 since 2026-09-01, and it takes TWO flags, not one. The GGUF declares
+      # context_length=262144: llama.cpp caps the slot on that value and ignores a
+      # larger --ctx-size, in a single log line, exactly as it did on muse. The
+      # override lifts the declared value, --ctx-size then sizes both the slot and
+      # the buffers on it. Verified in /props: default_generation_settings.n_ctx
+      # reads 393216, and the log prints n_ctx_slot with no capping line.
+      #
+      # 384k IS FREE ON THIS CARD, 512k IS NOT, and the two were measured rather
+      # than reasoned about. Same 50,480-token prompt, 800 tokens forced, fixed
+      # seed, cold prefill on a fresh process each time:
+      #   262144 ... VRAM 27,110 MiB ... decode 123.6 tok/s ... prefill 4,007 tok/s
+      #   393216 ... VRAM 31,291 MiB ... decode 122.5 tok/s ... prefill 4,035 tok/s
+      #   524288 ... VRAM 31,858 MiB ... decode  94.2 tok/s ... prefill 2,308 tok/s
+      # Half the extra window costs 4.2 GB of VRAM and NOTHING else. The full
+      # doubling costs a quarter of the decode and 43% of the prefill, and it also
+      # stops being reproducible: six runs at 512k spread from 71.9 to 94.9 tok/s
+      # decode and 1,716 to 2,333 prefill, where 262k and 384k both hold within 1%.
+      # The throttling wall on this card therefore sits BETWEEN 31.3 and 31.9 GB,
+      # not at the ~29 GB the q8_0 cache reading had suggested: that earlier figure
+      # was the point where a heavier KV cache started costing, not a hard edge.
+      #
+      # Only 1,316 MiB of VRAM are left free here. This profile has little
+      # headroom: another GPU tenant pushes it out of memory.
+      #
+      # RECALL PAST 262144 IS NOT PROVEN. A window the server accepts says nothing
+      # about what the model still finds in it, and 262144 is where the model was
+      # trained. A needle-in-a-haystack run at 300k+ was attempted on 2026-09-01
+      # and abandoned when the client dropped the connection mid-prefill; the
+      # server was fine. Treat the top third of this window as unproven.
+      #
+      # CLAUDE_CODE_MAX_CONTEXT_TOKENS in the client launcher must move with this
+      # value, in the same commit: a client promised more than the server serves is
+      # truncated server-side with no warning.
+      '--override-kv','qwen35.context_length=int:393216',
+      '--host','0.0.0.0','--port','8080','--ctx-size','393216',
       # --parallel 1: speculative decoding is a SINGLE-STREAM optimisation, its
       # gain evaporates past a few concurrent streams.
       #
@@ -464,24 +500,27 @@ switch ($Action) {
       # The q4 cache does not cost recall: needle in a haystack found at 207,067
       # tokens of prompt, verified by execution and not deduced.
       '--cache-type-k','q4_0','--cache-type-v','q4_0',
-      # -cram 49152 rather than the 8192 default. This flag does NOT size the KV
+      # -cram 24576 rather than the 8192 default. This flag does NOT size the KV
       # cache, it sizes the PROMPT cache in host RAM, where --cache-idle-slots,
       # on by default, parks a context that has gone idle before a new task
       # overwrites it. This, and not the slot count, decides whether coming back
       # to a conversation costs nothing or a full minute.
       # Measured on three disjoint ~150k-token contexts, replayed A, A, B, C, A:
-      #                            default 8192      -cram 49152
+      #                            default 8192      -cram raised
       #   A cold ................. 139,810 / 61.3 s  139,810 / 61.5 s
       #   A replayed at once .....       4 /  0.3 s        4 /  0.3 s
       #   A after B and C ........ 139,810 / 62.6 s        4 /  0.3 s
       # A 140k context weighs 2,461 MB in that cache, so 8 GB does not hold three
       # of them: TWO interleaved contexts are enough to lose one entirely. Cost is
       # host RAM only, 11,732 to 16,946 MB for the process with 91,866 MB still
-      # free, and VRAM is untouched.
+      # free, and VRAM is untouched. The A/B above was run at -cram 49152; the
+      # ceiling was brought down to 24576 MB on 2026-09-01 to bound the host-RAM
+      # footprint. At 2,461 MB per 140k context that still holds about ten of
+      # them, well past the two the measurement showed were needed.
       # MEASUREMENT TRAP: a cache test whose contexts all fit in the budget does
       # not measure the cache, it measures that nothing had to be evicted. Our
       # first attempt, at 8k per context, wrongly concluded interleaving was free.
-      '-cram','49152',
+      '-cram','24576',
       # Qwen thinking-mode calibration values. top-k is 20 here and 64 on muse.
       # --min-p 0 is also a calibration value: llama.cpp imposes 0.05 by default
       # when nothing sets it, which clips the tail of the distribution ON TOP OF
@@ -539,12 +578,76 @@ switch ($Action) {
       '--host','0.0.0.0','--port','8080','--ctx-size','262144',
       '--parallel','1','-b','4096','-ub','2048',
       '--cache-type-k','q4_0','--cache-type-v','q4_0',
-      # -cram 49152: prompt cache in host RAM, see the 'qwen' block for the
+      # -cram 24576: prompt cache in host RAM, see the 'qwen' block for the
       # measurement. Carried over as part of the identical profile, not re-measured
       # on this quant.
-      '-cram','49152',
+      '-cram','24576',
       '--temp','1.0','--top-p','0.95','--top-k','20','--min-p','0'
     ) $null $exeUp $workDirUp $cudaBinUp
+  }
+
+  'tiel' {
+    # Tiel-Coder-35B-A3B (MIT). Sparse MoE, architecture 'qwen35moe': 41 blocks,
+    # 256 experts, 8 active per token, so ~3B of 35B parameters do the work.
+    # general.name in the GGUF is 'Ornith-1.5-35B': this is a requantisation of
+    # Ornith-1.5-35B-A3B with an MTP head added, not a separate model.
+    Start-LLM 'tiel' @(
+      '-m',"$ModelsDir\tiel-coder-35b-a3b\Tiel-Coder-35B-A3B-MTP-UD-Q4_K_XL.gguf",
+      '--mmproj',"$ModelsDir\tiel-coder-35b-a3b\mmproj-BF16.gguf",
+      # Measured 2026-09-01 against the 'qwen' profile, same 37,981-token prompt,
+      # seed 42, three runs, median. Quality on a fresh 500-question MMLU set
+      # spanning 25 subjects plus 60 GSM8K problems, temperature 0, both models
+      # on the identical set:
+      #   decode ..... 104.53 -> 161.43 tok/s   (+54.4%)
+      #   prefill .... 4,264  -> 8,616  tok/s   (x2.02)
+      #   VRAM ....... 30,952 -> 29,465 MB
+      #   MMLU ....... 82.0%  -> 82.2%          (one question in five hundred)
+      #   GSM8K ...... 52/60  -> 58/60
+      # The gain is structural, not a setting: far fewer bytes reread per token,
+      # which is exactly the bandwidth ceiling this machine runs into. Note that
+      # MTP acceptance is WORSE than qwen's, 27.2% against 38.7%, and the model
+      # still wins by half again: acceptance rate does not predict throughput.
+      '--spec-type','draft-mtp','--spec-draft-n-max','4',
+      '--n-gpu-layers','99','--load-mode','mlock','--flash-attn','on','--jinja',
+      '--host','0.0.0.0','--port','8080','--parallel','1',
+      # The GGUF declares context_length 262144 and llama.cpp caps on the file,
+      # not on --ctx-size. This override is the ONLY lock, same as on muse, and
+      # no YaRN flag is needed. Recall verified 2026-09-01 by needle-in-haystack
+      # at 269,274 then 378,540 tokens, needle at 10/50/90% depth, 6 hits out of
+      # 6. VRAM then sits at 31,617 MB of 32,607: about 990 MB of headroom, NOT
+      # yet exercised with an image on input while the projector is loaded.
+      '--override-kv','qwen35moe.context_length=int:393216',
+      '--ctx-size','393216',
+      '-b','4096','-ub','2048',
+      '--cache-type-k','q4_0','--cache-type-v','q4_0',
+      '-cram','24576',
+      '--temp','1.0','--top-p','0.95','--top-k','20','--min-p','0'
+    ) $null $exeNew $workDirNew $cudaBinUp
+  }
+
+  'ornith' {
+    # Ornith-1.5-9B (MIT). Dense 9B, the small sibling of the 'tiel' backbone.
+    # Best capability-per-byte of the parc: 12,441 MB of VRAM, a third of the
+    # others, leaving room to run something else alongside.
+    Start-LLM 'ornith' @(
+      '-m',"$ModelsDir\ornith-1.5-9b\Ornith-1.5-9B-Q5_K_M.gguf",
+      '--mmproj',"$ModelsDir\ornith-1.5-9b\mmproj-Ornith-1.5-9B-BF16.gguf",
+      # Measured 2026-09-01, same protocol and same question set as 'tiel':
+      #   decode ..... 167.73 tok/s
+      #   prefill .... 10,497 tok/s
+      #   VRAM ....... 12,441 MB
+      #   MMLU ....... 73.0%   (against 82.0% for qwen: it knows much less)
+      #   GSM8K ...... 53/60   (against 52/60 for qwen, a 27B model)
+      # Read that pair the right way: equal reasoning, far less knowledge. This
+      # is a fast second-opinion and short-task model, not a replacement.
+      # No MTP file is published for it, the draft_n field is absent from timings.
+      '--n-gpu-layers','99','--load-mode','mlock','--flash-attn','on','--jinja',
+      '--host','0.0.0.0','--port','8080','--parallel','1','--ctx-size','262144',
+      '-b','4096','-ub','2048',
+      '--cache-type-k','q4_0','--cache-type-v','q4_0',
+      '-cram','24576',
+      '--temp','1.0','--top-p','0.95','--top-k','20','--min-p','0'
+    ) $null $exeNew $workDirNew $cudaBinUp
   }
 
   'embed' {

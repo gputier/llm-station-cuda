@@ -12,7 +12,7 @@ of this box.
 |---|---|
 | Weights | `Qwen3.8-27B-NVFP4-MTP-LOW.gguf`, 14.5 GiB |
 | Vision projector | `mmproj-BF16.gguf`, 0.87 GiB |
-| Context | 262,144 (native, hard ceiling without an override) |
+| Context | 393,216 (`--override-kv`; 262,144 is the native ceiling) |
 | KV cache | `q4_0` |
 | VRAM | 26,453 MB of 32,607 |
 | Throughput | 123.4 tok/s decode, 4,267 tok/s prefill |
@@ -100,23 +100,53 @@ it worse**, so the defect comes from the model and not from the image.
 
 Use [muse](../muse-glimmer-30b/) for OCR.
 
-## `--ctx-size 262144`, and why not more
+## `--ctx-size 393216`, and why not 524288
 
 The GGUF declares `context_length = 262144`. llama.cpp caps the window there, in
 a single log line, **but still sizes its buffers on the value you requested**.
-This profile used to ask for 524288 and paid the memory of a window it never had:
+This profile once asked for 524288 with no override and paid the memory of a
+window it never had:
 
 | Requested | Real window | VRAM | Decode | Prefill |
 |---|---|---|---|---|
-| **262144** | 262144 | **27.2 GB** | **123.03** | **4,241** |
+| 262144 | 262144 | 27.2 GB | **123.03** | **4,241** |
 | 524288 | 262144 | 31.9 GB | 99.76 | 2,462 |
 
 Twenty-three percent of decode and 72% of prefill lost for nothing.
 
-Raising it for real requires `--override-kv qwen35.context_length`, exactly like
-muse's 1M, and recall must then be re-proven by measurement. Expect it to cost
-most of the NVFP4 gain, since 512k-sized buffers put the card back into the
-saturation regime.
+Lifting the ceiling for real takes `--override-kv qwen35.context_length`, exactly
+like muse's override. Measured on 2026-09-01, same 50,480-token prompt, 800
+tokens forced, fixed seed, cold prefill on a fresh process, override in place:
+
+| Window | VRAM | Decode | Prefill |
+|---|---|---|---|
+| 262,144 | 27,110 MB | 123.6 tok/s | 4,007 tok/s |
+| **393,216** | **31,291 MB** | **122.5 tok/s** | **4,035 tok/s** |
+| 524,288 | 31,858 MB | 94.2 tok/s | 2,308 tok/s |
+
+**The cost is not linear, and that is the finding.** Half again as much window
+costs 4.2 GB of VRAM and nothing else, inside the noise on both throughput
+figures. Doubling it costs a quarter of the decode and 43% of the prefill, and it
+also stops being reproducible: six runs at 524,288 spread from 71.9 to 94.9 tok/s
+decode and 1,716 to 2,333 prefill, where 262,144 and 393,216 both hold within 1%
+across three runs.
+
+So the throttling wall on this card sits **between 31.3 and 31.9 GB**, not at the
+~29 GB the `q8_0` cache reading below had suggested. That earlier figure marked
+where a heavier KV cache began to cost, not a hard edge.
+
+Only 1,316 MB of VRAM are left free at 393,216. This profile has no room for
+another GPU tenant.
+
+**Recall past 262,144 is not proven.** A window the server accepts says nothing
+about what the model still finds in it, and 262,144 is where the model was
+trained. A needle-in-a-haystack run above 300k was attempted on 2026-09-01 and
+abandoned when the client dropped the connection mid-prefill; the server was
+fine. Until that run is redone, treat the top third of this window as unproven.
+
+`CLAUDE_CODE_MAX_CONTEXT_TOKENS` in the client launcher moves with this value, in
+the same commit. A client promised more than the server serves is truncated
+server-side with no warning.
 
 ## Why the KV cache is `q4_0` and not `q8_0`
 

@@ -37,7 +37,7 @@ export ANTHROPIC_DEFAULT_SONNET_MODEL="qwen3.8-27b"
 export ANTHROPIC_DEFAULT_HAIKU_MODEL="qwen3.8-27b"
 export ANTHROPIC_SMALL_FAST_MODEL="qwen3.8-27b"
 
-export CLAUDE_CODE_MAX_CONTEXT_TOKENS=262144
+export CLAUDE_CODE_MAX_CONTEXT_TOKENS=393216
 export CLAUDE_CODE_MAX_OUTPUT_TOKENS=16384
 export CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=0
 ```
@@ -58,7 +58,8 @@ still has a quarter of its window free. Set too high, a session crossing the
 real ceiling is truncated server-side **with no warning**. The authoritative
 value is `default_generation_settings.n_ctx` in `/props`, never the number you
 passed to `--ctx-size`. We briefly set 524288 on a server capped at 262144 and
-caught it the same day.
+caught it the same day. The current pair is 393216 on both sides, lifted above
+the model's native 262144 by `--override-kv qwen35.context_length`.
 
 ## The chat template trap
 
@@ -84,7 +85,7 @@ The launchers pass `--strict-mcp-config --mcp-config '{"mcpServers":{}}'`.
 
 Measured on this setup: the full client prompt is **109,738 tokens**, of which
 108 KB is tool schemas alone, for 70 tools. Without MCP servers it falls to
-roughly 44,000. On a 262k window that overhead is a quarter of the context gone
+roughly 44,000. On a 384k window that overhead is an eighth of the context gone
 before the first user message, and it makes the first turn much slower.
 
 Skills, slash commands, memory and project instructions are untouched by this

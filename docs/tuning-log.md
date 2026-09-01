@@ -9,6 +9,64 @@ hardware listed in [prerequisites.md](prerequisites.md).
 
 ---
 
+## 2026-09-01: the context ceiling was lifted to 384k, and 512k was rejected
+
+### `--override-kv` is what actually raises the window
+
+The 2026-08-28 entry below closed on a rule: only raise `--ctx-size` with an
+`--override-kv` that genuinely extends the window. That is what was done here.
+`--override-kv qwen35.context_length=int:393216` lifts the value the GGUF
+declares, `--ctx-size 393216` then sizes both the slot and the buffers on it.
+`/props` returns `default_generation_settings.n_ctx = 393216` and the log prints
+`n_ctx_slot = 393216` with no capping line.
+
+### The cost of window is not linear, and that is the finding
+
+Same 50,480-token prompt of real prose, 800 tokens forced, fixed seed, cold
+prefill on a fresh process each time, override in place:
+
+| Window | VRAM | Decode | Prefill |
+|---|---|---|---|
+| 262,144 | 27,110 MB | 123.6 tok/s | 4,007 tok/s |
+| **393,216** | **31,291 MB** | **122.5 tok/s** | **4,035 tok/s** |
+| 524,288 | 31,858 MB | 94.2 tok/s | 2,308 tok/s |
+
+Half again as much window costs **4.2 GB of VRAM and nothing else**, both
+throughput figures inside the noise. Doubling it costs a quarter of the decode
+and 43% of the prefill.
+
+At 524,288 throughput also stops being **reproducible**, which is its own signal.
+Six cold runs spread from 71.9 to 94.9 tok/s decode and 1,716 to 2,333 tok/s
+prefill; 262,144 and 393,216 each held within 1% across three runs. A profile
+whose numbers will not repeat is a profile sitting on a wall.
+
+### The wall is between 31.3 and 31.9 GB, not at 29
+
+The `q4_0` cache entry had put the throttling threshold around 29 GB. That was
+the point where a heavier KV cache started costing, not a hard edge: 31,291 MB
+runs at full speed here. The edge is narrower and higher than we thought, and it
+is worth knowing because it leaves 1,316 MB free. This profile now has no room
+for another GPU tenant.
+
+### What is NOT proven
+
+Recall past 262,144. A window the server accepts says nothing about what the
+model still finds in it, and 262,144 is where the model was trained. A
+needle-in-a-haystack run above 300k was attempted the same day and abandoned when
+the client dropped the connection at 58% of the prefill; the server logged a
+clean task cancellation and stayed up. Two things were learned from the attempt
+anyway: prefill decays badly on very long prompts, from 1,203 tok/s at 143k down
+to 796 tok/s at 233k, and a 400k prompt therefore needs a client that will hold a
+connection for ten minutes. Treat the top third of the window as unproven.
+
+### The client value moved in the same commit
+
+`CLAUDE_CODE_MAX_CONTEXT_TOKENS` is now 393216 in the launcher. It has to move
+with the server value, always: a client promised more than the server serves is
+truncated server-side with no warning.
+
+---
+
 ## 2026-08-31: the n-max sweep was measured on short prompts only
 
 ### Every sweep before this one used a single, short prompt
