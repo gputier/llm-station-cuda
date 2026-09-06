@@ -9,6 +9,69 @@ hardware listed in [prerequisites.md](prerequisites.md).
 
 ---
 
+## 2026-09-06: Tiel on the official b10826 binary, two slots, and a strict-instruction bench
+
+### The official b10826 binary is neutral in decode and +5% in prefill
+
+Posted flat into `llama-cpp-b10826` from the release zip plus its cudart, no compilation, the
+same way as b10740 on 2026-09-01. Control on the `tiel` profile, 65,615-token synthetic code
+prompt, 400 tokens forced, seed 42, temperature 0.6, prompt cache off, 3 runs, median:
+
+| Build | Prefill | Decode | VRAM | MTP counters |
+|---|---|---|---|---|
+| 2026-08-27 (b10643) | 8,724 tok/s | 211.3 tok/s | 31,707 MiB | 339 / 229 |
+| **b10826** | **9,155 tok/s** | 210.8 tok/s | 31,550 MiB | 341 / 228 |
+
+Confirmed in real use by the owner: a 41,264-token opening turn read at 9,950 tok/s against
+9,496 the day before. Two startup notices to know: `preserve_reasoning` is on by default since
+b10763 (may lengthen prompts, `--no-reasoning-preserve` turns it off), and the server recommends
+`--image-min-tokens 1024` for this vision model, which the profile does not carry yet.
+
+### Two slots are worth it for two callers, four are not
+
+`--parallel N --kv-unified` on b10826. Without `--kv-unified` the window is split between slots
+while `/props` still announces the total (measured 2026-09-02 on the Vulkan box). Pure generation,
+tiny prompts, 400 tokens forced per stream, one process with one thread per stream:
+
+| Streams | Per stream | Total |
+|---|---|---|
+| 1 | 260 tok/s | 260 |
+| 2 | 202 + 188 tok/s | 390 |
+| 4 | 97 to 104 tok/s each | 400 |
+
+With 40,000-token prompts arriving together the picture changes: two streams finish in 11.8 s,
+exactly the time of two sequential requests, and each stream drops to 15 to 50 tok/s while the
+other reads its prompt. Four streams finish in 30.9 s against 23 s queued: slower than no
+parallelism at all. A single stream on four idle slots loses 3% (205 against 211).
+
+Retained: `--parallel 2 --kv-unified`. VRAM 31,538 MiB at rest, 32,028 MiB under two-stream
+load (580 MiB headroom). Four slots rejected.
+
+### Temperature 0.6 instead of 1.0, trial
+
+Ornith's model card recommends 0.6 for general use and reserves 1.0 for reproducing its
+benchmarks. Claude Code sends no temperature (verified by capturing a request: only `thinking`,
+`output_config.effort` and `max_tokens` are sent, none of which llama-server maps to a
+reasoning budget), so the server value is what every session runs at. Set on 2026-09-06 as a
+trial on real usage; the strict-instruction bench below could not discriminate because it passed
+at 1.0.
+
+### A strict-instruction bench passes at 1.0, so the reported misbehaviour is elsewhere
+
+12 strict-format prompts (single word, exact JSON, four-line list, code without comments, banned
+word) on `/v1/chat/completions`, seed 42: 36/36. 8 file-editing tasks through Claude Code (rename
+a variable, create a file, replace a word, answer with one word): 8/8 in a fresh session, 7/8
+after a forced 55,000-token read placed before the instruction, the miss being an ambiguous
+prompt. The only "failure" seen came from this workstation's own UserPromptSubmit hook, which
+demands an acknowledgment line and contradicts "answer OK only": the model obeyed the hook.
+
+Read from the GGUF: Tiel embeds the Sharp chat template `qwen3.8-froggeric-v22.4.0` with a
+force-appended terseness system prompt (`terse` kwarg, default true), thinking on and reasoning
+effort `medium` by default. Ornith's own template raises on a late system message like Qwen's;
+a one-line derivative is staged next to the weights for a later A/B, unused.
+
+---
+
 ## 2026-09-01: the context ceiling was lifted to 384k, and 512k was rejected
 
 ### `--override-kv` is what actually raises the window

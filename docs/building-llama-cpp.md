@@ -1,13 +1,14 @@
 # Building llama.cpp for CUDA on Windows
 
-Three builds coexist on this machine, on purpose. They are **not
+Four builds coexist on this machine, on purpose. They are **not
 interchangeable**, and picking the wrong one fails silently rather than loudly.
 
 | Build | Date | CUDA | Serves | Why it exists |
 |---|---|---|---|---|
 | `llama-cpp-turboquant-win` | frozen 2026-04-07 | 12.8 | `embed` | A custom fork kept for a cache-quant feature of a model since removed. It has no remaining technical justification and could be retired once the embedder is validated on upstream. |
 | `llama-cpp-upstream` | 2026-08-11 | 13.3 | `muse`, `qwenu` | Official build. The only one of the first two that knows the `muse-glimmer` architecture. |
-| `llama-cpp-20260827` | 2026-08-27 | 13.3 | `qwen` | The only build with NVFP4 CUDA kernels. See below. |
+| `llama-cpp-20260827` | 2026-08-27 | 13.3 | `qwen`, `ornith` | The only build with NVFP4 CUDA kernels. See below. |
+| `llama-cpp-b10826` | 2026-09-06 | 13.3 | `tiel` | The official release zip and its cudart, unzipped flat, no compilation. Neutral in decode and +5% in prefill on Tiel against the 2026-08-27 build, see [tuning-log.md](tuning-log.md). |
 
 ## The build command
 

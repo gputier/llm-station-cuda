@@ -1,6 +1,6 @@
 # Documentation index
 
-Five documents, each answering a different question. Read them in this order the
+Six documents, each answering a different question. Read them in this order the
 first time; jump straight to one afterwards.
 
 | Document | Answers |
@@ -10,6 +10,7 @@ first time; jump straight to one afterwards.
 | [api-usage.md](api-usage.md) | How to call the server: endpoints, payloads, and the fields that carry the measurements. |
 | [claude-code-integration.md](claude-code-integration.md) | How an agentic client is pointed at this server, and the environment variables that matter. |
 | [tuning-log.md](tuning-log.md) | Every tuning campaign run on this box, including the ones that found nothing. |
+| [etude-vitesse-qwen-2026-09-06.md](etude-vitesse-qwen-2026-09-06.md) | Study of 2026-09-06, in French: every remaining speed lever for the reasoning profile, ranked, with what was already closed by measurement and the campaign plan. |
 
 ## Where the truth lives
 

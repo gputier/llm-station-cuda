@@ -14,16 +14,19 @@ $ModelsDir = 'D:\models'
 $CudaRoot  = 'C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA'
 
 # ---------------------------------------------------------------------------
-# Three llama.cpp builds coexist on this box, on purpose. They are NOT
+# Four llama.cpp builds coexist on this box, on purpose. They are NOT
 # interchangeable, and picking the wrong one is a silent failure.
 #
 #  - turboquant: a frozen custom fork (2026-04-07). Still serves 'embed'. Its
 #    only reason to exist was the turbo3 cache quants of a model that has since
 #    been removed, so it has no remaining technical justification and could be
 #    retired once 'embed' is validated on upstream.
-#  - upstream: official build of 2026-08-11. The only one of the two that knows
-#    the muse-glimmer architecture. Serves 'muse' and 'qwenu'.
-#  - dated build (2026-08-27): see below. Serves 'qwen', and only it can.
+#  - upstream: official build of 2026-08-11. The only one of the first two that
+#    knows the muse-glimmer architecture. Serves 'muse' and 'qwenu'.
+#  - dated build (2026-08-27): see below. Serves 'qwen', and only it can, plus
+#    'ornith'.
+#  - b10826 (2026-09-06): the official release binary, unzipped flat, no
+#    compilation. Serves 'tiel'. See its block below.
 # ---------------------------------------------------------------------------
 $exe       = "$RootDir\llama-cpp-turboquant-win\build-win\bin\llama-server.exe"
 $workDir   = "$RootDir\llama-cpp-turboquant-win\build-win\bin"
@@ -58,6 +61,16 @@ $cudaBinUp = "$CudaRoot\v13.3\bin"
 #    cannot open ggml-cuda.dll). Stop the server before recompiling.
 $exeNew     = "$RootDir\llama-cpp-20260827\build-win\bin\Release\llama-server.exe"
 $workDirNew = "$RootDir\llama-cpp-20260827\build-win\bin\Release"
+
+# Official binary b10826 (2026-09-06), CUDA 13.3, flat layout like llama-cpp-b10740: the zip and
+# its cudart unpacked into one directory, no compilation. Serves 'tiel' since 2026-09-06. Control
+# against the 2026-08-27 build, same 65,615-token prompt, 400 tokens, seed 42, 3 runs, temperature
+# 0.6: prefill 8,724 -> 9,155 tok/s (+4.9%), decode 211.3 -> 210.8 (identical), VRAM 31,707 ->
+# 31,550 MiB, MTP counters within noise (339/229 against 341/228). Two behaviour changes it brings, both logged at startup:
+# preserve_reasoning is on by default (turn off with --no-reasoning-preserve if prompts grow), and
+# it recommends --image-min-tokens 1024 for this vision model.
+$exeB10826     = "$RootDir\llama-cpp-b10826\llama-server.exe"
+$workDirB10826 = "$RootDir\llama-cpp-b10826"
 
 $instDir   = "$RootDir\instances"
 New-Item -ItemType Directory -Force -Path $instDir | Out-Null
@@ -607,9 +620,28 @@ switch ($Action) {
       # which is exactly the bandwidth ceiling this machine runs into. Note that
       # MTP acceptance is WORSE than qwen's, 27.2% against 38.7%, and the model
       # still wins by half again: acceptance rate does not predict throughput.
-      '--spec-type','draft-mtp','--spec-draft-n-max','4',
+      # n-max 2 since 2026-09-03, not 4. Swept on this model, production flags otherwise, one
+      # 38,000-token prompt of real llama.cpp sources, fixed seed, 3 runs, median decode:
+      #   n-max 2 ... 184.8 tok/s, acceptance 46.9%
+      #   n-max 3 ... 181.9 tok/s, acceptance 40.1%
+      #   n-max 4 ... 156.8 tok/s, acceptance 27.2%   <-- was in production
+      #   n-max 6 ... 133.3 tok/s, acceptance 18.4%
+      # Raising --spec-draft-p-min to 0.40 or 0.60 lifts acceptance to 50-66% and HALVES throughput.
+      # Acceptance is not the criterion, throughput is. Measured at short context only; the
+      # 2026-08-31 lesson on qwen (ranking inverts at full context) has not been replayed here.
+      '--spec-type','draft-mtp','--spec-draft-n-max','2',
       '--n-gpu-layers','99','--load-mode','mlock','--flash-attn','on','--jinja',
-      '--host','0.0.0.0','--port','8080','--parallel','1',
+      # --parallel 2 --kv-unified since 2026-09-06: two workstations call this model. With
+      # --kv-unified the 393216 window is ONE shared pool, not 2 x 196608: without it llama-server
+      # splits -c between slots while /props still announces the total.
+      # Measured the same day on b10826, 400 tokens forced, pure generation:
+      #   1 stream .... 260 tok/s
+      #   2 streams ... 202 + 188 tok/s (390 total)
+      #   4 streams ... 97 to 104 tok/s each (400 total, card saturated)
+      # The cost is the prefill: while one slot reads a 40k prompt (4 to 5 s), the other's
+      # generation drops to 15 to 50 tok/s. Four slots were rejected: no gain over two for two
+      # callers, half the per-stream rate, and 580 MB of VRAM headroom under load.
+      '--host','0.0.0.0','--port','8080','--parallel','2','--kv-unified',
       # The GGUF declares context_length 262144 and llama.cpp caps on the file,
       # not on --ctx-size. This override is the ONLY lock, same as on muse, and
       # no YaRN flag is needed. Recall verified 2026-09-01 by needle-in-haystack
@@ -621,8 +653,11 @@ switch ($Action) {
       '-b','4096','-ub','2048',
       '--cache-type-k','q4_0','--cache-type-v','q4_0',
       '-cram','24576',
-      '--temp','1.0','--top-p','0.95','--top-k','20','--min-p','0'
-    ) $null $exeNew $workDirNew $cudaBinUp
+      # temp 0.6 since 2026-09-06, not 1.0. Ornith's model card recommends 0.6 for general use and
+      # reserves 1.0 for reproducing its benchmarks. Claude Code sends no temperature, so this value
+      # is the one every session runs at. Trial on real usage; revert to 1.0 if nothing improves.
+      '--temp','0.6','--top-p','0.95','--top-k','20','--min-p','0'
+    ) $null $exeB10826 $workDirB10826 $cudaBinUp
   }
 
   'ornith' {

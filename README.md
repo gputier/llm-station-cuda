@@ -80,7 +80,7 @@ portable.
 | File | What it covers |
 |---|---|
 | [docs/prerequisites.md](docs/prerequisites.md) | Everything that must be installed before a first build |
-| [docs/building-llama-cpp.md](docs/building-llama-cpp.md) | The CUDA builds, why there are three, and the two build traps |
+| [docs/building-llama-cpp.md](docs/building-llama-cpp.md) | The CUDA builds, why there are four, and the two build traps |
 | [docs/claude-code-integration.md](docs/claude-code-integration.md) | How a local server replaces the Anthropic API, and what that costs |
 | [docs/api-usage.md](docs/api-usage.md) | Calling the server directly: sampling per model, vision, embeddings |
 | [docs/tuning-log.md](docs/tuning-log.md) | Every measurement campaign, including the ones that found nothing |
