@@ -9,6 +9,109 @@ hardware listed in [prerequisites.md](prerequisites.md).
 
 ---
 
+## 2026-09-08: four candidate models benched, and the bench itself turns out to measure the wrong thing
+
+Four files pulled the same morning were put against the models in service: `Ornith-1.5-9B-MTP-BF16-ASHQ1-6500`,
+`Ornith-1.5-35B-A3B-TIEL_Calibrated-MTPv2-23G-ICE`, `Ornith-1.5-35B-A3B-ONYX-compact`, and
+`KAT-Philly-MTP-Q4_K_M` from KAT-Coder-V2.5-Dev-35B-A3B. All four declare `nextn_predict_layers`,
+so all four were run with speculation on.
+
+Protocol: b10826, the production `tiel` argument list with only the model path changing, no
+projector on any of them including the control, `bench.ps1`, 150,000 characters of real llama.cpp
+sources (about 38,000 tokens), 512 tokens, seed 42, three runs, median.
+
+| Model | Decode | Prefill | VRAM | MTP accepted |
+|---|---|---|---|---|
+| **tiel** (control) | 199.71 tok/s | 8,758 tok/s | 30,936 MiB | 56.2% |
+| onyx compact | **207.19** | 8,275 | **25,621** | 60.1% |
+| kat-coder | 197.71 | 8,072 | 29,702 | 52.8% |
+| ice (MTPv2 23G) | 190.97 | 8,411 | 30,530 | 52.2% |
+
+And the two 9B, same protocol at the production `ornith` window of 262,144:
+
+| Model | Decode | Prefill | VRAM | MTP accepted |
+|---|---|---|---|---|
+| ornith Q5_K_M, as in production | 167.18 tok/s | **10,721** | **11,648 MiB** | none |
+| ornith Q5_K_M, speculation on | **179.64** | 7,715 | 14,179 | 58.4% |
+| ashq1 (the downloaded file) | 164.25 | 7,743 | 14,357 | 49.0% |
+
+### The 9B already had the MTP head, and nobody had switched it on
+
+The interesting line above is the middle one, and it is not a new file: it is the model that has
+been serving `ornith` all along. Starting it without `--spec-type` prints four warnings that are
+easy to walk past:
+
+```
+W model has unused tensor blk.32.nextn.eh_proj.weight (size = 23068672 bytes) -- ignoring
+```
+
+The production weights carry a draft head, llama-server drops it when no speculation is asked for,
+and switching it on is worth 7.5% of decode for 2,531 MB of VRAM and a quarter of the prefill. The
+file downloaded to answer that same question, ASHQ1, is slower than the one already on the disk.
+The lesson is the same one the download campaign taught four hours earlier: check what you have
+before fetching what you think you need.
+
+### The first request after a start is not a measurement
+
+Every speculation run collapsed on its first request and recovered on the next: 49, 57, 69, 86 and
+88 tok/s against 180 to 208 immediately after. Runs without speculation showed nothing of the sort.
+Two explanations fit, a cold server or a context the draft head has never seen, and they lead to
+opposite conclusions, so a second prompt of the same size was built from a different slice of the
+sources and sent to a warm server:
+
+| tiel | prompt A, cold | prompt A, cached | prompt B, new context | prompt B, cached |
+|---|---|---|---|---|
+| speculation on | 55.82 tok/s | 200.20 | 190.10 | 191.83 |
+| speculation off | 196.96 | 195.98 | 187.63 | 193.15 |
+
+A new context costs nothing. Only the first request after a start does, and only under speculation.
+**Discard run 1 of any speculative bench**, and read the header of this file accordingly: "median
+of 3 runs" has always meant one cold run plus two that hit the prompt cache, `-cram` being on in
+every profile. The median lands on the cached pair, which is the right regime to read since Claude
+Code reuses its prefix, but it is not what the phrase says.
+
+### The bench prompt is the worst possible case for speculation
+
+Compared like for like on prompt B, warm, speculation buys nothing at all: 190.10 against 187.63,
+then 191.83 against 193.15, for 3,710 MB of VRAM and 14% of the prefill. That reading would have
+sent the MTP head to the bin. It would have been wrong, and the reason is the prompt: `bench.ps1`
+asks for a ten-line summary in French, which is the least predictable text a draft head can be
+handed. Four short tasks at temperature 0, same model, same day:
+
+| Task | tiel, speculation on | tiel, speculation off |
+|---|---|---|
+| write a PowerShell function | **284.3 tok/s** | 218.2 |
+| read a Python snippet | **226.4** | 190.3 |
+| reason in French | 204.8 | **240.1** |
+
+Thirty percent on generated code, nineteen on reading it, fifteen lost on French prose. The head
+earns its VRAM on exactly the work this box exists for, and `bench.ps1` is blind to it. Every MTP
+decision taken on this bench since 2026-09-03, the `n-max` sweep included, was taken on prose.
+A code-shaped long-context bench is missing from this repository.
+
+### Quality, four exercises, temperature 0
+
+Same four tasks scored by hand: a C++ out-of-bounds loop, a PowerShell function to write, a
+classic fly-between-trains problem, and Python's mutable default argument.
+
+- **tiel** 4/4, **kat-coder** 4/4
+- **onyx** 3/4, **ice** 3/4, both failing the same one, the PowerShell function they write does
+  not return files
+
+Four questions rank nothing. They are a gate: onyx and ice do not pass it, and their throughput
+advantage is not worth reopening.
+
+### What moves
+
+Nothing yet, and `tiel` stayed in production throughout. Onyx leads the decode table by 3.7% and
+saves 5.3 GB, which is real, but it fails a four-question gate that the incumbent passes, and the
+table it leads measures the wrong regime. Kat-coder matches tiel everywhere and beats it on
+generated code, 295.1 tok/s against 284.3, which makes it the only candidate worth a real trial.
+Ice is out on both counts. The 9B question is answered without a download: the head is already
+there.
+
+---
+
 ## 2026-09-08: Ornith moves to b10826, which buys nothing, and a launcher trap bites twice
 
 ### The build change is neutral on Ornith, and the profile moved anyway
