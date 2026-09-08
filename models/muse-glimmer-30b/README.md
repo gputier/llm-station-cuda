@@ -13,7 +13,7 @@ tool calling, and the only one here that reads an image faithfully.
 | Weights | `Muse-Glimmer-30B-UD-Q4_K_XL.gguf`, 14.8 GB |
 | Vision projector | `mmproj-kquant.gguf`, 1.30 GB |
 | Drafter | `dflash-kquant.gguf`, 1.5 GB |
-| Context | 1,048,576 (trained at 131,072) |
+| Context | 262,144 since 2026-08-31. The model reaches 1,048,576 and it is served at a quarter of that, on purpose: see below. |
 | VRAM | 29.0 GB of 32.6 |
 | Throughput | 102 to 107 tok/s |
 | Build | upstream 2026-08-11. The frozen fork does not know the `muse-glimmer` architecture. |
@@ -35,11 +35,22 @@ llama.cpp caps the slot on the `context_length` written **in the GGUF**, not on
 the slot context (...) exceeds the training context of the model - capping
 ```
 
-The one and only lock is:
+The one and only lock is that override:
 
 ```
---override-kv muse-glimmer.context_length=int:1048576
+--override-kv muse-glimmer.context_length=int:262144
 ```
+
+**The value served is 262,144, not the million, since 2026-08-31.** A million
+tokens cost more than they returned, so the profile asks for a quarter of what
+the model can do. Everything below about the ceiling still holds: without the
+override, asking for 262,144 yields exactly 131,072, silently. The million is a
+proven capability, not a served one, and raising this figure is a one-line
+change whose memory cost is not linear.
+
+Beware of where that number was written down. The reduction rode along in a
+commit about a different profile, and the repository went on announcing a
+million-token window in two places for a week.
 
 **The three YaRN flags were removed, they did nothing.** This profile used to
 carry `--rope-scaling yarn --rope-scale 8 --yarn-orig-ctx 131072`, on the belief

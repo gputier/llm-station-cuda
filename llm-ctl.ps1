@@ -338,7 +338,13 @@ switch ($Action) {
       '--spec-draft-ngl','99',
       '--n-gpu-layers','99','--load-mode','mlock','--flash-attn','on',
       '--jinja',
-      # 1M context. ONE lock, and it is not YaRN: llama.cpp caps the slot on the
+      # 262,144 since 2026-08-31, down from 1,048,576: a million tokens cost more
+      # than they returned. The million remains a proven capability of the model,
+      # recall verified by needle-in-a-haystack at 556,390 tokens, and raising the
+      # two numbers below is all it takes to get it back. Note that the memory cost
+      # is NOT linear, see the qwen block.
+      #
+      # ONE lock, and it is not YaRN: llama.cpp caps the slot on the
       # context_length written IN THE GGUF ("the slot context exceeds the training
       # context of the model - capping") and ignores --ctx-size beyond it. Without
       # this override, asking for 262144 or 786432 yields exactly 131072, silently.

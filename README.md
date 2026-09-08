@@ -38,16 +38,21 @@ unloads the others.
 | `tiel` | Tiel-Coder-35B-A3B, MTP UD-Q4_K_XL | 393,216 | In service. Coding and reasoning, two slots, vision |
 | `kat` | KAT-Coder-V2.5-Dev-35B-A3B, MTP Q4_K_M | 393,216 | On trial since 2026-09-08. Text only, no projector |
 | `ornith` | Ornith-1.5-9B, Q5_K_M | 262,144 | Fast second opinion and short tasks, a third of the VRAM |
-| `muse` | Muse Glimmer 30B, UD-Q4_K_XL | 1,048,576 | Agentic multi-turn, vision, faithful OCR |
+| `muse` | Muse Glimmer 30B, UD-Q4_K_XL | 262,144 | Agentic multi-turn, vision, faithful OCR |
 | `qwen` | Qwen3.8-27B, NVFP4 LOW | 393,216 | Reasoning and coding, superseded by `tiel` |
 | `qwenu` | Qwen3.8-27B Uncensored, Q5_K_M | 262,144 | Used only when the aligned model refuses a legitimate task |
 | `embed` | nomic-embed-text-v1.5, Q8_0 | 131,072 | 768-dimension embeddings |
 
 Role split established by measurement, not preference. `tiel` took the coding
 and reasoning seat from `qwen` on 2026-09-01, on the strength of 54% more decode
-and twice the prefill at equal MMLU. Muse keeps the agentic loops, the faithful
-OCR (Qwen distorts identifiers), and anything beyond 262k. Ornith is the small,
-fast one: same reasoning, far less knowledge.
+and twice the prefill at equal MMLU. Muse keeps the agentic loops and the
+faithful OCR, Qwen distorting identifiers. Ornith is the small, fast one: same
+reasoning, far less knowledge.
+
+Muse used to be the answer to anything beyond 262k, and it no longer is: its
+window was brought down from 1,048,576 to 262,144 on 2026-08-31 because a
+million tokens cost more than they returned. The model still reaches a million,
+recall proven at 556,390 tokens; this box just does not serve it there.
 
 ## Quick start
 
