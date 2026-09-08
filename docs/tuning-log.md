@@ -33,6 +33,18 @@ keep. `llama-cpp-20260827` now justifies itself through `qwen` alone, which
 genuinely needs the NVFP4 kernels; b10826 is an official binary, unzipped, not a local
 compilation. One fewer profile depending on something we compiled ourselves.
 
+### The profile-to-build pairing now lives in one table
+
+Six switch branches each quoted their binary by hand at the `Start-LLM` call site, while the same
+script already resolved the port through a `$ports` table. The pairing moves far more often than
+the port does: `tiel` on 2026-09-06, `ornith` on 2026-09-08. A `$builds` table now holds it, one
+row per profile, and `Start-LLM` reads it when no binary is passed explicitly. Bench launchers
+still pass one, which is how a profile is run against another build without editing this file.
+
+Proved by execution, not by reading: each of the four distinct binaries was started through the
+table and the running process path checked. `embed` came up on the frozen turboquant build,
+`qwenu` on upstream, `qwen` on the 2026-08-27 build, `ornith` and `tiel` on b10826.
+
 ### `set "PATH=..." && ...` inside `cmd /c` swallows the whole command line, again
 
 `bench-launch.ps1` still carried the pattern that `Start-LLM` documents against since 2026-09-01:

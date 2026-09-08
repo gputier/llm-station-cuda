@@ -79,6 +79,23 @@ New-Item -ItemType Directory -Force -Path $instDir | Out-Null
 # GPU: starting one unloads the others.
 $ports = @{ embed = 8080; muse = 8080; ornith = 8080; qwen = 8080; qwenu = 8080; tiel = 8080 }
 
+# Which build serves which profile. Same indirection as $ports above, and for the same reason:
+# picking the wrong binary is a silent failure, and the profile-to-build pairing moves far more
+# often than the port does (tiel on 2026-09-06, ornith on 2026-09-08). Quoting the binary by hand
+# in each switch branch meant six independent places to keep in step. Change a pairing HERE, not
+# in the branch. Start-LLM still accepts an explicit binary, which is what the bench launchers use
+# to run a profile against another build without touching this file.
+$builds = @{
+  embed  = @{ Exe = $exe;         WorkDir = $workDir;         CudaBin = $cudaBin   }
+  muse   = @{ Exe = $exeUp;       WorkDir = $workDirUp;       CudaBin = $cudaBinUp }
+  qwenu  = @{ Exe = $exeUp;       WorkDir = $workDirUp;       CudaBin = $cudaBinUp }
+  qwen   = @{ Exe = $exeNew;      WorkDir = $workDirNew;      CudaBin = $cudaBinUp }
+  tiel   = @{ Exe = $exeB10826;   WorkDir = $workDirB10826;   CudaBin = $cudaBinUp }
+  # ornith moved off the 2026-08-27 build on 2026-09-08. The move bought no speed, it was taken
+  # because Ornith is Q5_K_M and never needed the NVFP4 kernels. Figures in docs/tuning-log.md.
+  ornith = @{ Exe = $exeB10826;   WorkDir = $workDirB10826;   CudaBin = $cudaBinUp }
+}
+
 function Quote($s) {
   if ($s -match '[\s"]') { return '"' + ($s -replace '"','\"') + '"' }
   return $s
@@ -203,9 +220,12 @@ function Show-Logs($name, $tail) {
 }
 
 function Start-LLM($name, $modelArgs, $cudaDevices = $null, $exePath = $null, $workDirPath = $null, $cudaBinPath = $null) {
-  if (-not $exePath)     { $exePath     = $exe }
-  if (-not $workDirPath) { $workDirPath = $workDir }
-  if (-not $cudaBinPath) { $cudaBinPath = $cudaBin }
+  # Explicit arguments win, so a bench can run a profile against another build. Otherwise the
+  # pairing comes from $builds, and a profile missing from it falls back to the turboquant paths.
+  $b = $builds[$name]
+  if (-not $exePath)     { $exePath     = if ($b) { $b.Exe }     else { $exe }     }
+  if (-not $workDirPath) { $workDirPath = if ($b) { $b.WorkDir } else { $workDir } }
+  if (-not $cudaBinPath) { $cudaBinPath = if ($b) { $b.CudaBin } else { $cudaBin } }
   $port = $ports[$name]
   # Free the port: kill any tracked instance on the same port.
   $killed = @()
@@ -350,7 +370,7 @@ switch ($Action) {
       '-cram','24576',
       '--cache-type-k','q8_0','--cache-type-v','q8_0',
       '--temp','1.0','--top-p','0.95','--top-k','64'
-    ) $null $exeUp $workDirUp $cudaBinUp
+    )
   }
 
   'qwen' {
@@ -543,7 +563,7 @@ switch ($Action) {
       '--temp','1.0','--top-p','0.95','--top-k','20','--min-p','0'
     # Build of 2026-08-27, NOT the 2026-08-11 one: NVFP4 is ggml type 40, whose
     # CUDA kernels exist only in that build, compiled for sm_120.
-    ) $null $exeNew $workDirNew $cudaBinUp
+    )
   }
 
   'qwenu' {
@@ -597,7 +617,7 @@ switch ($Action) {
       # on this quant.
       '-cram','24576',
       '--temp','1.0','--top-p','0.95','--top-k','20','--min-p','0'
-    ) $null $exeUp $workDirUp $cudaBinUp
+    )
   }
 
   'tiel' {
@@ -658,7 +678,7 @@ switch ($Action) {
       # reserves 1.0 for reproducing its benchmarks. Claude Code sends no temperature, so this value
       # is the one every session runs at. Trial on real usage; revert to 1.0 if nothing improves.
       '--temp','0.6','--top-p','0.95','--top-k','20','--min-p','0'
-    ) $null $exeB10826 $workDirB10826 $cudaBinUp
+    )
   }
 
   'ornith' {
@@ -683,10 +703,7 @@ switch ($Action) {
       '--cache-type-k','q4_0','--cache-type-v','q4_0',
       '-cram','24576',
       '--temp','1.0','--top-p','0.95','--top-k','20','--min-p','0'
-    ) $null $exeB10826 $workDirB10826 $cudaBinUp
-    # Build b10826 since 2026-09-08, not the 2026-08-27 one. The move buys no speed: it was
-    # taken because Ornith is Q5_K_M and never needed the NVFP4 kernels. Figures in
-    # docs/tuning-log.md, 2026-09-08.
+    )
   }
 
   'embed' {
