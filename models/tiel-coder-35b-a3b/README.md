@@ -1,0 +1,137 @@
+# Tiel-Coder-35B-A3B (MIT)
+
+Sparse MoE, architecture `qwen35moe`: 41 blocks, 256 experts, 8 active per
+token, so roughly 3B of the 35B parameters do the work per token.
+`general.name` in the GGUF reads `Ornith-1.5-35B`: this is a requantisation of
+Ornith-1.5-35B-A3B with an MTP head added, not a separate model. The coding
+model of this box.
+
+```powershell
+.\llm-ctl.ps1 -Action tiel
+```
+
+| | |
+|---|---|
+| Weights | `Tiel-Coder-35B-A3B-MTP-UD-Q4_K_XL.gguf` |
+| Vision projector | `mmproj-BF16.gguf` |
+| Context | 393,216 (`--override-kv`; 262,144 is the GGUF's declared ceiling) |
+| KV cache | `q4_0` |
+| VRAM | 29,465 MB, about 31,617 MB at the 393,216 window |
+| Slots | 2, `--kv-unified`, since 2026-09-06 |
+| Build | `b10826` (2026-09-06), official release binary, no compilation. Only build serving this profile. |
+
+## Why this model over `qwen`
+
+Measured 2026-09-01 against the `qwen` profile, same 37,981-token prompt, seed
+42, three runs, median, plus a fresh 500-question MMLU set spanning 25 subjects
+and 60 GSM8K problems, temperature 0, both models on the identical set:
+
+| | qwen | tiel | |
+|---|---|---|---|
+| Decode | 104.53 tok/s | 161.43 tok/s | +54.4% |
+| Prefill | 4,264 tok/s | 8,616 tok/s | x2.02 |
+| VRAM | 30,952 MB | 29,465 MB | |
+| MMLU | 82.0% | 82.2% | one question in five hundred |
+| GSM8K | 52/60 | 58/60 | |
+
+The gain is structural: far fewer bytes reread per token, which is exactly the
+bandwidth ceiling this machine runs into.
+
+**Acceptance rate does not predict throughput.** Tiel's MTP acceptance is
+27.2%, worse than qwen's 38.7%, and it still wins by half again. Read the
+acceptance percentage as a diagnostic, never as the criterion for a decision.
+
+## `--spec-draft-n-max 2`, not 4
+
+Swept on this model on 2026-09-03, production flags otherwise, one
+38,000-token prompt of real llama.cpp sources, fixed seed, 3 runs, median
+decode:
+
+| n-max | Decode | Acceptance |
+|---|---|---|
+| **2** | **184.8 tok/s** | 46.9% |
+| 3 | 181.9 tok/s | 40.1% |
+| 4 | 156.8 tok/s | 27.2% (was in production) |
+| 6 | 133.3 tok/s | 18.4% |
+
+Raising `--spec-draft-p-min` to 0.40 or 0.60 lifts acceptance to 50-66% and
+halves throughput: acceptance is not the target, throughput is. This sweep was
+run at short context only; the 2026-08-31 lesson on `qwen`, where the n-max
+ranking inverts at full context, has not been replayed here.
+
+A same-day bench (2026-09-08) later showed the sweep itself measures the wrong
+regime for part of the workload: `bench.ps1` asks for a ten-line French
+summary, the least predictable text a draft head can be handed. On generated
+code, speculation is worth 30%; on French prose, it can cost 15%. Every n-max
+decision taken on this bench has been taken on prose. A code-shaped
+long-context bench is still missing.
+
+## Two slots, `--kv-unified`, since 2026-09-06
+
+Two workstations call this model. With `--kv-unified` the 393,216 window is
+ONE shared pool, not split 2 x 196,608: without the flag llama-server divides
+`-c` between slots while `/props` still announces the total.
+
+Measured the same day on b10826, 400 tokens forced, pure generation:
+
+| Streams | Per stream | Total |
+|---|---|---|
+| 1 | 260 tok/s | 260 |
+| 2 | 202 + 188 tok/s | 390 |
+| 4 | 97 to 104 tok/s each | 400 (card saturated) |
+
+The cost is the prefill: while one slot reads a 40k prompt (4 to 5 s), the
+other's generation drops to 15 to 50 tok/s. Four slots were rejected: no gain
+over two for two callers, half the per-stream rate, and only 580 MB of VRAM
+headroom under two-stream load.
+
+## `--ctx-size 393216`, and the recall check behind it
+
+The GGUF declares `context_length 262144`; llama.cpp caps the slot on that
+value and ignores a larger `--ctx-size`, in a single log line. The lock is
+`--override-kv qwen35moe.context_length=int:393216`, same mechanism as on
+`muse` and `qwen`.
+
+Recall verified 2026-09-01 by needle-in-a-haystack at 269,274 then 378,540
+tokens, needle at 10/50/90% depth, 6 hits out of 6. VRAM then sits at 31,617
+MB of 32,607: about 990 MB of headroom, not yet exercised with an image on
+input while the projector is loaded.
+
+## The first request after a start is not a measurement
+
+Every speculation run on this box collapses on its first request and recovers
+on the next: 49 to 88 tok/s against 180 to 208 immediately after. A run without
+speculation shows nothing of the sort. Tested by sending a second prompt built
+from a different slice of the sources to a warm server:
+
+| | prompt A, cold | prompt A, cached | prompt B, new context | prompt B, cached |
+|---|---|---|---|---|
+| speculation on | 55.82 tok/s | 200.20 | 190.10 | 191.83 |
+| speculation off | 196.96 | 195.98 | 187.63 | 193.15 |
+
+A new context costs nothing; only the first request after a start does, and
+only under speculation. Discard run 1 of any speculative bench on this model.
+
+## Temperature 0.6, not 1.0
+
+Ornith's model card recommends 0.6 for general use and reserves 1.0 for
+reproducing its benchmarks. Claude Code sends no temperature (verified by
+capturing a request: only `thinking`, `output_config.effort` and `max_tokens`
+are sent, none of which llama-server maps to a reasoning budget), so 0.6 is
+the value every session runs at. Set 2026-09-06 as a trial on real usage; a
+12-prompt strict-instruction bench passed 36/36 at temperature 1.0, so it
+could not discriminate between the two values.
+
+Tiel embeds the Sharp chat template `qwen3.8-froggeric-v22.4.0` with a
+force-appended terseness system prompt (`terse` kwarg, default true), thinking
+on and reasoning effort `medium` by default.
+
+## Build: b10826 only
+
+`b10826` is the official release binary posted flat, no compilation. Against
+the 2026-08-27 build on the same profile, 65,615-token prompt, 400 tokens,
+seed 42, 3 runs: prefill 8,724 to 9,155 tok/s (+4.9%), decode 211.3 to 210.8
+(identical), VRAM 31,707 to 31,550 MB. Two behaviour changes it brings, both
+logged at startup: `preserve_reasoning` is on by default (`--no-reasoning-preserve`
+turns it off if prompts grow), and it recommends `--image-min-tokens 1024` for
+this vision model, which the profile does not currently carry.

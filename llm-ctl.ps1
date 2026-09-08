@@ -1,5 +1,5 @@
 param(
-  [ValidateSet('embed','muse','ornith','qwen','qwenu','tiel','stop','status','logs')]
+  [ValidateSet('embed','kat','muse','ornith','qwen','qwenu','tiel','stop','status','logs')]
   [string]$Action,
   [string]$Name,  # optional: for 'stop' and 'logs', targets a named instance
   [int]$Tail = 40 # for 'logs': history lines to show before following live
@@ -76,10 +76,14 @@ $instDir   = "$RootDir\instances"
 New-Item -ItemType Directory -Force -Path $instDir | Out-Null
 
 # Every model action sits on port 8080 and they are mutually exclusive on the
-# GPU: starting one unloads the others.
-$ports = @{ embed = 8080; muse = 8080; ornith = 8080; qwen = 8080; qwenu = 8080; tiel = 8080 }
+# GPU: starting one unloads the others. This was a per-profile table until
+# 2026-09-08, where every row held the same 8080 and its only real job was to
+# enumerate the profile names. A third list of names to keep in step with the
+# ValidateSet and with $builds, saying nothing of its own. The names now come
+# from $builds, which does carry per-profile information.
+$serverPort = 8080
 
-# Which build serves which profile. Same indirection as $ports above, and for the same reason:
+# Which build serves which profile. The one indirection that earns its keep:
 # picking the wrong binary is a silent failure, and the profile-to-build pairing moves far more
 # often than the port does (tiel on 2026-09-06, ornith on 2026-09-08). Quoting the binary by hand
 # in each switch branch meant six independent places to keep in step. Change a pairing HERE, not
@@ -94,6 +98,7 @@ $builds = @{
   # ornith moved off the 2026-08-27 build on 2026-09-08. The move bought no speed, it was taken
   # because Ornith is Q5_K_M and never needed the NVFP4 kernels. Figures in docs/tuning-log.md.
   ornith = @{ Exe = $exeB10826;   WorkDir = $workDirB10826;   CudaBin = $cudaBinUp }
+  kat    = @{ Exe = $exeB10826;   WorkDir = $workDirB10826;   CudaBin = $cudaBinUp }
 }
 
 function Quote($s) {
@@ -207,7 +212,7 @@ function Show-Logs($name, $tail) {
   if (-not $name) {
     $running = @(Read-Instances | Where-Object { Get-Process -Id $_.Pid -ErrorAction SilentlyContinue })
     if ($running.Count -eq 0) {
-      $noms = ($ports.Keys | Sort-Object) -join '/'
+      $noms = ($builds.Keys | Sort-Object) -join '/'
       Write-Output "NO_INSTANCE no tracked instance is running. Pass -Name ($noms)."
       return
     }
@@ -226,7 +231,7 @@ function Start-LLM($name, $modelArgs, $cudaDevices = $null, $exePath = $null, $w
   if (-not $exePath)     { $exePath     = if ($b) { $b.Exe }     else { $exe }     }
   if (-not $workDirPath) { $workDirPath = if ($b) { $b.WorkDir } else { $workDir } }
   if (-not $cudaBinPath) { $cudaBinPath = if ($b) { $b.CudaBin } else { $cudaBin } }
-  $port = $ports[$name]
+  $port = $serverPort
   # Free the port: kill any tracked instance on the same port.
   $killed = @()
   foreach ($i in Read-Instances) {
@@ -696,13 +701,64 @@ switch ($Action) {
       #   GSM8K ...... 53/60   (against 52/60 for qwen, a 27B model)
       # Read that pair the right way: equal reasoning, far less knowledge. This
       # is a fast second-opinion and short-task model, not a replacement.
-      # No MTP file is published for it, the draft_n field is absent from timings.
+      #
+      # Speculation on since 2026-09-08, and the draft head is NOT a new file: these
+      # very weights carry blk.32.nextn.* tensors, which llama-server logs as
+      # 'unused tensor ... -- ignoring' and drops whenever --spec-type is absent.
+      # It had been running that way since the profile was created. Measured the
+      # same day, bench.ps1, 38,000-token prompt, seed 42, 3 runs, median:
+      #   decode ..... 167.18 -> 179.64 tok/s   (+7.5%, acceptance 58.4%)
+      #   prefill .... 10,721 -> 7,715  tok/s   (-28%)
+      #   VRAM ....... 11,648 -> 14,179 MB      (+2,531, projector excluded)
+      # Taken because this profile answers short questions, where the head earns
+      # its memory, and gives up prefill it rarely uses. The published
+      # Ornith-1.5-9B-MTP-BF16-ASHQ1-6500 file, fetched to answer this same
+      # question, is SLOWER than these weights at 164.25 tok/s: it was not kept.
+      '--spec-type','draft-mtp','--spec-draft-n-max','2',
       '--n-gpu-layers','99','--load-mode','mlock','--flash-attn','on','--jinja',
       '--host','0.0.0.0','--port','8080','--parallel','1','--ctx-size','262144',
       '-b','4096','-ub','2048',
       '--cache-type-k','q4_0','--cache-type-v','q4_0',
       '-cram','24576',
       '--temp','1.0','--top-p','0.95','--top-k','20','--min-p','0'
+    )
+  }
+
+  'kat' {
+    # KAT-Coder-V2.5-Dev-35B-A3B, abliterated, requantised with an MTP head by
+    # jakeroxs. Same 'qwen35moe' architecture and the same 3B-of-35B sparsity as
+    # 'tiel', which is why it inherits that profile's arguments unchanged.
+    #
+    # On TRIAL since 2026-09-08, it replaces nothing. It is the only one of the
+    # four candidates benched that day to match 'tiel' everywhere and beat it
+    # where this box does its work, and the trial is what decides whether it
+    # takes over. Same protocol as 'tiel', b10826, projector on neither side:
+    #   decode, 38k prompt ..... 197.71 tok/s against 199.71 for tiel
+    #   prefill ................ 8,072  against 8,758
+    #   VRAM ................... 29,702 MB against 30,936
+    #   MTP accepted ........... 52.8% against 56.2%
+    #   writing PowerShell ..... 295.1 tok/s against 284.3
+    #   four hand-scored tasks . 4/4, same as tiel
+    # Running it STOPS 'tiel': one model at a time on this card, and 29.7 GB
+    # leaves no room for a second. This is an alternation, not a coexistence.
+    #
+    # No projector is published for these weights, so this profile is text only,
+    # unlike 'tiel' which loads mmproj-BF16. Anything sending an image must stay
+    # on 'tiel'.
+    Start-LLM 'kat' @(
+      '-m',"$ModelsDir\kat-coder-v25-35b-a3b-mtp\KAT-Philly-MTP-Q4_K_M.gguf",
+      # n-max 2 carried over from 'tiel' without a sweep of its own. The 2026-09-03
+      # sweep that settled that value was run on the other weights; re-run it here
+      # before reading anything into this model's acceptance rate.
+      '--spec-type','draft-mtp','--spec-draft-n-max','2',
+      '--n-gpu-layers','99','--load-mode','mlock','--flash-attn','on','--jinja',
+      '--host','0.0.0.0','--port','8080','--parallel','2','--kv-unified',
+      '--override-kv','qwen35moe.context_length=int:393216',
+      '--ctx-size','393216',
+      '-b','4096','-ub','2048',
+      '--cache-type-k','q4_0','--cache-type-v','q4_0',
+      '-cram','24576',
+      '--temp','0.6','--top-p','0.95','--top-k','20','--min-p','0'
     )
   }
 

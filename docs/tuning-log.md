@@ -48,8 +48,15 @@ W model has unused tensor blk.32.nextn.eh_proj.weight (size = 23068672 bytes) --
 The production weights carry a draft head, llama-server drops it when no speculation is asked for,
 and switching it on is worth 7.5% of decode for 2,531 MB of VRAM and a quarter of the prefill. The
 file downloaded to answer that same question, ASHQ1, is slower than the one already on the disk.
-The lesson is the same one the download campaign taught four hours earlier: check what you have
-before fetching what you think you need.
+
+**And this repository has said so since 2026-08-31**, in
+[../models/qwen3.8-27b/README.md](../models/qwen3.8-27b/README.md): "the `blk.*.nextn.*` tensors
+are already inside the quant; llama.cpp loads them and ignores them unless you pass `--spec-type
+draft-mtp`. One flag enables speculation, no second file to fetch." Written about `qwen`, true of
+every quant that ships those tensors, and never replayed against the other profiles. That is the
+actual lesson, and it is worse than the one about checking the disk before downloading: the fact
+was already written down, in this repository, by us. A finding about one model is worth a pass over
+the others the same day.
 
 ### The first request after a start is not a measurement
 

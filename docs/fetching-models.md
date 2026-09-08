@@ -3,8 +3,8 @@
 Use the official client. On this workstation it is `hf.exe`, from `huggingface_hub` 1.27.0.
 
 ```powershell
-hf download el4/Ornith-1.5-35B-A3B-ONYX-GGUF Ornith-1.5-35B-A3B-ONYX-compact.gguf `
-            --local-dir D:\models\ornith-35b-onyx-compact
+hf download jakeroxs/KAT-Coder-V2.5-Dev-35B-A3B-MTP-ABLITERATED-GGUF KAT-Philly-MTP-Q4_K_M.gguf `
+            --local-dir D:\models\kat-coder-v25-35b-a3b-mtp
 ```
 
 No environment variable is needed. `HF_HUB_ENABLE_HF_TRANSFER` is deprecated and now ignored: the
