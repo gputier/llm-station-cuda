@@ -9,6 +9,51 @@ hardware listed in [prerequisites.md](prerequisites.md).
 
 ---
 
+## 2026-09-08: Ornith moves to b10826, which buys nothing, and a launcher trap bites twice
+
+### The build change is neutral on Ornith, and the profile moved anyway
+
+`ornith` was the last profile owing itself to `llama-cpp-20260827`, the NVFP4 build, although its
+weights are Q5_K_M and never touched an NVFP4 kernel. Control against `llama-cpp-b10826` with the
+production argument list unchanged, only the binary varying: `bench.ps1`, 37,981-token prompt of
+real llama.cpp sources, 512 tokens, seed 42, temperature 1.0, thinking off, 3 runs, median decode.
+
+| Build | Decode | Prefill | VRAM | Window |
+|---|---|---|---|---|
+| 2026-08-27 | 166.32 tok/s | 10,682 tok/s | 12,696 MiB | 262,144 |
+| b10826 | 167.44 tok/s | 10,796 tok/s | 12,697 MiB | 262,144 |
+
+0.7% and 1.1%: noise on three runs. `draft_n` is absent on both, as expected, no MTP file exists
+for this model. The vision projector loads on both. A reasoning control (two trains, relative
+speed) answers correctly in French on b10826, so the chat template travels fine.
+
+**Moved regardless, and the reason is not speed.** Seven build directories sit on the disk, four
+of them in service (see [building-llama-cpp.md](building-llama-cpp.md)), and each has to earn its
+keep. `llama-cpp-20260827` now justifies itself through `qwen` alone, which
+genuinely needs the NVFP4 kernels; b10826 is an official binary, unzipped, not a local
+compilation. One fewer profile depending on something we compiled ourselves.
+
+### `set "PATH=..." && ...` inside `cmd /c` swallows the whole command line, again
+
+`bench-launch.ps1` still carried the pattern that `Start-LLM` documents against since 2026-09-01:
+`cmd /c` strips the outer quotes, `set PATH=<value> && <rest>` then absorbs everything after it
+into the variable's value. Nothing runs, no log file is created, and `Win32_Process.Create` still
+returns 0: the launch reports success and the server never exists. It cost one run here before
+the empty 2-byte log gave it away. Both bench launchers now set `$env:PATH` on the PowerShell
+process and let the child inherit it, like production does.
+
+### The repository copy of `llm-ctl.ps1` had drifted from the machine
+
+Comparing the two before deploying showed the repository copy was **behind on code and ahead on
+comments**. It was missing the 2026-09-05 fix that removes `--load-mode` from `embed` (the frozen
+turboquant build dies on that flag) and the dynamic profile list in the `NO_INSTANCE` message,
+while carrying better-written comment blocks for b10826 and for Tiel's draft depth. Deploying the
+repository file as-is would have broken the embedder. Reconciled in both directions on 2026-09-08:
+the machine keeps the code, the repository's comments were merged in, and the two files are now
+byte-identical modulo line endings. Worth a check before any future deploy from the repository.
+
+---
+
 ## 2026-09-06: Tiel on the official b10826 binary, two slots, and a strict-instruction bench
 
 ### The official b10826 binary is neutral in decode and +5% in prefill

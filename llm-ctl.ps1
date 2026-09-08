@@ -23,10 +23,11 @@ $CudaRoot  = 'C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA'
 #    retired once 'embed' is validated on upstream.
 #  - upstream: official build of 2026-08-11. The only one of the first two that
 #    knows the muse-glimmer architecture. Serves 'muse' and 'qwenu'.
-#  - dated build (2026-08-27): see below. Serves 'qwen', and only it can, plus
-#    'ornith'.
+#  - dated build (2026-08-27): see below. Serves 'qwen', and only it can. It
+#    also served 'ornith' until 2026-09-08, see that profile.
 #  - b10826 (2026-09-06): the official release binary, unzipped flat, no
-#    compilation. Serves 'tiel'. See its block below.
+#    compilation. Serves 'tiel' and, since 2026-09-08, 'ornith'. See its
+#    block below.
 # ---------------------------------------------------------------------------
 $exe       = "$RootDir\llama-cpp-turboquant-win\build-win\bin\llama-server.exe"
 $workDir   = "$RootDir\llama-cpp-turboquant-win\build-win\bin"
@@ -71,11 +72,10 @@ $workDirNew = "$RootDir\llama-cpp-20260827\build-win\bin\Release"
 # it recommends --image-min-tokens 1024 for this vision model.
 $exeB10826     = "$RootDir\llama-cpp-b10826\llama-server.exe"
 $workDirB10826 = "$RootDir\llama-cpp-b10826"
-
 $instDir   = "$RootDir\instances"
 New-Item -ItemType Directory -Force -Path $instDir | Out-Null
 
-# embed/muse/qwen/qwenu all sit on port 8080 and are mutually exclusive on the
+# Every model action sits on port 8080 and they are mutually exclusive on the
 # GPU: starting one unloads the others.
 $ports = @{ embed = 8080; muse = 8080; ornith = 8080; qwen = 8080; qwenu = 8080; tiel = 8080 }
 
@@ -190,7 +190,8 @@ function Show-Logs($name, $tail) {
   if (-not $name) {
     $running = @(Read-Instances | Where-Object { Get-Process -Id $_.Pid -ErrorAction SilentlyContinue })
     if ($running.Count -eq 0) {
-      Write-Output "NO_INSTANCE no tracked instance is running. Pass -Name (embed/muse/qwen/qwenu)."
+      $noms = ($ports.Keys | Sort-Object) -join '/'
+      Write-Output "NO_INSTANCE no tracked instance is running. Pass -Name ($noms)."
       return
     }
     $name = $running[0].Name
@@ -682,14 +683,20 @@ switch ($Action) {
       '--cache-type-k','q4_0','--cache-type-v','q4_0',
       '-cram','24576',
       '--temp','1.0','--top-p','0.95','--top-k','20','--min-p','0'
-    ) $null $exeNew $workDirNew $cudaBinUp
+    ) $null $exeB10826 $workDirB10826 $cudaBinUp
+    # Build b10826 since 2026-09-08, not the 2026-08-27 one. The move buys no speed: it was
+    # taken because Ornith is Q5_K_M and never needed the NVFP4 kernels. Figures in
+    # docs/tuning-log.md, 2026-09-08.
   }
 
   'embed' {
     Start-LLM 'embed' @(
       '-m',"$ModelsDir\nomic-embed-text-v1.5\nomic-embed-text-v1.5.Q8_0.gguf",
       '--embeddings','--pooling','mean',
-      '--n-gpu-layers','99','--load-mode','mlock','--flash-attn','on',
+      # No --load-mode here: 'embed' is served by the frozen turboquant build
+      # (2026-04-07), which predates that flag and dies on it with
+      # 'invalid argument: --load-mode'. Verified 2026-09-05.
+      '--n-gpu-layers','99','--flash-attn','on',
       '--host','0.0.0.0','--port','8080','--ctx-size','131072',
       '--parallel','1','-b','2048','-ub','2048'
     )
