@@ -52,13 +52,20 @@ does run with `--api-key`, put the real key here: it is sent as
 keeps the UI honest and stops the client from reaching for a real Anthropic
 model it cannot serve.
 
-**`CLAUDE_CODE_MAX_CONTEXT_TOKENS` must match one caller's SHARE of what the
-server serves.** This is not cosmetic. Set too low, the client compacts early
-while the server still has window free. Set too high, a session crossing the
-real ceiling is truncated server-side **with no warning**. The starting value is
-`default_generation_settings.n_ctx` in `/props`, never the number you passed to
-`--ctx-size`. We briefly set 524288 on a server capped at 262144 and caught it
-the same day.
+**`CLAUDE_CODE_MAX_CONTEXT_TOKENS` is an INPUT budget, not the window.** This is
+the correction of 2026-09-08 and it cost a working session. `n_ctx` counts input
+and output in the same pool. Announce the whole of it and the client fills the
+last token, after which the server has no room left to write anything and
+returns an **empty response**. It hit at 372,738 tokens of 393,216, 95% full:
+`/compact` answered `summarization produced empty response` twice in a row,
+because compacting is itself a request, and one that asks for 16,384 tokens of
+room to write its summary.
+
+The value is `default_generation_settings.n_ctx` from `/props`, **minus**
+`CLAUDE_CODE_MAX_OUTPUT_TOKENS`. For a 393,216 window with 16,384 of output,
+that is 376,832. Change one, change the other. Never read the number you passed
+to `--ctx-size`: we briefly set 524288 on a server capped at 262144 and caught
+it the same day.
 
 **A second slot forces you to divide it, and that is why there is no second
 slot.** Every profile here runs `--parallel 1`, so `/props` and this variable
