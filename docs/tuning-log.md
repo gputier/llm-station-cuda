@@ -9,6 +9,38 @@ hardware listed in [prerequisites.md](prerequisites.md).
 
 ---
 
+## 2026-09-08: 65,536 tokens of extra window cost a factor of fifty on decode
+
+A session sitting at 372,738 tokens of a 393,216 window could no longer compact: the client kept
+answering `summarization produced empty response`. The reading was that no room was left for the
+summary to be written, since `n_ctx` counts input and output in one pool. So the window went up to
+458,752 on `kat`, and the server took it: 30,527 MiB of 32,607, one gigabyte for the extra 65,536
+tokens.
+
+It made things worse, and the log says by how much. Same model, same 372,000-token context, same
+single slot:
+
+| Window | Prefill | Decode |
+|---|---|---|
+| 393,216 | cached | **97.31 tok/s** |
+| 458,752 | 371,799 tokens in 111 s | **1.92 tok/s** |
+
+Four minutes for 259 tokens, after which the client gave up. The empty response was a client
+timeout, not a server refusal.
+
+**The cliff is one gigabyte wide.** At 29,389 MiB the card has 3 GB spare and decodes at a hundred
+tokens per second; at 30,527 MiB it has 2 GB and decodes at two. This repository already carried
+the warning, in the `qwen` entry: the VRAM cost of a window is not linear, 384k was free on this
+card and 512k was not. It was read before the change and tried anyway.
+
+**What the incident does not explain.** Why the compaction failed at 393,216 in the first place,
+where decode was measured at 97 tok/s and 20,478 tokens of room remained, is still unknown. The
+window went back to 393,216 and the compaction then succeeded, so the working hypothesis is that
+the earlier failures were the two-slot configuration in place at that moment, not the window size.
+Not proven.
+
+---
+
 ## 2026-09-08: four candidate models benched, and the bench itself turns out to measure the wrong thing
 
 Four files pulled the same morning were put against the models in service: `Ornith-1.5-9B-MTP-BF16-ASHQ1-6500`,
