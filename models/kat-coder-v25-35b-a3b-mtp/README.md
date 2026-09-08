@@ -66,6 +66,19 @@ blind to the 30% speculation gains seen on generated code. Every number above
 that comes from `bench.ps1` measures a regime this model rarely runs in
 practice; the PowerShell figure is closer to real use.
 
+## Two slots means each caller gets half the pool, not all of it
+
+Inherited from `tiel` along with the rest: `--parallel 2 --kv-unified` holds ONE
+shared pool of 393,216 tokens. `/props` announces that whole pool to every
+caller, and a client that believes it hits a wall. Measured on the trial's first
+afternoon, two agents of a single session: a 196,000-token prefill at 1,546
+tok/s against the 8,000 the bench gives, the other slot generating at 1.40
+tok/s, then `failed to find free space in the KV cache`.
+
+The launcher now announces 180,000 to each caller, which is the pool over two
+slots minus room for the output. See
+[../../docs/claude-code-integration.md](../../docs/claude-code-integration.md).
+
 ## `--spec-draft-n-max 2` carried over, not re-swept
 
 The n-max value is inherited from `tiel`'s 2026-09-03 sweep, run on different

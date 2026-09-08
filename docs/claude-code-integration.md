@@ -52,14 +52,31 @@ does run with `--api-key`, put the real key here: it is sent as
 keeps the UI honest and stops the client from reaching for a real Anthropic
 model it cannot serve.
 
-**`CLAUDE_CODE_MAX_CONTEXT_TOKENS` must match what the server actually serves.**
-This is not cosmetic. Set too low, the client compacts early while the server
-still has a quarter of its window free. Set too high, a session crossing the
-real ceiling is truncated server-side **with no warning**. The authoritative
-value is `default_generation_settings.n_ctx` in `/props`, never the number you
-passed to `--ctx-size`. We briefly set 524288 on a server capped at 262144 and
-caught it the same day. The current pair is 393216 on both sides, lifted above
-the model's native 262144 by `--override-kv qwen35.context_length`.
+**`CLAUDE_CODE_MAX_CONTEXT_TOKENS` must match one caller's SHARE of what the
+server serves.** This is not cosmetic. Set too low, the client compacts early
+while the server still has window free. Set too high, a session crossing the
+real ceiling is truncated server-side **with no warning**. The starting value is
+`default_generation_settings.n_ctx` in `/props`, never the number you passed to
+`--ctx-size`. We briefly set 524288 on a server capped at 262144 and caught it
+the same day.
+
+**Then divide by the number of slots.** Reading `/props` and stopping there is
+what bit on 2026-09-08. A profile running `--parallel 2 --kv-unified` holds ONE
+shared pool of 393,216 tokens, and `/props` announces that whole pool to every
+caller. Two agents of a single session were each told they could fill 393,216.
+One of them reached a 196,000-token prompt, and the log reads: prefill down to
+1,546 tok/s against the 8,000 the bench gives, the other slot generating at
+**1.40 tok/s**, then `failed to find free space in the KV cache` with the batch
+size halved down to 16 and still failing.
+
+Two callers are not needed to trigger it. Agents spawned inside one session hit
+it identically, and so do the client's own background requests, which the
+launchers point at the same server.
+
+The rule, then: `n_ctx` from `/props`, divided by `--parallel`, minus room for
+`CLAUDE_CODE_MAX_OUTPUT_TOKENS`. For `tiel` and `kat` that is 393,216 over two
+slots, so 180,000 announced to each. Profiles running a single slot, like
+`qwen`, keep the full figure.
 
 ## The chat template trap
 
