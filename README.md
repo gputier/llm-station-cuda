@@ -35,7 +35,7 @@ unloads the others.
 
 | Action | Model | Context | Role |
 |---|---|---|---|
-| `tiel` | Tiel-Coder-35B-A3B, MTP UD-Q4_K_XL | 393,216 | In service. Coding and reasoning, two slots, vision |
+| `tiel` | Tiel-Coder-35B-A3B, MTP UD-Q4_K_XL | 393,216 | In service. Coding and reasoning, vision |
 | `kat` | KAT-Coder-V2.5-Dev-35B-A3B, MTP Q4_K_M | 393,216 | On trial since 2026-09-08. Text only, no projector |
 | `ornith` | Ornith-1.5-9B, Q5_K_M | 262,144 | Fast second opinion and short tasks, a third of the VRAM |
 | `muse` | Muse Glimmer 30B, UD-Q4_K_XL | 262,144 | Agentic multi-turn, vision, faithful OCR |

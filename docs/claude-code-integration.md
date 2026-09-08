@@ -60,23 +60,29 @@ real ceiling is truncated server-side **with no warning**. The starting value is
 `--ctx-size`. We briefly set 524288 on a server capped at 262144 and caught it
 the same day.
 
-**Then divide by the number of slots.** Reading `/props` and stopping there is
-what bit on 2026-09-08. A profile running `--parallel 2 --kv-unified` holds ONE
-shared pool of 393,216 tokens, and `/props` announces that whole pool to every
-caller. Two agents of a single session were each told they could fill 393,216.
-One of them reached a 196,000-token prompt, and the log reads: prefill down to
-1,546 tok/s against the 8,000 the bench gives, the other slot generating at
-**1.40 tok/s**, then `failed to find free space in the KV cache` with the batch
-size halved down to 16 and still failing.
+**A second slot forces you to divide it, and that is why there is no second
+slot.** Every profile here runs `--parallel 1`, so `/props` and this variable
+agree. The rule if that ever changes: `n_ctx` divided by the slot count, minus
+room for `CLAUDE_CODE_MAX_OUTPUT_TOKENS`. `--parallel 2 --kv-unified` holds ONE
+shared pool, not one window per slot, and `/props` announces the whole pool to
+every caller.
 
-Two callers are not needed to trigger it. Agents spawned inside one session hit
-it identically, and so do the client's own background requests, which the
-launchers point at the same server.
+`tiel` ran two slots from 2026-09-06 to 2026-09-08, on the reasoning that two
+workstations call it. Two days were enough to show what that costs. Each caller
+had to be told it could fill only half the pool, and the halved ceiling is what
+a client reads to decide when to compact. Agents spawned inside one session
+therefore threw their context away long before the model would have run out.
+The failure mode when the announcement was left at the full pool is worth
+keeping too: a 196,000-token prefill crawling at 1,546 tok/s against the 8,000
+the bench gives, the other slot generating at **1.40 tok/s**, then `failed to
+find free space in the KV cache` with the batch halved down to 16 and still
+failing.
 
-The rule, then: `n_ctx` from `/props`, divided by `--parallel`, minus room for
-`CLAUDE_CODE_MAX_OUTPUT_TOKENS`. For `tiel` and `kat` that is 393,216 over two
-slots, so 180,000 announced to each. Profiles running a single slot, like
-`qwen`, keep the full figure.
+Both profiles went back to a single slot the same day. Concurrent callers queue,
+which is the honest trade: waiting costs time, compacting costs work already
+done. Note that two callers are not needed to trigger any of this. Agents
+spawned inside one session hit it identically, and so do the client's own
+background requests, which the launchers point at the same server.
 
 ## The chat template trap
 

@@ -663,17 +663,25 @@ switch ($Action) {
       # 2026-08-31 lesson on qwen (ranking inverts at full context) has not been replayed here.
       '--spec-type','draft-mtp','--spec-draft-n-max','2',
       '--n-gpu-layers','99','--load-mode','mlock','--flash-attn','on','--jinja',
-      # --parallel 2 --kv-unified since 2026-09-06: two workstations call this model. With
-      # --kv-unified the 393216 window is ONE shared pool, not 2 x 196608: without it llama-server
-      # splits -c between slots while /props still announces the total.
-      # Measured the same day on b10826, 400 tokens forced, pure generation:
-      #   1 stream .... 260 tok/s
-      #   2 streams ... 202 + 188 tok/s (390 total)
-      #   4 streams ... 97 to 104 tok/s each (400 total, card saturated)
-      # The cost is the prefill: while one slot reads a 40k prompt (4 to 5 s), the other's
-      # generation drops to 15 to 50 tok/s. Four slots were rejected: no gain over two for two
-      # callers, half the per-stream rate, and 580 MB of VRAM headroom under load.
-      '--host','0.0.0.0','--port','8080','--parallel','2','--kv-unified',
+      # BACK TO --parallel 1 on 2026-09-08, after two days at 2 slots with --kv-unified.
+      #
+      # Two slots share ONE pool of 393216 tokens, so an honest client may only fill half of it,
+      # and the launcher has to announce that half. That is fatal to the way this box is actually
+      # used: agents spawned inside a single session each hit the halved ceiling and compact their
+      # context away long before the model would have run out. Guillaume's words, the day it bit:
+      # "ca arrete pas de niquer mes sous agents". A slot that makes a caller compact early is
+      # worse than a caller that waits its turn.
+      #
+      # So: one slot, the whole 393216 for whoever holds it, concurrent callers queue. The cost is
+      # real and accepted, a second caller waits instead of running at half speed.
+      #
+      # What the two-slot measurement of 2026-09-06 established, kept because it stays true if the
+      # question is ever reopened: 260 tok/s on one stream, 202 + 188 on two, 97 to 104 each on
+      # four with the card saturated. The prefill is what hurts: while one slot reads a 40k prompt
+      # (4 to 5 s), the other's generation falls to 15 to 50 tok/s. And --kv-unified is mandatory
+      # the moment --parallel exceeds 1, since without it llama-server splits -c between slots
+      # while /props still announces the total.
+      '--host','0.0.0.0','--port','8080','--parallel','1',
       # The GGUF declares context_length 262144 and llama.cpp caps on the file,
       # not on --ctx-size. This override is the ONLY lock, same as on muse, and
       # no YaRN flag is needed. Recall verified 2026-09-01 by needle-in-haystack
@@ -758,7 +766,9 @@ switch ($Action) {
       # before reading anything into this model's acceptance rate.
       '--spec-type','draft-mtp','--spec-draft-n-max','2',
       '--n-gpu-layers','99','--load-mode','mlock','--flash-attn','on','--jinja',
-      '--host','0.0.0.0','--port','8080','--parallel','2','--kv-unified',
+      # One slot, like tiel and for the same reason: a shared pool forces the launcher to announce
+      # half a window, which makes a session's agents compact early. See the tiel block.
+      '--host','0.0.0.0','--port','8080','--parallel','1',
       '--override-kv','qwen35moe.context_length=int:393216',
       '--ctx-size','393216',
       '-b','4096','-ub','2048',

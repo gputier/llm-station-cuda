@@ -17,7 +17,7 @@ model of this box.
 | Context | 393,216 (`--override-kv`; 262,144 is the GGUF's declared ceiling) |
 | KV cache | `q4_0` |
 | VRAM | 29,465 MB, about 31,617 MB at the 393,216 window |
-| Slots | 2, `--kv-unified`, since 2026-09-06 |
+| Slots | 1. It ran 2 from 2026-09-06 to 2026-09-08, see below. |
 | Build | `b10826` (2026-09-06), official release binary, no compilation. Only build serving this profile. |
 
 ## Why this model over `qwen`
@@ -66,13 +66,33 @@ code, speculation is worth 30%; on French prose, it can cost 15%. Every n-max
 decision taken on this bench has been taken on prose. A code-shaped
 long-context bench is still missing.
 
-## Two slots, `--kv-unified`, since 2026-09-06
+## Two slots, tried for two days, then given up
 
-Two workstations call this model. With `--kv-unified` the 393,216 window is
-ONE shared pool, not split 2 x 196,608: without the flag llama-server divides
-`-c` between slots while `/props` still announces the total.
+Two workstations call this model, which is why `--parallel 2 --kv-unified` was
+put in on 2026-09-06. It came out on 2026-09-08, and the reason is not
+throughput.
 
-Measured the same day on b10826, 400 tokens forced, pure generation:
+**A shared pool forces the client to be told half a window.** With
+`--kv-unified` the 393,216 tokens are ONE pool rather than 2 x 196,608, which is
+the right way round: without the flag llama-server divides `-c` between slots
+while `/props` still announces the total. But a pool is still shared, so an
+honest client may fill only its share, and `CLAUDE_CODE_MAX_CONTEXT_TOKENS` had
+to be halved to 180,000. That figure is what a client reads to decide when to
+compact. Agents spawned inside a single session therefore compacted their
+context away long before the model would have run out: work thrown out to
+respect a ceiling that only exists because a second slot might want its turn.
+
+Leaving the announcement at the full pool instead fails louder, and was seen the
+same afternoon: a 196,000-token prefill at 1,546 tok/s against the 8,000 the
+bench gives, the other slot generating at 1.40 tok/s, then `failed to find free
+space in the KV cache` with the batch halved down to 16 and still failing.
+
+One slot, the whole window, concurrent callers queue. Waiting costs time;
+compacting costs work already done.
+
+The two-slot measurements are kept here, because they stay true if the question
+is ever reopened. Measured 2026-09-06 on b10826, 400 tokens forced, pure
+generation:
 
 | Streams | Per stream | Total |
 |---|---|---|
