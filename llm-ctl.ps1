@@ -693,10 +693,12 @@ switch ($Action) {
       '-b','4096','-ub','2048',
       '--cache-type-k','q4_0','--cache-type-v','q4_0',
       '-cram','24576',
-      # temp 0.6 since 2026-09-06, not 1.0. Ornith's model card recommends 0.6 for general use and
-      # reserves 1.0 for reproducing its benchmarks. Claude Code sends no temperature, so this value
-      # is the one every session runs at. Trial on real usage; revert to 1.0 if nothing improves.
-      '--temp','0.6','--top-p','0.95','--top-k','20','--min-p','0'
+      # temp 0.3 since 2026-09-10, down from 0.6, down from 1.0 before that. Ornith's model card
+      # recommends 0.6 for general use and reserves 1.0 for reproducing its benchmarks, so 0.3 is
+      # below what the authors document. It was set on the box by hand, as a trial on real usage,
+      # and read back from there into this file. Do NOT go to 0: Qwen documents that greedy
+      # decoding on these weights degrades quality and produces endless repetitions.
+      '--temp','0.3','--top-p','0.95','--top-k','20','--min-p','0'
     )
   }
 
@@ -734,7 +736,10 @@ switch ($Action) {
       '-b','4096','-ub','2048',
       '--cache-type-k','q4_0','--cache-type-v','q4_0',
       '-cram','24576',
-      '--temp','1.0','--top-p','0.95','--top-k','20','--min-p','0'
+      # temp 0.6 since 2026-09-10, not 1.0. Set on the box by hand and read back from there. The
+      # model card reserves 1.0 for reproducing benchmarks and recommends 0.6 for general use,
+      # which is what this profile actually serves.
+      '--temp','0.6','--top-p','0.95','--top-k','20','--min-p','0'
     )
   }
 
@@ -774,7 +779,9 @@ switch ($Action) {
       '-b','4096','-ub','2048',
       '--cache-type-k','q4_0','--cache-type-v','q4_0',
       '-cram','24576',
-      '--temp','0.6','--top-p','0.95','--top-k','20','--min-p','0'
+      # temp 0.3 since 2026-09-10, not 0.6. Set on the box by hand alongside tiel, same trial,
+      # and read back from there. Never 0 on these weights, see the tiel block.
+      '--temp','0.3','--top-p','0.95','--top-k','20','--min-p','0'
     )
   }
 
