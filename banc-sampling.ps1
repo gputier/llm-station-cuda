@@ -31,6 +31,14 @@ $temps = $Temperatures -split ',' | ForEach-Object { [double]$_.Trim() }
 $topks = $TopKs -split ',' | ForEach-Object { [int]$_.Trim() }
 $recap = @()
 
+# Numbers crossing a command line MUST be formatted in the invariant culture. On a
+# French Windows, 0.6 renders as "0,6", and PowerShell reads a comma as an array
+# separator: -Temperature 0,6 arrives as two values, and every argument after it
+# shifts. That is what killed the top-k sweep on its first run.
+function Inv($n) { return ([double]$n).ToString([System.Globalization.CultureInfo]::InvariantCulture) }
+# Labels strip BOTH separators, since which one appears depends on the culture.
+function Lab($n) { return (Inv $n) -replace '[.,]','' }
+
 foreach ($p in $liste) {
   Write-Output ("=== {0} : chargement" -f $p)
   & powershell -NoProfile -ExecutionPolicy Bypass -File $ctl -Action $p | Out-Host
@@ -45,17 +53,17 @@ foreach ($p in $liste) {
   if (-not $ok) { $recap += ("{0} : echec de chargement" -f $p); continue }
 
   foreach ($t in $temps) {
-    $lab = "{0}-t{1}-k20" -f $p, ($t -replace '\.','')
+    $lab = "{0}-t{1}-k20" -f $p, (Lab $t)
     Write-Output ("--- {0}" -f $lab)
-    & powershell -NoProfile -ExecutionPolicy Bypass -File $banc -Label $lab -Temperature $t -TopK 20 | Out-Host
+    & powershell -NoProfile -ExecutionPolicy Bypass -File $banc -Label $lab -Temperature (Inv $t) -TopK 20 | Out-Host
     $r = Get-Content ("D:\LLM-Setup\bench\resultats\banc-{0}.txt" -f $lab)
     $recap += ("{0} : {1} | {2}" -f $lab, (($r | Where-Object { $_ -like 'mmlu*' }) -join '').Trim(), (($r | Where-Object { $_ -like 'gsm8k*' }) -join '').Trim())
   }
 
   foreach ($k in $topks) {
-    $lab = "{0}-t{1}-k{2}" -f $p, ($TopKAt -replace '\.',''), $k
+    $lab = "{0}-t{1}-k{2}" -f $p, (Lab $TopKAt), $k
     Write-Output ("--- {0}" -f $lab)
-    & powershell -NoProfile -ExecutionPolicy Bypass -File $banc -Label $lab -Temperature $TopKAt -TopK $k | Out-Host
+    & powershell -NoProfile -ExecutionPolicy Bypass -File $banc -Label $lab -Temperature (Inv $TopKAt) -TopK $k | Out-Host
     $r = Get-Content ("D:\LLM-Setup\bench\resultats\banc-{0}.txt" -f $lab)
     $recap += ("{0} : {1} | {2}" -f $lab, (($r | Where-Object { $_ -like 'mmlu*' }) -join '').Trim(), (($r | Where-Object { $_ -like 'gsm8k*' }) -join '').Trim())
   }
