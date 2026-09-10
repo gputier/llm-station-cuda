@@ -48,18 +48,26 @@ foreach ($q in $mmlu) {
   $opts = ($q.choices | ForEach-Object -Begin { $i = 0 } -Process {
     "{0}. {1}" -f $letters[$i], $_; $i++
   }) -join "`n"
-  $prompt = "{0}`n{1}`n`nAnswer with the single letter A, B, C or D. Nothing else." -f $q.q, $opts
+  $prompt = "{0}`n{1}`n`nEnd your reply with this exact line and nothing after it:`nAnswer: X`nwhere X is A, B, C or D." -f $q.q, $opts
 
-  # 8 tokens: the answer is one letter. A model that needs more is not answering
-  # the question that was asked, and truncating it is the correct verdict.
-  $a = (Ask $prompt 8)
+  # 600 tokens and NOT 8, since 2026-09-10. The first version of this script gave
+  # one letter's worth of room, on the reasoning that a model needing more was not
+  # answering the question. That was wrong, and it produced a false ranking: Nex
+  # ignores enable_thinking, started reasoning, and got truncated before writing
+  # its letter on 220 of 500 questions. Scored 51.8%, which put a 35B model under
+  # a 4B one. On the 280 it did answer it was right 92.5% of the time.
+  #
+  # A bench must measure the model, not the model's obedience to an output cap.
+  $a = (Ask $prompt 600)
   $mmluDone++
   if (-not $a) { $mmluEmpty++; continue }
-  # First standalone letter anywhere in the reply: models prefix with "Answer:"
-  # or wrap in markdown often enough that a strict equality throws away correct
-  # answers and measures formatting instead of knowledge.
-  $m = [regex]::Match($a.Trim().ToUpper(), '\b([ABCD])\b')
-  if ($m.Success -and $letters[[int]$q.answer] -eq $m.Groups[1].Value) { $mmluOk++ }
+  $up = $a.Trim().ToUpper()
+  # LAST "Answer: X" first, because a reasoning model names candidate letters
+  # while it thinks and only the closing line is its verdict. Falling back to the
+  # last standalone letter covers models that ignore the requested format.
+  $m = [regex]::Matches($up, 'ANSWER\s*[:：]\s*\(?([ABCD])\b')
+  if ($m.Count -eq 0) { $m = [regex]::Matches($up, '\b([ABCD])\b') }
+  if ($m.Count -gt 0 -and $letters[[int]$q.answer] -eq $m[$m.Count - 1].Groups[1].Value) { $mmluOk++ }
   if ($mmluDone % 50 -eq 0) {
     Write-Output ("mmlu {0}/{1} : {2} justes" -f $mmluDone, $mmlu.Count, $mmluOk)
   }
