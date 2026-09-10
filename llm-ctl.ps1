@@ -90,6 +90,12 @@ $workDirB10883 = "$RootDir\llama-cpp-b10883"
 $instDir   = "$RootDir\instances"
 New-Item -ItemType Directory -Force -Path $instDir | Out-Null
 
+# Logs live in their own directory since 2026-09-10. They used to sit at the root
+# of $RootDir, where they were indistinguishable from the scripts, the model
+# notes and eight dated backups of this very file.
+$logDir    = "$RootDir\logs"
+New-Item -ItemType Directory -Force -Path $logDir | Out-Null
+
 # Every model action sits on port 8080 and they are mutually exclusive on the
 # GPU: starting one unloads the others. This was a per-profile table until
 # 2026-09-08, where every row held the same 8080 and its only real job was to
@@ -224,9 +230,10 @@ function Stop-All {
 # Live log tailing.
 #
 # llama-server writes ALL of its output to stderr, including progress lines and
-# served requests: llm-out-<name>.log stays empty forever and is NOT the file to
-# read. llm-err-<name>.log carries everything. This action exists so nobody has
-# to remember that: it picks the log of the running instance and follows it.
+# served requests. logs\llm-err-<name>.log carries everything; standard output
+# went to NUL on 2026-09-10, after ten empty llm-out-*.log files had accumulated
+# at the root. This action exists so nobody has to remember any of that: it picks
+# the log of the running instance and follows it.
 # Ctrl+C to exit; the server is unaffected.
 function Show-Logs($name, $tail) {
   if (-not $name) {
@@ -238,7 +245,7 @@ function Show-Logs($name, $tail) {
     }
     $name = $running[0].Name
   }
-  $errLog = "$RootDir\llm-err-$name.log"
+  $errLog = "$logDir\llm-err-$name.log"
   if (-not (Test-Path $errLog)) { Write-Output "NO_LOG $errLog not found"; return }
   Write-Output "TAILING name=$name file=$errLog (Ctrl+C to exit)"
   Get-Content $errLog -Tail $tail -Wait
@@ -267,9 +274,12 @@ function Start-LLM($name, $modelArgs, $cudaDevices = $null, $exePath = $null, $w
     ForEach-Object { Write-Output "KILLED_ORPHAN pid=$_ port=$port"; Kill-Pid $_ }
   Wait-VramReleased
 
-  $outLog = "$RootDir\llm-out-$name.log"
-  $errLog = "$RootDir\llm-err-$name.log"
-  Clear-Content $outLog -ErrorAction SilentlyContinue
+  # Standard output goes to NUL, and no llm-out-<name>.log is created any more.
+  # Ten of them sat at the root of $RootDir, every single one at zero bytes, for
+  # as long as this script has existed: llama-server writes everything to stderr,
+  # progress lines and served requests included. They were pure noise.
+  # To get them back, put "$RootDir\llm-out-$name.log" here instead of NUL.
+  $errLog = "$logDir\llm-err-$name.log"
   Clear-Content $errLog -ErrorAction SilentlyContinue
 
   $quoted = ($modelArgs | ForEach-Object { Quote $_ }) -join ' '
@@ -286,7 +296,7 @@ function Start-LLM($name, $modelArgs, $cudaDevices = $null, $exePath = $null, $w
   $env:PATH = "$cudaBinPath;$env:PATH"
   # CPU-only instances: hide the GPU to avoid a pointless CUDA init.
   if ($null -ne $cudaDevices) { $env:CUDA_VISIBLE_DEVICES = $cudaDevices }
-  $inner = "cd /d `"$workDirPath`" && `"$exePath`" $quoted > `"$outLog`" 2> `"$errLog`""
+  $inner = "cd /d `"$workDirPath`" && `"$exePath`" $quoted > NUL 2> `"$errLog`""
   $r = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{ CommandLine = "cmd.exe /c $inner"; CurrentDirectory = $workDirPath }
   $env:PATH = $savedPath
   if ($null -eq $savedCuda) { Remove-Item Env:\CUDA_VISIBLE_DEVICES -ErrorAction SilentlyContinue }
