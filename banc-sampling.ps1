@@ -28,7 +28,11 @@ $ctl   = 'D:\LLM-Setup\llm-ctl.ps1'
 $banc  = 'D:\LLM-Setup\bench\banc.ps1'
 $liste = $Profils -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ }
 $temps = $Temperatures -split ',' | ForEach-Object { [double]$_.Trim() }
-$topks = $TopKs -split ',' | ForEach-Object { [int]$_.Trim() }
+# $ks and NOT $topks: PowerShell is case-insensitive, so $topks IS the $TopKs
+# parameter, declared [string]. Assigning an array back into it converts it
+# straight to "0 40 64", and the whole sweep is passed as one argument. A local
+# name that only differs in case from a typed parameter is a silent bug.
+$ks = $TopKs -split ',' | ForEach-Object { [int]$_.Trim() }
 $recap = @()
 
 # Numbers crossing a command line MUST be formatted in the invariant culture. On a
@@ -55,15 +59,21 @@ foreach ($p in $liste) {
   foreach ($t in $temps) {
     $lab = "{0}-t{1}-k20" -f $p, (Lab $t)
     Write-Output ("--- {0}" -f $lab)
-    & powershell -NoProfile -ExecutionPolicy Bypass -File $banc -Label $lab -Temperature (Inv $t) -TopK 20 | Out-Host
+    # Skip what is already on disk: a sweep that dies halfway must be restartable
+    # without paying again for the hours it already spent.
+    if (-not (Test-Path ("D:\LLM-Setup\bench\resultats\banc-{0}.txt" -f $lab))) {
+      & powershell -NoProfile -ExecutionPolicy Bypass -File $banc -Label $lab -Temperature (Inv $t) -TopK 20 | Out-Host
+    } else { Write-Output 'deja mesure, passe' }
     $r = Get-Content ("D:\LLM-Setup\bench\resultats\banc-{0}.txt" -f $lab)
     $recap += ("{0} : {1} | {2}" -f $lab, (($r | Where-Object { $_ -like 'mmlu*' }) -join '').Trim(), (($r | Where-Object { $_ -like 'gsm8k*' }) -join '').Trim())
   }
 
-  foreach ($k in $topks) {
+  foreach ($k in $ks) {
     $lab = "{0}-t{1}-k{2}" -f $p, (Lab $TopKAt), $k
     Write-Output ("--- {0}" -f $lab)
-    & powershell -NoProfile -ExecutionPolicy Bypass -File $banc -Label $lab -Temperature (Inv $TopKAt) -TopK $k | Out-Host
+    if (-not (Test-Path ("D:\LLM-Setup\bench\resultats\banc-{0}.txt" -f $lab))) {
+      & powershell -NoProfile -ExecutionPolicy Bypass -File $banc -Label $lab -Temperature (Inv $TopKAt) -TopK $k | Out-Host
+    } else { Write-Output 'deja mesure, passe' }
     $r = Get-Content ("D:\LLM-Setup\bench\resultats\banc-{0}.txt" -f $lab)
     $recap += ("{0} : {1} | {2}" -f $lab, (($r | Where-Object { $_ -like 'mmlu*' }) -join '').Trim(), (($r | Where-Object { $_ -like 'gsm8k*' }) -join '').Trim())
   }
