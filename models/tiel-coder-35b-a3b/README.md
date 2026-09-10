@@ -32,6 +32,8 @@ and 60 GSM8K problems, temperature 0, both models on the identical set:
 | Prefill | 4,264 tok/s | 8,616 tok/s | x2.02 |
 | VRAM | 30,952 MB | 29,465 MB | |
 | MMLU | 82.0% | 82.2% | one question in five hundred |
+| MMLU, re-run 2026-09-10 | 78.8% | **86.6%** | the old bench was lost, both figures moved |
+| GSM8K, re-run 2026-09-10 | 57/60 | 53/60 | tiel's weak spot, `kat` scores 60/60 |
 | GSM8K | 52/60 | 58/60 | |
 
 The gain is structural: far fewer bytes reread per token, which is exactly the

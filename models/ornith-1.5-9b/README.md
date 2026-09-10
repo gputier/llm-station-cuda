@@ -26,6 +26,14 @@ Measured 2026-09-01, same protocol and question set as `tiel`:
 loaded, which is the figure the header quotes. On the quality set, against
 `qwen`, a 27B model: MMLU 73.0% against 82.0%, GSM8K 53/60 against 52/60.
 
+**Both of those numbers were wrong, and the correction favours this model.**
+The bench that produced them was lost and its method unknown; re-run on
+2026-09-10 with a versioned bench, `ornith` scores **83.4 %** and `qwen`
+**78.8 %**. Nine billion parameters ahead of twenty-seven, in a third of the
+memory. GSM8K holds at 51/60 against 57, which is where it does pay for its
+size. Full campaign in
+[../../docs/campagne-mesures-2026-09-10.md](../../docs/campagne-mesures-2026-09-10.md).
+
 Read that pair the right way: equal reasoning, far less knowledge. It knows much
 less than the 27B model and answers word problems just as well.
 

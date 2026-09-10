@@ -16,7 +16,7 @@ Installed and measured 2026-09-10.
 | KV cache | `q8_0` |
 | VRAM | **13,156 MiB measured**, against 9,000 computed. See below |
 | Decode | 226 to 231 tok/s |
-| MMLU | **334/500, 66.8%** |
+| MMLU | **365/500, 73.0%**, zero empty answers |
 | GSM8K | **46/60** |
 | Build | `b10883` (2026-09-09). **b10828 is the minimum**, see below |
 
@@ -27,10 +27,10 @@ that ranked the production models:
 
 | Model | Parameters | MMLU | GSM8K |
 |---|---|---|---|
-| `tiel` | 35B-A3B | 82.2% | 58/60 |
-| `qwen` | 27B | 82.0% | 52/60 |
-| `ornith` | 9B | 73.0% | 53/60 |
-| `spark` | 4B | 66.8% | 46/60 |
+| `tiel` | 35B-A3B | 86.6% | 53/60 |
+| `qwen` | 27B | 78.8% | 57/60 |
+| `ornith` | 9B | 83.4% | 51/60 |
+| `spark` | 4B | 73.0% | 46/60 |
 
 Fifteen points under the production models on knowledge was expected at this
 size. Last on GSM8K was not: Ornith had shown that a small model can reason as
@@ -38,8 +38,13 @@ well as one three times its size, and the hope was that Spark would do the same
 one rung down. It does not. Reasoning does not survive the drop to 4B the way
 knowledge-free arithmetic sometimes does.
 
-It is also not fast for its size: 226 tok/s in decode, against 210 for `tiel`,
-a 35B-A3B model with speculation. Eight times fewer parameters buy 8% of decode.
+It is also not fast for its size: 226 tok/s in decode, against 230.4 for `tiel`,
+a 35B-A3B model with speculation. Eight times fewer parameters buy nothing at
+all on this card.
+
+Its first published score here was 66.8 %, taken with a 600-token output cap that
+cut it short; the cap was raised to 2000 the same day and the figure settled at
+73.0 %. The correction lifted every model and changed none of the ranking.
 
 ## It is a reasoning model, and that has a practical cost
 

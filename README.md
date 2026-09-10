@@ -17,7 +17,7 @@ without ever printing an error.
 
 | | |
 |---|---|
-| GPU | NVIDIA GeForce RTX 5090, 32,607 MiB, driver 616.56 |
+| GPU | NVIDIA GeForce RTX 5090, 32,607 MiB, driver 616.92 |
 | CPU / RAM | Ryzen 9 9950X3D, 128 GB |
 | OS | Windows 11 Pro, build 26200 |
 | Backend | `llama.cpp` CUDA, native Windows build (not vLLM, not WSL) |
@@ -46,18 +46,25 @@ unloads the others.
 | `spark` | Spark-X2.5-4B, Q8_0 | 262,144 | Candidate since 2026-09-10. Agentic, text only |
 | `bonsai` | Ternary-Bonsai-27B, Q2_g64 | 262,144 | Candidate since 2026-09-10. Ternary weights, vision |
 
-The last three are candidates, not a service offering. They were installed on
-2026-09-10 and **not one figure has been measured on them yet**: the contexts in
-that table are what the profiles ask for, not what recall has been shown to
-survive. Each carries a known defect, written at the top of its page under
-[models/](models/). They run on their own engine, `b10883`, which serves nothing
-else.
+The last three were installed on 2026-09-10 and measured the same day. They run
+on their own engine, `b10883`, which serves nothing else, and each carries a
+known defect written at the top of its page under [models/](models/).
 
-Role split established by measurement, not preference. `tiel` took the coding
-and reasoning seat from `qwen` on 2026-09-01, on the strength of 54% more decode
-and twice the prefill at equal MMLU. Muse keeps the agentic loops and the
-faithful OCR, Qwen distorting identifiers. Ornith is the small, fast one: same
-reasoning, far less knowledge.
+**Every quality figure in this repository comes from the campaign of
+2026-09-10**, where all nine chat models went through the same 500-question MMLU
+set and the same 60 GSM8K problems. It is written up in
+[docs/campagne-mesures-2026-09-10.md](docs/campagne-mesures-2026-09-10.md), and
+it replaced the figures published before it: the previous bench had been lost,
+its method was unknown, and the re-run showed it wrong in both directions at
+once. `ornith` does not score 73.0 % but 83.4 %, and `qwen` not 82.0 % but 78.8 %.
+
+Ranking, MMLU then GSM8K: `nex` and `tiel` 86.6 %, `muse` 85.0 %, `kat` 84.6 %,
+`bonsai` 83.6 %, `ornith` 83.4 %, `qwen` 78.8 %, `qwenu` 77.0 %, `spark` 73.0 %.
+`kat` alone scores 60/60 on GSM8K, where `tiel` manages 53.
+
+Which one to reach for, per use, with what is measured kept separate from what
+is inferred:
+[docs/quel-modele-pour-quel-usage.md](docs/quel-modele-pour-quel-usage.md).
 
 Muse used to be the answer to anything beyond 262k, and it no longer is: its
 window was brought down from 1,048,576 to 262,144 on 2026-08-31 because a
@@ -88,8 +95,12 @@ From the macOS client:
 export LLM_HOST=your-server-hostname-or-ip
 export LLM_SSH_USER=your-ssh-user
 
-./clients/qwen        # loads Qwen if needed, then runs Claude Code against it
+./clients/tiel        # loads Tiel if needed, then runs Claude Code against it
 ```
+
+There is one launcher per served model, nine in all, listed with what each is
+good at in [clients/README.md](clients/README.md). `embed` has none on purpose:
+it serves embeddings, not a chat endpoint.
 
 The three paths at the top of `llm-ctl.ps1` (`$RootDir`, `$ModelsDir`,
 `$CudaRoot`) are the only installation-specific values. Everything else is
@@ -100,10 +111,12 @@ portable.
 | File | What it covers |
 |---|---|
 | [docs/prerequisites.md](docs/prerequisites.md) | Everything that must be installed before a first build |
-| [docs/building-llama-cpp.md](docs/building-llama-cpp.md) | The CUDA builds, why there are four, and the two build traps |
+| [docs/building-llama-cpp.md](docs/building-llama-cpp.md) | The CUDA builds, why there are five, and the two build traps |
 | [docs/claude-code-integration.md](docs/claude-code-integration.md) | How a local server replaces the Anthropic API, and what that costs |
 | [docs/api-usage.md](docs/api-usage.md) | Calling the server directly: sampling per model, vision, embeddings |
 | [docs/tuning-log.md](docs/tuning-log.md) | Every measurement campaign, including the ones that found nothing |
+| [docs/campagne-mesures-2026-09-10.md](docs/campagne-mesures-2026-09-10.md) | Nine models through one bench in one day. **Supersedes every quality figure published before it.** |
+| [docs/quel-modele-pour-quel-usage.md](docs/quel-modele-pour-quel-usage.md) | Which model to reach for, per use, and what is measured against what is inferred |
 | [models/](models/) | One page per model: profile, measurements, model-specific traps |
 | [clients/](clients/) | The launcher scripts and how they decide to reload |
 
