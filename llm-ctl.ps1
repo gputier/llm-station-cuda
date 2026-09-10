@@ -1,5 +1,5 @@
 param(
-  [ValidateSet('embed','kat','muse','ornith','qwen','qwenu','tiel','stop','status','logs')]
+  [ValidateSet('bonsai','embed','kat','muse','nex','ornith','qwen','qwenu','spark','tiel','stop','status','logs')]
   [string]$Action,
   [string]$Name,  # optional: for 'stop' and 'logs', targets a named instance
   [int]$Tail = 40 # for 'logs': history lines to show before following live
@@ -72,6 +72,21 @@ $workDirNew = "$RootDir\llama-cpp-20260827\build-win\bin\Release"
 # it recommends --image-min-tokens 1024 for this vision model.
 $exeB10826     = "$RootDir\llama-cpp-b10826\llama-server.exe"
 $workDirB10826 = "$RootDir\llama-cpp-b10826"
+
+# Official binary b10883 (2026-09-09), CUDA 13.3, same flat layout: release zip and its cudart
+# unpacked into one directory, no compilation. Installed 2026-09-10 for three candidate models that
+# the older builds cannot serve, and it serves only those: 'nex', 'spark', 'bonsai'. Nothing in
+# production was moved onto it.
+#
+# It exists because of ONE hard requirement. b10826 does not know the 'spark2_5' architecture,
+# whose support landed in b10828, and an engine that does not know an architecture does not say so
+# clearly: it fails at load. b10883 was taken rather than b10828 exactly to avoid doing this twice.
+#
+# It has NOT been benchmarked against b10826 on the production models. Do not move tiel, ornith or
+# kat here on the assumption that newer is faster; the 2026-08-27 build taught that lesson at a
+# cost of two full compilations for a gain of nothing.
+$exeB10883     = "$RootDir\llama-cpp-b10883\llama-server.exe"
+$workDirB10883 = "$RootDir\llama-cpp-b10883"
 $instDir   = "$RootDir\instances"
 New-Item -ItemType Directory -Force -Path $instDir | Out-Null
 
@@ -99,6 +114,11 @@ $builds = @{
   # because Ornith is Q5_K_M and never needed the NVFP4 kernels. Figures in docs/tuning-log.md.
   ornith = @{ Exe = $exeB10826;   WorkDir = $workDirB10826;   CudaBin = $cudaBinUp }
   kat    = @{ Exe = $exeB10826;   WorkDir = $workDirB10826;   CudaBin = $cudaBinUp }
+  # The three candidates of 2026-09-10. They are on b10883 because nothing older can serve them,
+  # not because it is newer. See the b10883 block above.
+  nex    = @{ Exe = $exeB10883;   WorkDir = $workDirB10883;   CudaBin = $cudaBinUp }
+  spark  = @{ Exe = $exeB10883;   WorkDir = $workDirB10883;   CudaBin = $cudaBinUp }
+  bonsai = @{ Exe = $exeB10883;   WorkDir = $workDirB10883;   CudaBin = $cudaBinUp }
 }
 
 function Quote($s) {
@@ -782,6 +802,104 @@ switch ($Action) {
       # temp 0.3 since 2026-09-10, not 0.6. Set on the box by hand alongside tiel, same trial,
       # and read back from there. Never 0 on these weights, see the tiel block.
       '--temp','0.3','--top-p','0.95','--top-k','20','--min-p','0'
+    )
+  }
+
+  # -------------------------------------------------------------------------
+  # The three candidates installed on 2026-09-10. NOTHING below this comment has
+  # been measured on this box: the figures in each block are budgets computed from
+  # the architecture, not readings. Treat every one of them as a hypothesis until
+  # the 110-question MMLU plus 60 GSM8K bench has run.
+  # -------------------------------------------------------------------------
+  'nex' {
+    # Nex-N2.5-mini, architecture 'qwen3_5_moe': 40 blocks, hybrid attention mixing
+    # Gated DeltaNet linear layers with 10 full-attention layers. Weights are
+    # mradermacher's i1-Q4_K_M, quantised with a published importance matrix.
+    Start-LLM 'nex' @(
+      '-m',"$ModelsDir\nex-n2.5-mini\Nex-N2.5-mini.i1-Q4_K_M.gguf",
+      '--mmproj',"$ModelsDir\nex-n2.5-mini\mmproj-Nex-N2.5-mini-F16.gguf",
+      # NO speculation here, and that is not an oversight. config.json declares
+      # mtp_num_hidden_layers 1, but the safetensors index carries zero MTP tensors and
+      # exactly 40 layers, 0 to 39: the head is announced and not shipped. Verified at the
+      # source on 2026-09-09. Should the loader trip on that declaration, the workaround is
+      #   --override-kv qwen35moe.block_count=int:40,qwen35moe.nextn_predict_layers=int:0
+      # Losing speculation is the real cost of preferring this model to tiel.
+      '--n-gpu-layers','99','--load-mode','mlock','--flash-attn','on','--jinja',
+      '--host','0.0.0.0','--port','8080','--parallel','1',
+      # No --override-kv on the window: this GGUF already declares context_length 262144,
+      # unlike tiel whose file caps lower than the profile asks for.
+      '--ctx-size','262144',
+      '-b','4096','-ub','2048',
+      # q8_0 and not q4_0, unlike the production profiles. The budget allows it: 10 full
+      # layers, 2 KV heads, head_dim 256 cost about 10 KiB per token in q8_0, so roughly
+      # 2,700 MiB of cache at 262,144 tokens, against 20,180 MiB of weights and 860 of
+      # projector. About 24 GiB in all, comfortably inside 32. Drop to q4_0 only if the
+      # measured figure says otherwise.
+      '--cache-type-k','q8_0','--cache-type-v','q8_0',
+      '-cram','24576',
+      # KNOWN DEFECT, llama.cpp issue 27931, open: the server crashes on this family of
+      # hybrid recurrent models with a projector loaded when text and image turns ALTERNATE
+      # in one conversation. A single image in one turn may well pass. The proposed fix,
+      # pull request 28007, is not merged as of 2026-09-10.
+      '--temp','0.6','--top-p','0.95','--top-k','20','--min-p','0'
+    )
+  }
+
+  'spark' {
+    # Spark-X2.5-4B, architecture 'spark2_5': hybrid attention, most layers on a 512-token
+    # sliding window, 9 full-attention layers. Supported upstream since pull request 27868,
+    # in build b10828; the fork the model card sends you to compile is obsolete, 15 commits
+    # ahead all merged upstream and 385 behind. Do not compile it.
+    Start-LLM 'spark' @(
+      '-m',"$ModelsDir\spark-x2.5-4b\Spark-X2.5-4B-Q8_0.gguf",
+      '--n-gpu-layers','99','--load-mode','mlock','--flash-attn','on','--jinja',
+      '--host','0.0.0.0','--port','8080','--parallel','1',
+      # 262,144 rather than the 64k asked for, because the room is there and a window costs
+      # nothing until it is filled. Counter-intuitive figure worth keeping: this 4B model
+      # costs MORE cache per token than the 35B one, 9 full layers with 4 KV heads at
+      # head_dim 256 against 10 layers with 2 heads. About 18 KiB per token in q8_0, so
+      # roughly 4,800 MiB of cache at full window on top of 4,170 MiB of weights.
+      '--ctx-size','262144',
+      '-b','4096','-ub','2048',
+      '--cache-type-k','q8_0','--cache-type-v','q8_0',
+      '-cram','24576',
+      # NEVER --swa-full on this one: it would drop the sliding-window saving that makes the
+      # cache affordable and hold every layer at full width.
+      '--temp','0.6','--top-p','0.95','--top-k','20','--min-p','0'
+    )
+  }
+
+  'bonsai' {
+    # Ternary-Bonsai-27B, a ternary quantisation of Qwen3.6-27B, weights in {-1, 0, +1} with
+    # group-wise FP16 scaling, about 1.71 bits per weight. 27B parameters in 7.06 GiB.
+    Start-LLM 'bonsai' @(
+      # Q2_g64 and NOT PQ2_0. The two files are the same model: PQ2_0 is packed for PrismML's
+      # own fork of llama.cpp, Q2_g64 is the variant meant for upstream builds. Taking PQ2_0
+      # would mean compiling and maintaining a fifth engine here, against the rule that this
+      # box runs official release binaries.
+      '-m',"$ModelsDir\ternary-bonsai-27b\Ternary-Bonsai-27B-Q2_g64.gguf",
+      '--mmproj',"$ModelsDir\ternary-bonsai-27b\Ternary-Bonsai-27B-mmproj-BF16.gguf",
+      # DSpark, the model's own semi-autoregressive drafter, announced by its authors at
+      # 1.34x. EXPECT THIS TO FAIL: llama.cpp issue 26337 reports the drafter refusing to
+      # load on an inconsistent tensor offset, 'dspark.fc.weight has offset 337718592,
+      # expected 357584192'. Open, never confirmed by a maintainer, never fixed, reported on
+      # b10197 and untested on b10883. If it does fail, drop these three flags and the model
+      # still serves; only the speed claim goes.
+      '--spec-type','draft-dspark','--spec-draft-n-max','2',
+      '-md',"$ModelsDir\ternary-bonsai-27b\Ternary-Bonsai-27B-dspark-Q4_1.gguf",
+      '--n-gpu-layers','99','--load-mode','mlock','--flash-attn','on','--jinja',
+      '--host','0.0.0.0','--port','8080','--parallel','1',
+      '--ctx-size','262144',
+      '-b','4096','-ub','2048',
+      # q8_0 like the other two candidates. The cache budget here is the LEAST certain of the
+      # three: the backbone is announced as roughly three quarters linear attention, but the
+      # exact count of full layers and KV heads has not been read out of the file. Weights,
+      # projector and drafter together already sit near 9,975 MiB.
+      '--cache-type-k','q8_0','--cache-type-v','q8_0',
+      '-cram','24576',
+      # 0.7 and not 0.6: this is what the model card gives for its own benchmark runs, and
+      # unlike the Qwen profiles there is no second recommended value for general use.
+      '--temp','0.7','--top-p','0.95','--top-k','20','--min-p','0'
     )
   }
 
