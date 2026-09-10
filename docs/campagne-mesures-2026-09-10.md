@@ -55,13 +55,13 @@ qui n'a pas fini n'a pas été mesuré, il a été tronqué.
 |---|---|---|---|---|---|
 | `nex` | 35B-A3B | **86,6 %** | 58/60 | 37 | 13,0 min |
 | `tiel` | 35B-A3B | **86,6 %** | 53/60 | 0 | 3,5 min |
+| `muse` | 30B | 85,0 % | 52/60 | 41 | 48,1 min |
 | `kat` | 35B-A3B | 84,6 % | **60/60** | 0 | 9,1 min |
 | `bonsai` | 27B ternaire | 83,6 % | 59/60 | 0 | 23,5 min |
 | `ornith` | 9B | 83,4 % | 51/60 | 0 | 8,8 min |
 | `qwen` | 27B | 78,8 % | 57/60 | 0 | 19,7 min |
 | `qwenu` | 27B | 77,0 % | 57/60 | 0 | 25,9 min |
 | `spark` | 4B | 73,0 % | 46/60 | 0 | 5,6 min |
-| `muse` | 30B | en cours de remesure | | | |
 
 Ce qu'il faut en retenir.
 
@@ -85,6 +85,11 @@ la connaissance, ce qui est attendu à quatre milliards de paramètres. Dernier
 aussi sur le raisonnement, ce qui ne l'était pas : `ornith` avait montré qu'un
 petit modèle pouvait raisonner comme un trois fois plus gros, l'espoir était que
 Spark répète l'exploit un cran plus bas. Non.
+
+**`muse` remonte de vingt-six points** entre l'ancien plafond de sortie et le
+nouveau, de 59,0 % à 85,0 %, ce qui le fait passer de dernier à troisième. C'est
+la démonstration la plus brutale de ce qu'un plafond trop serré fait à un
+classement, et il lui reste 41 réponses coupées.
 
 **Les durées disent autre chose que les scores.** `tiel` passe le banc en 3,5
 minutes, `qwenu` en 25,9. Sept fois plus lent pour six points de moins.
