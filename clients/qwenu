@@ -79,10 +79,17 @@ export ANTHROPIC_DEFAULT_SONNET_MODEL="qwen3.8-27b-uncensored"
 export ANTHROPIC_DEFAULT_HAIKU_MODEL="qwen3.8-27b-uncensored"
 export ANTHROPIC_SMALL_FAST_MODEL="qwen3.8-27b-uncensored"
 
-# The server serves the model's native 262k window, not the 200k Claude Code
-# assumes for an unknown model id. Without this it would compact early while the
-# server still had a quarter of its window free.
-export CLAUDE_CODE_MAX_CONTEXT_TOKENS=262144
+# 253_952 = the 262_144 the server serves, MINUS the 8_192 of output below.
+#
+# It said 262_144 until 2026-09-10, the whole window. This variable is an INPUT
+# budget, not the window: n_ctx counts input and output in one pool, so
+# announcing all of it lets the client fill the last token, after which the
+# server has no room left to write and returns an empty response. That is the
+# lesson of 2026-09-08, paid for with a working session.
+#
+# Change one of these two numbers, change the other. The authority is
+# default_generation_settings.n_ctx in /props, never --ctx-size.
+export CLAUDE_CODE_MAX_CONTEXT_TOKENS=253952
 export CLAUDE_CODE_MAX_OUTPUT_TOKENS=8192
 
 # Telemetry and update pings would otherwise be aimed at the local server.

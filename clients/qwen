@@ -80,22 +80,31 @@ export ANTHROPIC_DEFAULT_SONNET_MODEL="qwen3.8-27b"
 export ANTHROPIC_DEFAULT_HAIKU_MODEL="qwen3.8-27b"
 export ANTHROPIC_SMALL_FAST_MODEL="qwen3.8-27b"
 
-# The server serves the model's native 262k window, not the 200k Claude Code
-# assumes for an unknown model id. Without this it would compact early while the
-# server still had a quarter of its window free.
+# 376_832 = the 393_216 the server serves, MINUS the 16_384 of output below.
 #
-# This MUST match what the server actually serves, and 262144 is a hard ceiling
-# here: the GGUF declares context_length=262144, so llama.cpp caps the window at
-# that value no matter what --ctx-size asks for, in a single log line. The value
-# was briefly set to 524288 on 2026-08-28; that promised the client twice the
-# window the server can deliver, and a session crossing 262144 tokens would have
-# been truncated server-side with no warning. Raising it for real requires
-# --override-kv qwen35.context_length on the server, exactly like muse's 1M, and
-# recall must then be proven by measurement, not assumed: a window the server
-# accepts says nothing about what the model still finds in it. Expect that to
-# cost most of the NVFP4 speed gain, since 512k-sized buffers put the card back
-# into the saturation regime (23% of decode and 72% of prefill, measured).
-export CLAUDE_CODE_MAX_CONTEXT_TOKENS=262144
+# It said 262_144 until 2026-09-10, and that was wrong in the direction nobody
+# notices: the client compacted at two thirds of the window while the server
+# still had 131_072 tokens free. The 262_144 ceiling was real when this comment
+# was written, the GGUF declaring context_length=262144 and llama.cpp capping on
+# the file. The profile then took exactly the way out this comment described,
+# --override-kv qwen35.context_length=int:393216, and the client was never
+# updated to follow.
+#
+# The other half of the correction, from 2026-09-08: this variable is an INPUT
+# budget, not the window. n_ctx counts input and output in one pool, so
+# announcing the total lets the client fill the last token, after which the
+# server has no room left to write and returns an EMPTY response. It hit at
+# 372_738 tokens of 393_216: /compact answered "summarization produced empty
+# response" twice, compaction being itself a request that needs room to write.
+#
+# The rule: n_ctx minus CLAUDE_CODE_MAX_OUTPUT_TOKENS. Change one, change the
+# other. The authority is default_generation_settings.n_ctx in /props, never the
+# --ctx-size passed to the server. A value was briefly set to 524288 on
+# 2026-08-28, twice what the server could then deliver, and caught the same day.
+#
+# Recall at this depth is NOT proven on these weights: a window the server
+# accepts says nothing about what the model still finds inside it.
+export CLAUDE_CODE_MAX_CONTEXT_TOKENS=376832
 export CLAUDE_CODE_MAX_OUTPUT_TOKENS=16384
 
 # Telemetry and update pings would otherwise be aimed at the local server.
