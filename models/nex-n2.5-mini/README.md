@@ -1,8 +1,11 @@
 # Nex-N2.5-mini
 
 Sparse MoE, architecture `qwen3_5_moe`: 40 blocks, hybrid attention mixing Gated
-DeltaNet linear layers with 10 full-attention layers. Installed 2026-09-10 as a
-candidate. Nothing below the header has been measured on this box.
+DeltaNet linear layers with 10 full-attention layers. Installed and measured
+2026-09-10.
+
+**The best quality in the parc**, tied with `tiel` on knowledge and ahead of it
+on reasoning, with no speculation of any kind and 37 answers still cut short.
 
 ```powershell
 .\llm-ctl.ps1 -Action nex
@@ -14,7 +17,10 @@ candidate. Nothing below the header has been measured on this box.
 | Vision projector | `mmproj-Nex-N2.5-mini-F16.gguf`, 0.84 GiB |
 | Context | 262,144, declared by the GGUF itself |
 | KV cache | `q8_0` |
-| VRAM | About 24 GiB, COMPUTED not measured: 20,180 MiB of weights, 860 of projector, roughly 2,700 of cache at full window |
+| VRAM | **27,089 MiB measured**, against 24,000 computed. The formula underestimates by about 3 GiB, same gap and same direction as on Spark |
+| MMLU | **433/500, 86.6 %**, and that is a floor: 37 answers were still truncated, so 433 of 463 finished, 93.5 % |
+| GSM8K | **58/60** |
+| Decode | **215.1 tok/s**, no speculation. `tiel` without its MTP head does 198.3 |
 | Build | `b10883` (2026-09-09) |
 | Speculation | None. See below, this is the model's main cost |
 

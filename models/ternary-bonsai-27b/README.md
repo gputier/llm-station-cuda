@@ -2,8 +2,11 @@
 
 A ternary quantisation of Qwen3.6-27B by PrismML: weights in {-1, 0, +1} with
 group-wise FP16 scaling, about 1.71 bits each. Twenty-seven billion parameters
-in 7.06 GiB. Installed 2026-09-10 as a candidate. Nothing below the header has
-been measured on this box.
+in 7.06 GiB. Installed and measured 2026-09-10.
+
+**The best quality-per-byte in the parc, by a wide margin.** Three points under
+the best model of the day for a third of its weight, and the only candidate whose
+footprint leaves room for a second model on the card.
 
 ```powershell
 .\llm-ctl.ps1 -Action bonsai
@@ -13,10 +16,13 @@ been measured on this box.
 |---|---|
 | Weights | `Ternary-Bonsai-27B-Q2_g64.gguf`, 7.06 GiB |
 | Vision projector | `Ternary-Bonsai-27B-mmproj-BF16.gguf`, 0.87 GiB |
-| Speculation drafter | `Ternary-Bonsai-27B-dspark-Q4_1.gguf`, 1.81 GiB. **Expect it to fail**, see below |
+| Speculation | **None.** Its own drafter prevents the model from loading at all, see below |
 | Context | 262,144 |
 | KV cache | `q8_0` |
-| VRAM | Weights, projector and drafter alone are 9,975 MiB. The cache budget is the least certain of the three candidates |
+| VRAM | Weights and projector, the drafter having been dropped |
+| MMLU | **418/500, 83.6 %**, zero empty answers |
+| GSM8K | **59/60**, second only to kat's perfect score |
+| Decode | **102.6 tok/s**. Half of tiel, which is expected: 27B dense works every parameter per token where the MoE models activate three billion of thirty-five |
 | Build | `b10883` (2026-09-09) |
 
 ## Q2_g64 and not PQ2_0
