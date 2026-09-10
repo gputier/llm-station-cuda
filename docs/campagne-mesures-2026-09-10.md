@@ -191,9 +191,37 @@ piste. Sur du code, l'arbitrage penche du bon côté.
 Ne jamais descendre à 0 pour autant : le glouton fait ici PERDRE 1,4 point, et
 Qwen documente qu'il produit des répétitions sans fin sur ces poids.
 
+## Le top-k ne sert à rien à cette température
+
+Mesuré sur `tiel` à température 0,3, quatre largeurs de filtre, même jeu de 560
+questions :
+
+| top-k | MMLU | GSM8K |
+|---|---|---|
+| 0, filtre désactivé | 88,0 % | 53/60 |
+| 20, valeur de tous les profils | 88,0 % | 53/60 |
+| 40 | 88,0 % | 53/60 |
+| 64 | 88,0 % | 53/60 |
+
+Quatre fois le même nombre, à la question près. Les trois valeurs ont bien été
+transmises jusqu'au banc, vérifié dans le protocole écrit par chaque fichier de
+résultat, ce qui n'était pas une précaution superflue après deux défauts de
+passage d'arguments dans la même journée.
+
+L'explication tient au cumul des filtres. À 0,3 la distribution est déjà très
+piquée, et `top_p 0.95` a coupé la queue avant que le top-k n'ait quoi que ce
+soit à faire : les jetons au-delà du vingtième ont une probabilité négligeable,
+les garder ou les jeter revient au même.
+
+Conséquence pratique : **un paramètre de moins à régler**. Aligner le top-k sur
+la carte de chaque modèle reste correct par principe, mais n'attendez rien de
+mesurable tant que la température reste basse. Le résultat pourrait changer à
+température 1,0, où la queue de distribution pèse encore quelque chose ; ce
+n'est pas mesuré.
+
 ## Ce qui reste à mesurer
 
-Le balayage top-k, et la température sur `kat`, `nex` et `spark`. Le script est
+La température sur `kat`, `nex` et `spark`, en cours. Le script est
 [../bench/banc-sampling.ps1](../bench/banc-sampling.ps1) et il balaie un facteur
 à la fois.
 
