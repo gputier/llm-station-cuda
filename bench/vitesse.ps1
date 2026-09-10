@@ -26,21 +26,41 @@ if (-not (Test-Path $PromptFile)) { throw "invite introuvable : $PromptFile" }
 $prompt = (Get-Content $PromptFile -Raw | ConvertFrom-Json).prompt
 if (-not $prompt) { throw "le fichier d invite ne porte pas de champ 'prompt'" }
 
+# Wait for the server rather than assume it: a model that is still loading
+# answers /props with 503 "Loading model", and the run dies on the first call
+# instead of on a measurement.
+$pret = $false
+for ($w = 0; $w -lt 600; $w += 5) {
+  try {
+    if ((Invoke-RestMethod -Uri "$Uri/health" -TimeoutSec 4).status -eq 'ok') { $pret = $true; break }
+  } catch { }
+  Start-Sleep -Seconds 5
+}
+if (-not $pret) { throw "le serveur n a pas repondu en 600 s" }
+
 $props = Invoke-RestMethod -Uri "$Uri/props" -TimeoutSec 15
 $modele = $props.model_path
 
 $decode = @(); $prefill = @(); $accepte = @(); $draftes = @()
 
 for ($i = 1; $i -le $Runs; $i++) {
+  # /v1/chat/completions and NOT /completion, since 2026-09-10. The raw endpoint
+  # sends the prompt with no chat template, and an instruction-tuned model reads a
+  # finished block of code as finished: tiel ingested 44,801 tokens and emitted an
+  # end-of-sequence immediately, one token predicted, 0.0 tok/s. Nothing was wrong
+  # with tiel, the protocol was asking the wrong question.
+  #
+  # The reply's CONTENT is ignored on purpose. Reasoning models put everything in
+  # reasoning_content and leave content empty; this bench measures throughput, and
+  # a token costs the same whether it lands in one field or the other.
   $body = @{
-    prompt      = $prompt
-    n_predict   = $Predict
+    messages    = @(@{ role = 'user'; content = ($prompt + "`n`nResume ce code en une phrase.") })
+    max_tokens  = $Predict
     seed        = 42
     temperature = 0
-    cache_prompt = $false   # each run must pay its own prefill, or runs 2 and 3 measure nothing
-  } | ConvertTo-Json -Depth 4 -Compress
+  } | ConvertTo-Json -Depth 6 -Compress
 
-  $r = Invoke-RestMethod -Uri "$Uri/completion" -Method Post `
+  $r = Invoke-RestMethod -Uri "$Uri/v1/chat/completions" -Method Post `
         -ContentType 'application/json; charset=utf-8' `
         -Body ([System.Text.Encoding]::UTF8.GetBytes($body)) -TimeoutSec 900
 
@@ -66,7 +86,10 @@ $lignes = @(
   ("date        : {0}" -f (Get-Date -Format 'yyyy-MM-dd HH:mm')),
   ("modele      : {0}" -f $modele),
   ("generation  : {0:N1} tok/s (mediane de {1})" -f (Mediane $decode), $Runs),
-  ("ingestion   : {0:N0} tok/s (mediane de {1})" -f (Mediane $prefill), $Runs),
+  # First run only: the OpenAI-compatible endpoint keeps its prompt cache, so runs
+  # 2 and 3 report an ingestion of about 50 tok/s that measures a cache hit and
+  # nothing else. Decode is unaffected and stays a median.
+  ("ingestion   : {0:N0} tok/s (premiere passe, les suivantes lisent le cache)" -f $prefill[0]),
   ("speculation : {0}" -f $tauxTxt),
   ("vram        : {0}" -f $vram),
   ("protocole   : {0} jetons generes, graine 42, temperature 0, cache d invite desactive" -f $Predict)
