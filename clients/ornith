@@ -1,0 +1,112 @@
+#!/usr/bin/env bash
+# ornith - launch Claude Code against the local Ornith-1.5-9B server.
+#
+# Sibling of `kat`, `qwen` and `muse`, same mechanism: the llama.cpp build
+# serving this model exposes a native Anthropic-compatible /v1/messages
+# endpoint, SSE and tool_use included, so no translation proxy is involved.
+#
+# THE SMALL ONE, and better than its size suggests. Measured 2026-09-10 on the
+# same 500-question MMLU set as every other model here: 83.4 %, which puts nine
+# billion parameters AHEAD of `qwen` and its twenty-seven, in a third of the
+# memory. Its weak spot is arithmetic, 51/60 on GSM8K, the lowest of the models
+# that matter.
+#
+# Reach for it when the card is needed elsewhere, or when a second opinion is
+# worth more than the best answer. Running it STOPS whatever else holds the
+# card, one model at a time.
+#
+# Scope: the exported variables live in this process only. A plain `claude` in
+# another shell keeps talking to Anthropic.
+
+set -euo pipefail
+
+HOST="${LLM_HOST:-your-server-hostname-or-ip}"
+PORT="8080"
+BASE="http://${HOST}:${PORT}"
+SSH_TARGET="${LLM_SSH_USER:-youruser}@${HOST}"
+CTL='D:\LLM-Setup\llm-ctl.ps1'
+LOAD_TIMEOUT=240
+
+err() { printf '%s\n' "$*" >&2; }
+
+is_up() { curl -sS -m 3 "${BASE}/health" 2>/dev/null | grep -q '"status":"ok"'; }
+
+# The server is single-slot: whichever model sits on port 8080 answers every
+# request, whatever model id the client asks for. Checking health is therefore
+# not enough, we must confirm this model is the one loaded.
+loaded_model() {
+  curl -sS -m 3 "${BASE}/props" 2>/dev/null \
+    | sed -n 's/.*"model_path":"\([^"]*\)".*/\1/p'
+}
+
+is_ornith() { printf '%s' "$(loaded_model)" | grep -qi 'ornith'; }
+
+load_ornith() {
+  err "Chargement de Ornith-1.5-9B sur ${HOST}..."
+  ssh -o ConnectTimeout=10 "$SSH_TARGET" \
+    "powershell -NoProfile -ExecutionPolicy Bypass -File ${CTL} -Action ornith" >&2
+
+  local waited=0
+  while (( waited < LOAD_TIMEOUT )); do
+    if is_up && is_ornith; then
+      err "Ornith prêt."
+      return 0
+    fi
+    sleep 5
+    waited=$(( waited + 5 ))
+  done
+
+  err "Échec : le modèle n'a pas répondu en ${LOAD_TIMEOUT} s."
+  err "Journal : ssh ${SSH_TARGET} \"powershell -NoProfile -ExecutionPolicy Bypass -File ${CTL} -Action logs -Name ornith\""
+  err "Ou directement D:\\LLM-Setup\\llm-err-ornith.log sur ${HOST}."
+  return 1
+}
+
+if ! is_up; then
+  load_ornith
+elif ! is_ornith; then
+  err "Le port ${PORT} sert « $(loaded_model | sed 's/.*\\//') », pas Ornith."
+  read -r -p "Le remplacer par Ornith ? [o/N] " answer
+  [[ "$answer" =~ ^[oOyY]$ ]] || { err "Abandon."; exit 1; }
+  load_ornith
+fi
+
+# AUTH_TOKEN and not API_KEY: the latter triggers Claude Code's custom-key
+# approval prompt. llama-server started without --api-key accepts any bearer.
+export ANTHROPIC_AUTH_TOKEN="local"
+export ANTHROPIC_BASE_URL="$BASE"
+
+export ANTHROPIC_MODEL="ornith-1.5-9b"
+export ANTHROPIC_DEFAULT_OPUS_MODEL="ornith-1.5-9b"
+export ANTHROPIC_DEFAULT_SONNET_MODEL="ornith-1.5-9b"
+export ANTHROPIC_DEFAULT_HAIKU_MODEL="ornith-1.5-9b"
+export ANTHROPIC_SMALL_FAST_MODEL="ornith-1.5-9b"
+
+# 245_760 = the 262_144 the server serves, MINUS the 16_384 of output below.
+# This variable is an INPUT budget, not the window: n_ctx counts input and
+# output in one pool, so announcing the total lets the client fill the last
+# token, after which the server has no room left to write and returns an EMPTY
+# response. That cost a working session on 2026-09-08 at 95 % full, where
+# /compact answered "summarization produced empty response" twice.
+#
+# The rule: n_ctx minus CLAUDE_CODE_MAX_OUTPUT_TOKENS. Change one, change the
+# other. The authority is default_generation_settings.n_ctx in /props, never the
+# --ctx-size passed to the server.
+#
+# Recall in this window is NOT proven on these weights: no needle-in-a-haystack
+# has been run here, unlike on `tiel`. Treat long sessions with suspicion.
+export CLAUDE_CODE_MAX_CONTEXT_TOKENS=245760
+export CLAUDE_CODE_MAX_OUTPUT_TOKENS=16384
+
+# Read for PRESENCE, not for value: any non-empty string turns the disabling ON.
+export CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1
+
+# Read by VALUE, unlike the line above. Dropping the attribution block keeps the
+# first tokens of every request stable, so the server recognises the
+# conversation as a continuation instead of re-prefilling the whole context.
+export CLAUDE_CODE_ATTRIBUTION_HEADER=0
+
+# MCP servers dropped: 70 tool schemas weigh 108 KB of prompt on their own, which
+# buys little here and costs a much slower first turn. Skills, commands, memory
+# and CLAUDE.md are untouched.
+exec claude --strict-mcp-config --mcp-config '{"mcpServers":{}}' "$@"

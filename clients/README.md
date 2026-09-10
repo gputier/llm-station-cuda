@@ -6,11 +6,31 @@ for it to actually answer, then hands over to Claude Code pointed at it.
 ```bash
 export LLM_HOST=your-server-hostname-or-ip
 export LLM_SSH_USER=your-ssh-user
+export LLM_SSH_KEY=~/.ssh/id_ed25519   # optional, see below
 
-./qwen        # reasoning and coding
-./muse        # agentic, vision, 1M context
+./tiel        # the default: coding and reasoning, fastest of all
+./kat         # when arithmetic reasoning matters more than speed
+./ornith      # the small one, a third of the VRAM, better than its size
+./nex         # best quality measured here, no speculation, vision
+./bonsai      # 27B in 7 GiB, the best quality per byte
+./spark       # 4B, last on every measure
+./muse        # agentic, vision, faithful OCR
+./qwen        # reasoning and coding, superseded by tiel
 ./qwenu       # only when the aligned model refuses a legitimate task
 ```
+
+Which one to reach for, with the figures behind each line, is in
+[../docs/quel-modele-pour-quel-usage.md](../docs/quel-modele-pour-quel-usage.md).
+
+`embed` has no launcher on purpose: it serves embeddings, not a chat endpoint.
+
+## LLM_SSH_KEY, and why it exists
+
+The newer launchers name their key explicitly and pass `IdentitiesOnly=yes`. An
+ssh agent holding several keys offers them all, and a server that caps
+authentication attempts refuses the connection before the right key is ever
+tried, with a `Too many authentication failures` that says nothing about the
+cause. Set `LLM_SSH_KEY` if you hit that; leave it alone otherwise.
 
 Put them somewhere on your `PATH` to call them by name. They pass their
 arguments through, so `qwen --help` or `qwen -p "..."` works as expected.
