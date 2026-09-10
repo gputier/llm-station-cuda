@@ -959,8 +959,17 @@ switch ($Action) {
       # expected 357584192'. Open, never confirmed by a maintainer, never fixed, reported on
       # b10197 and untested on b10883. If it does fail, drop these three flags and the model
       # still serves; only the speed claim goes.
-      '--spec-type','draft-dspark','--spec-draft-n-max','2',
-      '-md',"$ModelsDir\ternary-bonsai-27b\Ternary-Bonsai-27B-dspark-Q4_1.gguf",
+      # The three DSpark flags were REMOVED on 2026-09-10 after the failure predicted by
+      # llama.cpp issue 26337 happened here: the profile was loaded during the bench
+      # campaign and never answered, 420 seconds, no health, the runner moved on. Loaded
+      # again with -NoSpec, it came up and served at 102.6 tok/s. The drafter was the
+      # whole problem. The file stays on disk at
+      #   D:\models\ternary-bonsai-27b\Ternary-Bonsai-27B-dspark-Q4_1.gguf
+      # for the day the defect is fixed; the flags to put back are
+      #   --spec-type draft-dspark --spec-draft-n-max 2 -md <that file>
+      #
+      # Do not reach for ngram-cache as a replacement: measured on nex and tiel the same
+      # day, it HALVES decode on conversational use. See the nex block.
       '--n-gpu-layers','99','--load-mode','mlock','--flash-attn','on','--jinja',
       '--host','0.0.0.0','--port','8080','--parallel','1',
       '--ctx-size','262144',
