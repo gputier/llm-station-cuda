@@ -46,9 +46,9 @@ foreach ($p in $liste) {
   Write-Output ("{0} : servi par {1}" -f $p, $props.model_path)
   $vram = (nvidia-smi --query-gpu=memory.used --format=csv,noheader) -join ''
 
-  & powershell -NoProfile -ExecutionPolicy Bypass -File 'D:\LLM-Setup\banc.ps1' -Label $p | Out-Host
+  & powershell -NoProfile -ExecutionPolicy Bypass -File 'D:\LLM-Setup\bench\banc.ps1' -Label $p | Out-Host
 
-  $res = Get-Content ("D:\LLM-Setup\banc-{0}.txt" -f $p)
+  $res = Get-Content ("D:\LLM-Setup\bench\resultats\banc-{0}.txt" -f $p)
   $mmlu = ($res | Where-Object { $_ -like 'mmlu*' }) -join ''
   $gsm  = ($res | Where-Object { $_ -like 'gsm8k*' }) -join ''
   $recap += ("{0} : {1} | {2} | vram {3}" -f $p, $mmlu.Trim(), $gsm.Trim(), $vram)
@@ -57,4 +57,4 @@ foreach ($p in $liste) {
 Write-Output ''
 Write-Output '=== RECAPITULATIF'
 $recap | ForEach-Object { Write-Output $_ }
-Set-Content -Path 'D:\LLM-Setup\banc-recap.txt' -Value $recap -Encoding UTF8
+Set-Content -Path 'D:\LLM-Setup\bench\resultats\banc-recap.txt' -Value $recap -Encoding UTF8

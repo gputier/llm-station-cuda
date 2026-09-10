@@ -24,8 +24,9 @@ function Plan($action, $item, $dest) {
   "{0,-8} {1,-42} {2}" -f $action, $item, $dest
 }
 
-# Kept at the root: the launcher, and nothing else.
-$garder = @('llm-ctl.ps1')
+# Kept at the root: the launcher, and this script, which would otherwise sweep
+# itself into the archive on its way through.
+$garder = @('llm-ctl.ps1','ranger.ps1')
 
 # Moved to bench\: the bench that is still used, plus its question set.
 $versBench = @('banc.ps1','banc-tous.ps1','quality.ps1','epreuves.jsonl','bench-prompt.json','vision-test.png')
