@@ -1,17 +1,18 @@
 # Documentation index
 
-Seven documents, each answering a different question. Read them in this order the
+Eight documents, each answering a different question. Read them in this order the
 first time; jump straight to one afterwards.
 
 | Document | Answers |
 |---|---|
 | [prerequisites.md](prerequisites.md) | What hardware, drivers and toolkits this station assumes, and the failure modes that look like something else. |
-| [building-llama-cpp.md](building-llama-cpp.md) | How the four coexisting llama.cpp builds are compiled, and why they are not interchangeable. |
+| [building-llama-cpp.md](building-llama-cpp.md) | How the five coexisting llama.cpp builds are compiled, and why they are not interchangeable. |
 | [api-usage.md](api-usage.md) | How to call the server: endpoints, payloads, and the fields that carry the measurements. |
 | [claude-code-integration.md](claude-code-integration.md) | How an agentic client is pointed at this server, and the environment variables that matter. |
 | [fetching-models.md](fetching-models.md) | Which client to use to pull weights, why the in-house fetcher was deleted, and how to measure a transfer honestly. |
 | [tuning-log.md](tuning-log.md) | Every tuning campaign run on this box, including the ones that found nothing. |
 | [etude-vitesse-qwen-2026-09-06.md](etude-vitesse-qwen-2026-09-06.md) | Study of 2026-09-06, in French: every remaining speed lever for the reasoning profile, ranked, with what was already closed by measurement and the campaign plan. |
+| [banc-candidats-2026-09-10.md](banc-candidats-2026-09-10.md) | Plan of 2026-09-10, in French: what to check after the driver update, in which order to try the three candidates, and what the quality bench will and will not tell you. |
 
 ## Where the truth lives
 

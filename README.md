@@ -30,7 +30,7 @@ did not transpose either.
 
 ## Models served
 
-All seven share port 8080 and are mutually exclusive on the GPU: loading one
+All ten share port 8080 and are mutually exclusive on the GPU: loading one
 unloads the others.
 
 | Action | Model | Context | Role |
@@ -42,6 +42,16 @@ unloads the others.
 | `qwen` | Qwen3.8-27B, NVFP4 LOW | 393,216 | Reasoning and coding, superseded by `tiel` |
 | `qwenu` | Qwen3.8-27B Uncensored, Q5_K_M | 262,144 | Used only when the aligned model refuses a legitimate task |
 | `embed` | nomic-embed-text-v1.5, Q8_0 | 131,072 | 768-dimension embeddings |
+| `nex` | Nex-N2.5-mini, i1-Q4_K_M | 262,144 | Candidate since 2026-09-10. Vision, no speculation |
+| `spark` | Spark-X2.5-4B, Q8_0 | 262,144 | Candidate since 2026-09-10. Agentic, text only |
+| `bonsai` | Ternary-Bonsai-27B, Q2_g64 | 262,144 | Candidate since 2026-09-10. Ternary weights, vision |
+
+The last three are candidates, not a service offering. They were installed on
+2026-09-10 and **not one figure has been measured on them yet**: the contexts in
+that table are what the profiles ask for, not what recall has been shown to
+survive. Each carries a known defect, written at the top of its page under
+[models/](models/). They run on their own engine, `b10883`, which serves nothing
+else.
 
 Role split established by measurement, not preference. `tiel` took the coding
 and reasoning seat from `qwen` on 2026-09-01, on the strength of 54% more decode

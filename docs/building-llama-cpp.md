@@ -1,6 +1,6 @@
 # Building llama.cpp for CUDA on Windows
 
-Four builds coexist on this machine, on purpose. They are **not
+Five builds coexist on this machine, on purpose. They are **not
 interchangeable**, and picking the wrong one fails silently rather than loudly.
 
 | Build | Date | CUDA | Serves | Why it exists |
@@ -9,6 +9,26 @@ interchangeable**, and picking the wrong one fails silently rather than loudly.
 | `llama-cpp-upstream` | 2026-08-11 | 13.3 | `muse`, `qwenu` | Official build. The only one of the first two that knows the `muse-glimmer` architecture. |
 | `llama-cpp-20260827` | 2026-08-27 | 13.3 | `qwen` | The only build with NVFP4 CUDA kernels. See below. It also served `ornith` until 2026-09-08; that profile is Q5_K_M and never needed those kernels. |
 | `llama-cpp-b10826` | 2026-09-06 | 13.3 | `tiel`, `ornith`, `kat` | The official release zip and its cudart, unzipped flat, no compilation. Neutral in decode and +5% in prefill on Tiel against the 2026-08-27 build; strictly neutral on Ornith, which moved here on 2026-09-08 to stop owing a profile to the NVFP4 build. See [tuning-log.md](tuning-log.md). `kat` was added here on 2026-09-08 and never ran anywhere else. |
+| `llama-cpp-b10883` | 2026-09-09 | 13.3 | `nex`, `spark`, `bonsai` | Same recipe as b10826, official zip plus cudart unzipped flat. Installed 2026-09-10 for three candidate models and serving only those. See below. |
+
+## b10883: taken for one architecture, not for speed
+
+It exists because of a single hard requirement. b10826 does not know the
+`spark2_5` architecture, whose support landed in **b10828**, and an engine that
+does not know an architecture fails at load rather than saying so. b10883, the
+newest release at install time, was taken instead of the barely-sufficient
+b10828 so the exercise would not have to be repeated a week later.
+
+It has **not** been benchmarked against b10826 on the production models, and no
+production profile was moved onto it. Do not move `tiel`, `ornith` or `kat` here
+on the assumption that newer is faster: the 2026-08-27 build taught that lesson
+at the price of two full compilations for a gain of exactly nothing.
+
+The official x64 release only ships against CUDA 12.4 and 13.3. There is a 13.4
+asset, but arm64 only. Running this box on a 13.4 toolkit does not require a
+matching build, since each build carries its own cudart flat in its directory
+and a driver of the same major version serves it; testing 13.4 *kernels* on x64
+would mean compiling, which is a different exercise.
 
 ## The build command
 
