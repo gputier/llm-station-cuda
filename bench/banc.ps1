@@ -63,7 +63,14 @@ foreach ($q in $mmlu) {
   }) -join "`n"
   $prompt = "{0}`n{1}`n`nEnd your reply with this exact line and nothing after it:`nAnswer: X`nwhere X is A, B, C or D." -f $q.q, $opts
 
-  # 600 tokens and NOT 8, since 2026-09-10. The first version of this script gave
+  # 2000 tokens, raised from 600 on 2026-09-10, itself raised from 8 the same day.
+  # A CEILING IS NOT A COST: a model that answers in thirty tokens stops on its
+  # own and pays nothing for the headroom it did not use. Both earlier values were
+  # tightened out of a worry about duration that does not survive that sentence.
+  # 600 still cut muse on 181 of 500 questions, scoring it at 59% when it places
+  # 92.5% of what it finishes, and cut nex on 64.
+  #
+  # The first version of this script gave
   # one letter's worth of room, on the reasoning that a model needing more was not
   # answering the question. That was wrong, and it produced a false ranking: Nex
   # ignores enable_thinking, started reasoning, and got truncated before writing
@@ -71,7 +78,7 @@ foreach ($q in $mmlu) {
   # a 4B one. On the 280 it did answer it was right 92.5% of the time.
   #
   # A bench must measure the model, not the model's obedience to an output cap.
-  $a = (Ask $prompt 600)
+  $a = (Ask $prompt 2000)
   $mmluDone++
   if (-not $a) { $mmluEmpty++; continue }
   $up = $a.Trim().ToUpper()
@@ -89,7 +96,7 @@ foreach ($q in $mmlu) {
 $gsmOk = 0; $gsmDone = 0; $gsmEmpty = 0
 foreach ($q in $gsm) {
   $prompt = "{0}`n`nReason briefly, then end your reply with the final number alone on its own last line." -f $q.q
-  $a = (Ask $prompt 512)
+  $a = (Ask $prompt 1024)
   $gsmDone++
   if (-not $a) { $gsmEmpty++; continue }
   # Last number in the reply, commas and currency stripped. GSM8K answers are
