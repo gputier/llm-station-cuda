@@ -21,6 +21,7 @@ on reasoning, with no speculation of any kind and 37 answers still cut short.
 | MMLU | **433/500, 86.6 %**, and that is a floor: 37 answers were still truncated, so 433 of 463 finished, 93.5 % |
 | GSM8K | **58/60** |
 | Decode | **215.1 tok/s**, no speculation. `tiel` without its MTP head does 198.3 |
+| Long-context recall | **6/6**, needle at 10/50/90 % depth, at 176,080 then 243,969 tokens |
 | Build | `b10883` (2026-09-09) |
 | Speculation | None. See below, this is the model's main cost |
 

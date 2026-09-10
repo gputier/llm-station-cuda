@@ -219,14 +219,37 @@ mesurable tant que la température reste basse. Le résultat pourrait changer à
 température 1,0, où la queue de distribution pèse encore quelque chose ; ce
 n'est pas mesuré.
 
+## Le rappel de `nex` tient jusqu'à la fenêtre annoncée
+
+Aiguille dans la botte de foin, remplissage de code source réel et varié, phrase
+arbitraire plantée à 10, 50 et 90 % de profondeur.
+
+| Longueur du contexte | Résultat |
+|---|---|
+| 176 080 jetons | 3/3 |
+| **243 969 jetons** | **3/3** |
+
+Six sur six. La seconde longueur est le chiffre qui compte : elle passe juste
+sous les 245 760 jetons que le lanceur annonce au client. Ce que la station
+promet est donc tenu, et ce n'était pas acquis.
+
+Deux inquiétudes levées au passage. Le défaut d'arrêt silencieux en contexte long
+qui frappe cette famille, issue 27756, ne s'est pas manifesté : le modèle répond
+normalement à 244 000 jetons. Et l'ingestion de ce contexte prend 47 secondes,
+un coût réel mais supportable pour une session qui va vivre longtemps.
+
+Ce que ce résultat ne dit pas : il mesure la capacité à retrouver **une** phrase
+exacte, pas à raisonner sur l'ensemble du contexte. Un modèle peut retrouver une
+aiguille et rester incapable de synthétiser ce qui l'entoure.
+
 ## Ce qui reste à mesurer
 
 La température sur `kat`, `nex` et `spark`, en cours. Le script est
 [../bench/banc-sampling.ps1](../bench/banc-sampling.ps1) et il balaie un facteur
 à la fois.
 
-Le rappel en contexte long, qu'aucun des trois candidats n'a prouvé, alors que
-leurs profils annoncent 262 144 jetons.
+Le rappel en contexte long de `spark` et `bonsai`. Celui de `nex` est prouvé,
+voir plus haut.
 
 La vision de `nex`, assise sur un défaut ouvert de llama.cpp qui fait tomber le
 serveur quand texte et image alternent.
