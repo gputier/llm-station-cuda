@@ -50,6 +50,25 @@ request, no workaround. Reported against b10197 and untested on b10883.
 If it fails at startup, drop `--spec-type`, `--spec-draft-n-max` and `-md` from
 the profile. The model still serves; only the speed claim goes.
 
+**It did fail, on 2026-09-10.** The profile was loaded during the bench campaign
+and never answered: 420 seconds, no health, the runner moved on to the next
+model. So the defect reported against b10197 in February is still there in
+b10883, seven months and several hundred releases later.
+
+### There is a replacement, and it does not come from the model's author
+
+Bonsai is a quantisation of Qwen3.6-27B, and that base has drafters published by
+other people, already converted to GGUF: `spiritbuun/Qwen3.6-27B-DFlash-GGUF`
+and `Ardenzard/Qwen3.6-27B-DFlash-GGUF`, plus an EAGLE3 at
+`wimmmm/Ex0bit-Qwen3.6-27B-PRISM-EAGLE3-GGUF`. They are usable here because the
+whole Qwen3.5 and 3.6 family shares one 248,320-token vocabulary, which is the
+condition that makes a drafter transferable at all.
+
+The caveat is the same one that applies to Nex: these are trained on the **base**
+model, not on this ternary derivative. A drafter that predicts what the original
+would say, where the derivative says something else, gets rejected. Only the
+decode rate settles it.
+
 ## Sampling
 
 Temperature 0.7, top-p 0.95, top-k 20, straight from the model card. Unlike the
