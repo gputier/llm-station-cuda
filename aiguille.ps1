@@ -33,7 +33,11 @@ foreach ($f in Get-ChildItem $Corpus -Recurse -Include *.cpp,*.h,*.hpp -EA Silen
   if ($sb.Length -ge $cibleCar) { break }
 }
 if ($sb.Length -lt ($cibleCar / 2)) { throw "corpus trop court : $($sb.Length) caracteres pour $cibleCar demandes" }
-$foin = $sb.ToString().Substring(0, [Math]::Min($cibleCar, $sb.Length))
+# Keep printable ASCII only. A source checkout carries files that are not valid
+# UTF-8, and one stray byte makes the server reject the whole request with a JSON
+# parse error 500 that names a column number and not the cause.
+$foin = ($sb.ToString() -replace '[^\x20-\x7E\r\n\t]', '')
+$foin = $foin.Substring(0, [Math]::Min($cibleCar, $foin.Length))
 
 $n = (Invoke-RestMethod -Uri "$Uri/tokenize" -Method Post -ContentType 'application/json' `
       -Body (@{ content = $foin } | ConvertTo-Json -Compress)).tokens.Count
