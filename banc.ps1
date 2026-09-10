@@ -2,6 +2,17 @@ param(
   [Parameter(Mandatory=$true)][string]$Label,
   [int]$MmluCount = 500,
   [int]$Gsm8kCount = 60,
+  # Temperature 0 by default: the bench wants one reproducible number. Any other
+  # value is a deliberate sweep, and the seed stays fixed so the runs remain
+  # comparable to each other.
+  [double]$Temperature = 0,
+  # top-k 20 is what every profile here runs. 0 disables the filter entirely,
+  # which is what Spark's generation_config asks for; 40 is Nex's; 64 is muse's.
+  # Sweep ONE factor at a time: temperature at fixed top-k, then top-k at the
+  # temperature that won. A full grid multiplies the runs and tells you less,
+  # because a pair that scores well never says which half earned it.
+  [int]$TopK = 20,
+  [double]$TopP = 0.95,
   [string]$Epreuves = 'D:\LLM-Setup\bench\epreuves.jsonl',
   [string]$Uri = 'http://127.0.0.1:8080/v1/chat/completions'
 )
@@ -31,7 +42,9 @@ function Ask($prompt, $maxTokens) {
     messages    = @(@{ role = 'user'; content = $prompt })
     max_tokens  = $maxTokens
     seed        = 42
-    temperature = 0
+    temperature = $Temperature
+    top_k       = $TopK
+    top_p       = $TopP
     chat_template_kwargs = @{ enable_thinking = $false }
   } | ConvertTo-Json -Depth 6 -Compress
   $r = Invoke-RestMethod -Uri $Uri -Method Post `
@@ -101,7 +114,7 @@ $lignes = @(
   ("gsm8k       : {0}/{1}" -f $gsmOk, $gsm.Count),
   ("vides       : {0} mmlu, {1} gsm8k" -f $mmluEmpty, $gsmEmpty),
   ("duree       : {0} min" -f $mins),
-  "temperature 0, seed 42, thinking desactive"
+  ("protocole   : temperature {0}, top-k {1}, top-p {2}, graine 42, reflexion desactivee" -f $Temperature, $TopK, $TopP)
 )
 Set-Content -Path $out -Value $lignes -Encoding UTF8
 $lignes | ForEach-Object { Write-Output $_ }
