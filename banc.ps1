@@ -2,7 +2,7 @@ param(
   [Parameter(Mandatory=$true)][string]$Label,
   [int]$MmluCount = 500,
   [int]$Gsm8kCount = 60,
-  [string]$Epreuves = 'D:\LLM-Setup\epreuves.jsonl',
+  [string]$Epreuves = 'D:\LLM-Setup\bench\epreuves.jsonl',
   [string]$Uri = 'http://127.0.0.1:8080/v1/chat/completions'
 )
 
@@ -20,7 +20,7 @@ param(
 # answer, which scores as a wrong answer and measures nothing.
 
 $ErrorActionPreference = 'Stop'
-$out = "D:\LLM-Setup\banc-$Label.txt"
+$out = "D:\LLM-Setup\bench\resultats\banc-$Label.txt"
 
 $all = Get-Content $Epreuves | ForEach-Object { ConvertFrom-Json $_ }
 $mmlu  = @($all | Where-Object { $_.kind -eq 'mmlu'  } | Select-Object -First $MmluCount)
