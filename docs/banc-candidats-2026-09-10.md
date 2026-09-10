@@ -55,16 +55,31 @@ on les retire et on relance. Deux lancements prévus d'avance, pas un raté.
 
 ## Le banc de qualité
 
-Cent dix questions MMLU réparties sur vingt-cinq matières, plus soixante
+Cinq cents questions MMLU réparties sur vingt-cinq matières, plus soixante
 problèmes GSM8K, température 0, le même jeu pour tous les modèles. C'est le banc
-déjà utilisé pour départager `tiel`, `qwen` et `ornith`, ce qui donne les points
-de comparaison : 82,0 % et 52/60 pour `qwen`, 82,2 % et 58/60 pour `tiel`,
-73,0 % et 53/60 pour `ornith`.
+qui a départagé `tiel`, `qwen` et `ornith`, ce qui donne les points de
+comparaison : 82,0 % et 52/60 pour `qwen`, 82,2 % et 58/60 pour `tiel`, 73,0 %
+et 53/60 pour `ornith`.
 
-L'outil et le jeu de questions vivent sur la machine, `quality.ps1` et
-`epreuves.jsonl` dans `D:\LLM-Setup`. **Les relire avant de lancer** : ce
-document ne recopie pas leurs paramètres, parce qu'une copie se périme en
-silence et que le script fait foi.
+Le jeu de questions vit sur la machine, `epreuves.jsonl` dans `D:\LLM-Setup`,
+560 lignes. Le script, lui, avait **disparu** de la machine : il n'était
+versionné nulle part et seul `quality.ps1` avait survécu, qui est un autre banc,
+quatre questions ouvertes lues à la main. Il a donc été réécrit le 10/09/2026 et
+versé au dépôt sous [../bench/banc.ps1](../bench/banc.ps1), pour que la même
+chose ne se reproduise pas.
+
+Deux choix de ce script méritent d'être connus avant de lire ses chiffres. Une
+question MMLU se voit accorder huit jetons, parce que la réponse attendue est une
+lettre : un modèle qui en demande plus ne répond pas à la question posée, et le
+tronquer est le bon verdict. La lettre est ensuite cherchée n'importe où dans la
+réponse plutôt qu'exigée seule, sans quoi le banc mesure la mise en forme et non
+la connaissance.
+
+Le mode réflexion est coupé par `chat_template_kwargs`. Sans ça, un modèle qui
+raisonne dépense tout son budget de sortie en réflexion et rend une réponse
+vide, qui compte comme une faute et ne mesure rien. Constaté sur Spark le jour
+même, en dehors du banc : deux cents jetons demandés, deux cents jetons produits,
+contenu vide.
 
 Un point de méthode qui a déjà mordu ici : température 0 pour le banc, jamais
 pour le service. Qwen documente que le décodage glouton sur ces poids dégrade la
