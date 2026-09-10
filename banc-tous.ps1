@@ -1,7 +1,13 @@
 param(
-  [string[]]$Profils = @('tiel','kat','ornith','qwen','qwenu','muse'),
+  # A STRING, not a string array, and split here. Passing -Profils a,b,c through
+  # ssh then powershell -File hands the script one string "a,b,c" and the
+  # ValidateSet of llm-ctl.ps1 rejects it. Splitting on this side is the one
+  # form that survives every layer.
+  [string]$Profils = 'tiel,kat,ornith,qwen,qwenu,muse',
   [int]$LoadTimeout = 420
 )
+
+$liste = $Profils -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ }
 
 # Runs the quality bench across several profiles in one pass: load, wait for the
 # server to actually answer, bench, move on. One model at a time, which is the
@@ -16,7 +22,7 @@ $ErrorActionPreference = 'Stop'
 $ctl = 'D:\LLM-Setup\llm-ctl.ps1'
 $recap = @()
 
-foreach ($p in $Profils) {
+foreach ($p in $liste) {
   Write-Output ("=== {0} : chargement" -f $p)
   & powershell -NoProfile -ExecutionPolicy Bypass -File $ctl -Action $p | Out-Host
 
