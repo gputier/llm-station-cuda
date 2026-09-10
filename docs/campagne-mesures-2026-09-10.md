@@ -167,12 +167,35 @@ ouverte. `nex` demande température 0,7 et top-k 40, il tournait à 0,6 et 20.
 `spark` demande le filtre top-k **désactivé**, `top_k: -1` dans son
 `generation_config.json`, il tournait bridé à 20.
 
+## Température : 0,3 gagne, et la contrepartie est visible
+
+Mesuré sur `tiel`, top-k 20 constant, même jeu de 560 questions à chaque fois.
+
+| Température | MMLU | GSM8K |
+|---|---|---|
+| 0 | 86,6 % | 53/60 |
+| **0,3** | **88,0 %** | 53/60 |
+| 0,6 | 86,2 % | 54/60 |
+| 1,0 | 85,0 % | 55/60 |
+
+Le réglage posé à la main sur la machine est donc le meilleur des quatre en
+connaissance : il gagne 1,4 point sur le décodage glouton et 3 points sur la
+valeur par défaut du modèle. L'intuition qui l'avait fait choisir était juste.
+
+La contrepartie apparaît dans l'autre colonne, en sens exactement inverse : le
+GSM8K monte de 53 à 55 quand la température monte de 0 à 1. Une basse température
+sert la connaissance factuelle, où il n'y a qu'une bonne réponse, et dessert
+légèrement le raisonnement en chaîne, où le modèle a besoin de pouvoir changer de
+piste. Sur du code, l'arbitrage penche du bon côté.
+
+Ne jamais descendre à 0 pour autant : le glouton fait ici PERDRE 1,4 point, et
+Qwen documente qu'il produit des répétitions sans fin sur ces poids.
+
 ## Ce qui reste à mesurer
 
-Le balayage température et top-k sur `tiel`, `kat`, `nex` et `spark`, pour
-remplacer par une mesure l'argument selon lequel 0,3 apporte de la précision. Le
-script existe, [../bench/banc-sampling.ps1](../bench/banc-sampling.ps1), et il
-balaie un facteur à la fois.
+Le balayage top-k, et la température sur `kat`, `nex` et `spark`. Le script est
+[../bench/banc-sampling.ps1](../bench/banc-sampling.ps1) et il balaie un facteur
+à la fois.
 
 Le rappel en contexte long, qu'aucun des trois candidats n'a prouvé, alors que
 leurs profils annoncent 262 144 jetons.
