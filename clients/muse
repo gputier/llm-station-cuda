@@ -73,15 +73,29 @@ export ANTHROPIC_DEFAULT_SONNET_MODEL="muse-glimmer-30b"
 export ANTHROPIC_DEFAULT_HAIKU_MODEL="muse-glimmer-30b"
 export ANTHROPIC_SMALL_FAST_MODEL="muse-glimmer-30b"
 
-# The server holds a 1M context, not the 200k Claude Code assumes for an unknown
-# model id. Without this it would compact at 200k while the server still had four
-# fifths of its window free.
+# 253_952 = the 262_144 the server serves, MINUS the 8_192 of output below.
 #
-# The window comes from overriding the GGUF's context_length, not from YaRN: the
-# three YaRN flags were dropped on 2026-08-12 as useless. The global layers carry
-# no positional encoding, so there is no position to stretch. Recall was measured
-# at 556_390 tokens without them.
-export CLAUDE_CODE_MAX_CONTEXT_TOKENS=1048576
+# It said 1048576 until 2026-09-10, which was wrong twice over. The profile stopped
+# serving a million on 2026-08-31 and now overrides context_length to 262_144, so the
+# client was promising four times the real window: a session past 262_144 tokens would
+# have been truncated server-side with no warning at all.
+#
+# And the value is an INPUT budget, not the window. n_ctx counts input and output in one
+# pool, so announcing all of it lets the client fill the last token, after which the
+# server has no room left to write and returns an empty response. That is the lesson of
+# 2026-09-08, paid for with a working session: /compact answered "summarization produced
+# empty response" twice, compaction being itself a request that needs room to write.
+#
+# Change one of these two numbers, change the other. The authority is
+# default_generation_settings.n_ctx in /props, never the --ctx-size passed to the server.
+# This correction was computed from the profile while the box was down for a driver
+# update; confirm it against /props once the server is back up.
+#
+# The window itself comes from overriding the GGUF's context_length, not from YaRN: the
+# three YaRN flags were dropped on 2026-08-12 as useless. The global layers carry no
+# positional encoding, so there is no position to stretch. Recall was measured at 556_390
+# tokens without them, which is what made the 1M figure believable for so long.
+export CLAUDE_CODE_MAX_CONTEXT_TOKENS=253952
 export CLAUDE_CODE_MAX_OUTPUT_TOKENS=8192
 
 # Telemetry and update pings would otherwise be aimed at the local server.
