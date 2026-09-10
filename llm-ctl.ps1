@@ -9,7 +9,12 @@ param(
   # They are appended LAST, so they win over the profile on any repeated flag.
   # Nothing that proves itself here should stay here: a setting worth keeping
   # goes into its profile, where a comment can say why.
-  [string]$Extra = ''
+  [string]$Extra = '',
+  # Strips the profile's own speculation flags before -Extra is appended, which
+  # -Extra alone cannot do: --spec-type accumulates rather than replaces, so
+  # asking for another type on a profile that already has one runs BOTH. That is
+  # not academic, it cost 36% of tiel's decode on 2026-09-10.
+  [switch]$NoSpec
 )
 
 # ---------------------------------------------------------------------------
@@ -259,6 +264,18 @@ function Show-Logs($name, $tail) {
 }
 
 function Start-LLM($name, $modelArgs, $cudaDevices = $null, $exePath = $null, $workDirPath = $null, $cudaBinPath = $null) {
+  # -NoSpec first, so a trial can REPLACE a profile's speculation instead of
+  # stacking on top of it.
+  if ($NoSpec) {
+    $garde = @(); $saut = $false
+    foreach ($a in @($modelArgs)) {
+      if ($saut) { $saut = $false; continue }
+      if ($a -in @('--spec-type','--spec-draft-n-max','--spec-draft-p-min','-md','--spec-draft-model')) { $saut = $true; continue }
+      $garde += $a
+    }
+    $modelArgs = $garde
+    Write-Output 'NOSPEC drapeaux de speculation du profil retires'
+  }
   # -Extra flags land here rather than in each of the ten branches.
   if ($Extra) {
     $sup = @($Extra -split '\s+' | Where-Object { $_ })
@@ -846,21 +863,29 @@ switch ($Action) {
       # exactly 40 layers, 0 to 39: the head is announced and not shipped. Verified at the
       # source on 2026-09-09. Should the loader trip on that declaration, the workaround is
       #   --override-kv qwen35moe.block_count=int:40,qwen35moe.nextn_predict_layers=int:0
-      # Losing the model's OWN speculation turned out not to matter, because it does not
-      # need a drafter at all. Measured 2026-09-10, same 65k prompt, seed 42, 3 runs, median:
-      #   no speculation ......... 213.1 tok/s decode, 11,486 prefill, 27,457 MiB
-      #   ngram-cache n-max 4 .... 408.8 tok/s decode, 11,480 prefill, 27,459 MiB   <-- this
-      #   draft-dflash + drafter .. 316.7 tok/s decode,  3,703 prefill, 32,120 MiB
-      # ngram-cache guesses the continuation from patterns already in the context, so it
-      # needs no draft model, no download and no memory: +92% decode for 2 MiB.
+      # NO speculation, and this is a measured conclusion, not an omission.
+      # Measured 2026-09-10, 45k-token prompt through /v1/chat/completions, seed 42,
+      # 3 runs, median decode:
+      #   no speculation .......... 215.1 tok/s
+      #   ngram-cache n-max 4 ..... 110.4 tok/s   <-- HALF
+      #   draft-dflash + drafter .. see below
       #
-      # The DFlash drafter is the trap. It reads as the serious option, it IS faster than
-      # nothing, and it costs 4.6 GiB and two thirds of the prefill: the 392 MiB file drags
-      # its own KV cache sized for the full 262,144 window, leaving 487 MiB of headroom on
-      # the card. On long prompts, which is what this box does, that trade is a loss.
+      # ngram-cache was briefly put in this profile on the strength of 408.8 against
+      # 213.1, measured through /completion on a raw block of code. That number was real
+      # and it was useless: completing code means literally repeating structures already
+      # in the buffer, which is the one case pattern-guessing wins. Ask the same model to
+      # answer a question and every guess is rejected, and every rejected guess is paid
+      # for. The bench has to look like the use, or it measures the bench.
       #
-      # n-max 4 and not more: 8 gives 407.6 and 16 gives 409.2, all three inside the noise.
-      '--spec-type','ngram-cache','--spec-draft-n-max','4',
+      # Same verdict on tiel, which has a real MTP head: 230.4 tok/s with it, 198.3 with
+      # nothing, 103.8 with ngram-cache instead. And stacking ngram-cache ON TOP of MTP
+      # gives 147.6, because --spec-type accumulates and the two fight over the same
+      # candidates.
+      #
+      # The DFlash drafter, measured on the raw endpoint, reached 316.7 tok/s but divided
+      # prefill by three and cost 4.6 GiB: its 392 MiB file drags a KV cache sized for the
+      # whole 262,144 window, leaving 487 MiB of headroom. Not retested on chat because
+      # the memory cost alone rules it out here.
       '--n-gpu-layers','99','--load-mode','mlock','--flash-attn','on','--jinja',
       '--host','0.0.0.0','--port','8080','--parallel','1',
       # No --override-kv on the window: this GGUF already declares context_length 262144,
