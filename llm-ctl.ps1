@@ -846,7 +846,21 @@ switch ($Action) {
       # exactly 40 layers, 0 to 39: the head is announced and not shipped. Verified at the
       # source on 2026-09-09. Should the loader trip on that declaration, the workaround is
       #   --override-kv qwen35moe.block_count=int:40,qwen35moe.nextn_predict_layers=int:0
-      # Losing speculation is the real cost of preferring this model to tiel.
+      # Losing the model's OWN speculation turned out not to matter, because it does not
+      # need a drafter at all. Measured 2026-09-10, same 65k prompt, seed 42, 3 runs, median:
+      #   no speculation ......... 213.1 tok/s decode, 11,486 prefill, 27,457 MiB
+      #   ngram-cache n-max 4 .... 408.8 tok/s decode, 11,480 prefill, 27,459 MiB   <-- this
+      #   draft-dflash + drafter .. 316.7 tok/s decode,  3,703 prefill, 32,120 MiB
+      # ngram-cache guesses the continuation from patterns already in the context, so it
+      # needs no draft model, no download and no memory: +92% decode for 2 MiB.
+      #
+      # The DFlash drafter is the trap. It reads as the serious option, it IS faster than
+      # nothing, and it costs 4.6 GiB and two thirds of the prefill: the 392 MiB file drags
+      # its own KV cache sized for the full 262,144 window, leaving 487 MiB of headroom on
+      # the card. On long prompts, which is what this box does, that trade is a loss.
+      #
+      # n-max 4 and not more: 8 gives 407.6 and 16 gives 409.2, all three inside the noise.
+      '--spec-type','ngram-cache','--spec-draft-n-max','4',
       '--n-gpu-layers','99','--load-mode','mlock','--flash-attn','on','--jinja',
       '--host','0.0.0.0','--port','8080','--parallel','1',
       # No --override-kv on the window: this GGUF already declares context_length 262144,
@@ -864,7 +878,12 @@ switch ($Action) {
       # hybrid recurrent models with a projector loaded when text and image turns ALTERNATE
       # in one conversation. A single image in one turn may well pass. The proposed fix,
       # pull request 28007, is not merged as of 2026-09-10.
-      '--temp','0.6','--top-p','0.95','--top-k','20','--min-p','0'
+      #
+      # 0.7 and top-k 40 come from the model card, which is explicit: "For the best
+      # generation quality, we recommend temperature 0.7, top_p 0.95, top_k 40". This
+      # profile ran at 0.6 and top-k 20 for its first hours because it was written by
+      # copying the shape of the Qwen profiles without opening this model's card.
+      '--temp','0.7','--top-p','0.95','--top-k','40','--min-p','0'
     )
   }
 
@@ -888,7 +907,14 @@ switch ($Action) {
       '-cram','24576',
       # NEVER --swa-full on this one: it would drop the sliding-window saving that makes the
       # cache affordable and hold every layer at full width.
-      '--temp','0.6','--top-p','0.95','--top-k','20','--min-p','0'
+      #
+      # top-k 0, meaning the filter is OFF, and that is what this model asks for: its
+      # generation_config.json carries top_k -1 with temperature 1.0. It ran at 0.6 and
+      # top-k 20 for its first hours, bridled by a profile copied from the Qwen models
+      # without opening its own configuration. Temperature stays at 0.6 rather than the
+      # published 1.0 until the sampling sweep says otherwise, since 1.0 is what publishers
+      # quote for reproducing their own benchmarks more often than for daily use.
+      '--temp','0.6','--top-p','0.95','--top-k','0','--min-p','0'
     )
   }
 
