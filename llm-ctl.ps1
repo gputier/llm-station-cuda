@@ -2,7 +2,14 @@ param(
   [ValidateSet('bonsai','embed','kat','muse','nex','ornith','qwen','qwenu','spark','tiel','stop','status','logs')]
   [string]$Action,
   [string]$Name,  # optional: for 'stop' and 'logs', targets a named instance
-  [int]$Tail = 40 # for 'logs': history lines to show before following live
+  [int]$Tail = 40, # for 'logs': history lines to show before following live
+  # Extra llama-server flags appended to the profile, for a trial that should not
+  # become a commit. Space separated, quoted as one string so it survives ssh:
+  #   -Action nex -Extra "--spec-type ngram-cache --spec-draft-n-max 4"
+  # They are appended LAST, so they win over the profile on any repeated flag.
+  # Nothing that proves itself here should stay here: a setting worth keeping
+  # goes into its profile, where a comment can say why.
+  [string]$Extra = ''
 )
 
 # ---------------------------------------------------------------------------
@@ -252,6 +259,12 @@ function Show-Logs($name, $tail) {
 }
 
 function Start-LLM($name, $modelArgs, $cudaDevices = $null, $exePath = $null, $workDirPath = $null, $cudaBinPath = $null) {
+  # -Extra flags land here rather than in each of the ten branches.
+  if ($Extra) {
+    $sup = @($Extra -split '\s+' | Where-Object { $_ })
+    $modelArgs = @($modelArgs) + $sup
+    Write-Output ("EXTRA " + ($sup -join ' '))
+  }
   # Explicit arguments win, so a bench can run a profile against another build. Otherwise the
   # pairing comes from $builds, and a profile missing from it falls back to the turboquant paths.
   $b = $builds[$name]
