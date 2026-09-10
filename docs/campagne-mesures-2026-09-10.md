@@ -1,0 +1,178 @@
+# Campagne de mesures du 10/09/2026
+
+Neuf modèles passés au même banc, dans la même journée, sur la même machine. Ce
+document remplace tous les chiffres de qualité qui circulaient avant lui.
+
+Il raconte aussi quatre erreurs de méthode, parce qu'elles ont chacune produit un
+résultat faux et crédible, et que c'est ça qui coûte cher.
+
+## Pourquoi tout a été remesuré
+
+Les scores publiés jusqu'ici, 82,0 % pour `qwen`, 82,2 % pour `tiel`, 73,0 % pour
+`ornith`, venaient d'un programme **qui n'existe plus sur la machine**. Il n'était
+versionné nulle part. Seul le jeu de questions avait survécu.
+
+Deux nombres obtenus par deux méthodes inconnues ne se comparent pas, et un
+classement bâti dessus est de la décoration. Le banc a donc été réécrit, versé au
+dépôt sous [../bench/banc.ps1](../bench/banc.ps1), et les neuf modèles y sont
+repassés.
+
+La suite a donné raison à cette prudence : `ornith` ne fait pas 73,0 % mais
+83,4 %, et `qwen` pas 82,0 % mais 78,8 %. L'ancien banc se trompait **dans les
+deux sens à la fois**, il sous-estimait le petit modèle et surestimait le gros.
+C'est précisément la comparaison qui justifiait la place de `qwen` dans le parc.
+
+## Le protocole
+
+Cinq cents questions MMLU sur vingt-cinq matières, soixante problèmes GSM8K,
+température 0, graine 42, mode réflexion coupé, le même jeu pour tous. Le jeu
+vit sur la machine dans `bench\epreuves.jsonl`, 560 lignes.
+
+Quatre choix qui décident de ce que le banc mesure vraiment.
+
+**Deux mille jetons de sortie au QCM, pas huit.** Un plafond n'est pas un coût :
+un modèle qui répond en trente jetons s'arrête tout seul et ne paie rien pour la
+marge inutilisée. Voir plus bas ce que les deux valeurs précédentes ont coûté.
+
+**La dernière ligne `Answer: X` fait foi.** Un modèle qui raisonne cite des
+lettres candidates en chemin ; seule sa conclusion compte. La recherche remonte
+donc la réponse depuis la fin.
+
+**Température 0 ici et nulle part ailleurs.** Le banc veut un nombre
+reproductible et accepte pour cela le décodage glouton. Un profil de service ne
+le fait jamais : Qwen documente que le glouton sur ces poids dégrade la qualité
+et part en répétitions.
+
+**Le nombre de réponses vides est rapporté.** C'est le garde-fou qui a rattrapé
+trois résultats faux dans la journée.
+
+## Qualité, les neuf modèles
+
+Classement par MMLU. La colonne « vides » est à lire avant le score : un modèle
+qui n'a pas fini n'a pas été mesuré, il a été tronqué.
+
+| Modèle | Paramètres | MMLU | GSM8K | Vides | Durée |
+|---|---|---|---|---|---|
+| `nex` | 35B-A3B | **86,6 %** | 58/60 | 37 | 13,0 min |
+| `tiel` | 35B-A3B | **86,6 %** | 53/60 | 0 | 3,5 min |
+| `kat` | 35B-A3B | 84,6 % | **60/60** | 0 | 9,1 min |
+| `bonsai` | 27B ternaire | 83,6 % | 59/60 | 0 | 23,5 min |
+| `ornith` | 9B | 83,4 % | 51/60 | 0 | 8,8 min |
+| `qwen` | 27B | 78,8 % | 57/60 | 0 | 19,7 min |
+| `qwenu` | 27B | 77,0 % | 57/60 | 0 | 25,9 min |
+| `spark` | 4B | 73,0 % | 46/60 | 0 | 5,6 min |
+| `muse` | 30B | en cours de remesure | | | |
+
+Ce qu'il faut en retenir.
+
+**`nex` égale `tiel` en connaissance et le bat en raisonnement**, avec 37
+réponses encore coupées. Son score est donc un plancher, pas un plafond : sur les
+463 questions qu'il termine il en place 433, soit 93,5 %. C'est le meilleur
+modèle de qualité du parc, et il n'a aucune accélération utilisable.
+
+**`bonsai` est le meilleur rapport qualité sur mémoire, de très loin.**
+Vingt-sept milliards de paramètres compressés à 1,71 bit chacun, 7,06 Go de
+poids, et trois points seulement sous le meilleur. C'est le seul modèle du parc
+qui laisserait de la place pour un second sur la carte.
+
+**`ornith`, neuf milliards de paramètres, bat `qwen` qui en a vingt-sept**, de
+4,6 points, en occupant un tiers de la mémoire. `qwen` est le seul modèle à
+mobiliser un moteur compilé rien que pour lui, celui qui porte les noyaux NVFP4.
+Sa place dans le parc est à rediscuter.
+
+**`spark` est dernier partout.** Quinze points sous les modèles de production sur
+la connaissance, ce qui est attendu à quatre milliards de paramètres. Dernier
+aussi sur le raisonnement, ce qui ne l'était pas : `ornith` avait montré qu'un
+petit modèle pouvait raisonner comme un trois fois plus gros, l'espoir était que
+Spark répète l'exploit un cran plus bas. Non.
+
+**Les durées disent autre chose que les scores.** `tiel` passe le banc en 3,5
+minutes, `qwenu` en 25,9. Sept fois plus lent pour six points de moins.
+
+## Vitesse et spéculation
+
+Invite de 45 000 jetons, point d'entrée conversationnel, graine 42, trois passes,
+médiane de la génération. L'ingestion ne se lit qu'à la première passe, ce point
+d'entrée gardant son cache d'invite.
+
+| Modèle et réglage | Génération | VRAM |
+|---|---|---|
+| `tiel` avec sa tête MTP, production | **230,4 tok/s** | 31 784 MiB |
+| `nex` sans spéculation | **215,1 tok/s** | 27 089 MiB |
+| `tiel` sans spéculation | 198,3 tok/s | 28 199 MiB |
+| `tiel` MTP + ngram-cache empilés | 147,6 tok/s | 31 784 MiB |
+| `nex` avec ngram-cache | 110,4 tok/s | 27 090 MiB |
+| `tiel` avec ngram-cache seul | 103,8 tok/s | 28 197 MiB |
+| `bonsai` sans spéculation | 102,6 tok/s | |
+
+Trois conclusions, dont deux contre-intuitives.
+
+**La spéculation par motifs divise le débit par deux en usage conversationnel.**
+Sur les deux modèles essayés. Chaque motif proposé est rejeté et chaque rejet se
+paie.
+
+**Empiler deux mécanismes coûte 36 %.** `--spec-type` s'accumule au lieu de
+remplacer : demander un type sur un profil qui en a déjà un fait tourner les deux,
+et ils se disputent les mêmes candidats. Le lanceur a gagné un `-NoSpec` pour
+pouvoir remplacer au lieu d'empiler.
+
+**Le brouillon DFlash est un piège coûteux.** Mesuré à 316,7 tok/s sur le point
+d'entrée brut, il divise l'ingestion par trois, de 11 486 à 3 703, et coûte
+4,6 Go : son fichier de 392 Mio traîne un cache dimensionné sur la fenêtre
+entière, ne laissant que 487 Mio de marge sur la carte. Son coût n'est pas sa
+taille, c'est sa réserve.
+
+Conséquence pour `nex` : il n'aura pas d'accélération. Sa propre tête MTP est
+déclarée dans sa configuration et absente de ses poids, le brouillon externe
+coûte trop cher, les motifs le ralentissent de moitié. Il tient quand même la
+comparaison avec `tiel` privé de sa tête, 215,1 contre 198,3.
+
+## Les quatre erreurs de méthode, et ce qu'elles ont coûté
+
+Elles ont toutes produit un résultat faux et crédible. C'est le seul type
+d'erreur qui compte.
+
+**Huit jetons pour une question à choix multiple.** Le raisonnement paraissait
+solide, la réponse attendue tient en une lettre. `nex` s'est fait couper sur 220
+questions sur 500 et a été noté 51,8 %, sous un modèle dix fois plus petit. Une
+épreuve doit mesurer le sujet, pas son obéissance à un format.
+
+**Six cents jetons, ensuite.** Corrigeait `nex` à moitié et laissait `muse` à 181
+réponses coupées sur 500, noté 59 % quand il place 92,5 % de ce qu'il termine. Les
+deux valeurs avaient été serrées par crainte de la durée, crainte qui ne survit
+pas à la phrase « un plafond n'est pas un coût ».
+
+**Le mauvais point d'entrée pour la vitesse.** Une invite brute sans gabarit de
+discussion : `tiel` a ingéré 44 801 jetons puis émis une fin de séquence
+immédiate, un jeton produit, 0,0 tok/s. Le modèle allait bien, un modèle
+d'instruction lit un bloc de code terminé comme terminé.
+
+**Une mesure qui ne ressemblait pas à l'usage.** La plus coûteuse, parce qu'elle a
+fait poser un réglage en production. La spéculation par motifs mesurée sur une
+complétion de code brut donnait +92 %, et c'était vrai : compléter du code, c'est
+recopier des structures déjà présentes. Reprise sur le point d'entrée
+conversationnel, elle divise par deux. **Un banc doit ressembler à l'usage, sinon
+il mesure le banc.**
+
+## Deux profils écrits de travers, corrigés
+
+`nex` et `spark` ont tourné leurs premières heures avec un échantillonnage
+recopié de la forme des profils Qwen, sans que la carte de chaque modèle soit
+ouverte. `nex` demande température 0,7 et top-k 40, il tournait à 0,6 et 20.
+`spark` demande le filtre top-k **désactivé**, `top_k: -1` dans son
+`generation_config.json`, il tournait bridé à 20.
+
+## Ce qui reste à mesurer
+
+Le balayage température et top-k sur `tiel`, `kat`, `nex` et `spark`, pour
+remplacer par une mesure l'argument selon lequel 0,3 apporte de la précision. Le
+script existe, [../bench/banc-sampling.ps1](../bench/banc-sampling.ps1), et il
+balaie un facteur à la fois.
+
+Le rappel en contexte long, qu'aucun des trois candidats n'a prouvé, alors que
+leurs profils annoncent 262 144 jetons.
+
+La vision de `nex`, assise sur un défaut ouvert de llama.cpp qui fait tomber le
+serveur quand texte et image alternent.
+
+Et `bonsai` en cohabitation, la seule piste que ses 7 Go rendent crédible.

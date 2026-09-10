@@ -12,7 +12,7 @@ first time; jump straight to one afterwards.
 | [fetching-models.md](fetching-models.md) | Which client to use to pull weights, why the in-house fetcher was deleted, and how to measure a transfer honestly. |
 | [tuning-log.md](tuning-log.md) | Every tuning campaign run on this box, including the ones that found nothing. |
 | [etude-vitesse-qwen-2026-09-06.md](etude-vitesse-qwen-2026-09-06.md) | Study of 2026-09-06, in French: every remaining speed lever for the reasoning profile, ranked, with what was already closed by measurement and the campaign plan. |
-| [banc-candidats-2026-09-10.md](banc-candidats-2026-09-10.md) | Plan of 2026-09-10, in French: what to check after the driver update, in which order to try the three candidates, and what the quality bench will and will not tell you. |
+| [campagne-mesures-2026-09-10.md](campagne-mesures-2026-09-10.md) | Campaign of 2026-09-10, in French: nine models through one bench in one day, what it says about the parc, and the four method errors that each produced a false and credible result. **Supersedes every quality figure published before it.** |
 
 ## Where the truth lives
 
