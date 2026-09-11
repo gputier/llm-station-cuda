@@ -9,6 +9,101 @@ hardware listed in [prerequisites.md](prerequisites.md).
 
 ---
 
+## 2026-09-11, on the 16 GB box: the window doubles for free, and every road to speculation is closed
+
+**Different hardware.** This campaign ran on an RTX 4080 SUPER, 16,376 MiB, not
+the 5090 the rest of this file describes. Two dense 9B models on a Qwen3.5 base,
+one served at a time. None of the figures below transpose to the 32 GB box, and
+that is exactly why they are worth writing down: the same flags land differently
+when the card is half the size.
+
+### The window was set to half of what the weights offer, for no reason
+
+The profile served 131,072 because it had been copied from a working profile.
+The GGUF header says otherwise: `qwen35.context_length = 262144`.
+
+| Window | oxcoder | neohorse | Memory |
+|---|---|---|---|
+| 131,072 | 80.9 tok/s | 77.5 tok/s | 9,822 MiB |
+| **262,144** | **80.9 tok/s** | **77.3 tok/s** | 13,018 MiB |
+
+**Doubling is free here.** That is the opposite of the 5090 box, where a window
+increase cost fifty times the decode rate. The lesson is not "windows are cheap",
+it is that the cost of a window is a property of the machine and has to be
+measured on it.
+
+### Asking for more than the trained context burns memory for nothing
+
+At `--ctx-size 524288` the server still serves 262,144, warns once
+(`exceeds the training context of the model - capping`), and **keeps 15,882 MiB
+allocated** against 13,018 at the correct setting. Three gigabytes spent on a
+window that does not exist. The warning is a single line in a log nobody reads,
+and nothing else signals it.
+
+### KV cache quantisation costs nothing in quality, and that was worth proving
+
+The suspicion was that compressing the attention cache degraded long reasoning,
+since it approximates exactly what the model has just produced. Measured on 48
+reasoning items, same protocol on both sides:
+
+| Cache | Score | Speed | Memory |
+|---|---|---|---|
+| `q8_0` | 34/48 | 80.9 tok/s | 9,822 MiB |
+| `f16` | **34/48** | 78.0 tok/s | 11,357 MiB |
+
+Identical score. Full precision costs 1,535 MiB and 2.9 tok/s and buys nothing.
+The hypothesis is closed by measurement rather than by principle.
+
+### Speculative decoding: four roads, four dead ends
+
+All four measured on oxcoder, at 262,144 window, against a reference of
+**80.9 tok/s and 237.0 s over 24 real reasoning items**.
+
+| Setting | Speed | 24 real items | Memory | Acceptance |
+|---|---|---|---|---|
+| none (reference) | 80.9 tok/s | 237.0 s | 12,992 MiB | - |
+| `draft-mtp` | refused | - | - | server will not start |
+| `ngram-cache` | 80.6 tok/s | 240.3 s | 12,923 MiB | **0.00** |
+| draft model, n-max 3 | **18.1 tok/s** | 478.6 s | 15,905 MiB | 0.70 |
+| draft model, n-max 6 | 15.4 tok/s | 437.8 s | 15,905 MiB | 0.55 |
+| draft model, n-max 3, draft cache q4_0 | 47.3 tok/s | 328.7 s | 15,907 MiB | - |
+
+The draft model is `Qwen3.5-0.8B-Q4_0`, 537 MB, verified compatible by reading
+the GGUF headers of both: same architecture `qwen35`, same 248,320 vocabulary.
+
+**The draft guesses well and ruins throughput anyway.** Seventy percent
+acceptance, and decode falls by a factor of four and a half. The cause is in the
+memory column: this build offers no way to give the draft a smaller window, so it
+allocates its own cache over the same 262,144 tokens, the card saturates at
+15,905 of 16,376 MiB, and what no longer fits spills. Quantising the draft's
+cache nearly triples the rate back to 47.3, still 1.7 times slower than no
+speculation at all.
+
+This is the same lesson the 5090 box learned in the opposite direction, where
+raising acceptance from 27 to 66 percent halved throughput: **what decides is
+measured throughput, never the acceptance rate.**
+
+The n-gram variants deserve their own note. Acceptance was flat zero, hundreds of
+drafts generated and not one accepted, which costs a measurable 1.4 percent. A
+published benchmark rating them highly is measuring a synthetic prompt where
+repetition is guaranteed; real reasoning output has none.
+
+**Conclusion for a 16 GB card: a long window and a second model do not coexist.**
+The window is the one you keep.
+
+### A quoting trap that reads as an incompatibility
+
+The first draft-model runs failed with `failed to open GGUF file` and the server
+exiting. The path was correct and the file was there. The launcher's `-Extra`
+splits on spaces and passes each word through, so quotes written around the path
+survived to the binary and became part of the filename it looked for. The path
+had no space and needed none.
+
+A speculation setting that "is not supported" is worth checking twice before it
+is written down as such: here the model was compatible all along.
+
+---
+
 ## 2026-09-08: 65,536 tokens of extra window cost a factor of fifty on decode
 
 A session sitting at 372,738 tokens of a 393,216 window could no longer compact: the client kept

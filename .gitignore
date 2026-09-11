@@ -28,6 +28,22 @@ bench-prompt.json
 *-test.jpg
 test-images/
 
+# Question sets, and this one is not about privacy.
+#
+# A published question set stops measuring. It is absorbed into the next
+# generation of training data, and a model that has read the answers scores
+# high without knowing anything. That is not a hypothesis: the public multiple
+# choice benchmark rates two of the models measured here at 88 percent and
+# cannot tell them apart, while a set nobody outside this house has seen puts
+# them at 73 and 68 and separates them.
+#
+# So the scripts, the method and the numbers are published, and the questions
+# never are. Anyone can rebuild a set from the schema in docs; nobody can train
+# on ours.
+bench/epreuves.jsonl
+bench/inedit/
+*.jsonl
+
 # Local secrets.
 .env
 .env.*
