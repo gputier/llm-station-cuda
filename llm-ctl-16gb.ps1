@@ -243,11 +243,18 @@ switch ($Action) {
     # OxCoder-9B, a coding model published 2026-09-07 on a Qwen3.5 base
     # (Qwen3_5ForConditionalGeneration, 32 layers, 262K context). The 5090 box
     # has no Qwen3.5 anything: its two coders, tiel and kat, are both qwen35moe
-    # mixtures of experts, and its Qwen weights are 3.8. Sampling from the model
-    # card's SWE-bench protocol: temperature 1.0, top_p 0.95.
+    # mixtures of experts, and its Qwen weights are 3.8.
+    #
+    # Reasoning stays ON, like every profile on the 5090 box. A `--reasoning off`
+    # was added here by hand on 2026-09-12, never measured and never committed:
+    # it served a model chosen BECAUSE it reasons, and benched with its reasoning,
+    # with that reasoning cut. Removed the same day.
+    #
+    # No derived chat template, unlike neohorse: the embedded one does not raise on
+    # a late system message, read from /props on 2026-09-12.
     Start-LLM 'oxcoder' @(
       '-m',"$ModelsDir\oxcoder-9b\OxCoder-9B.Q5_K_M.gguf",
-      '--n-gpu-layers','99','--flash-attn','on','--jinja',
+      '--n-gpu-layers','99','--load-mode','mlock','--flash-attn','on','--jinja',
       # 262144 and not 131072: that IS the trained context of these weights, read
       # in the GGUF header (qwen35.context_length). Measured on 2026-09-11, the
       # doubling is FREE here: 80.9 tok/s at both sizes for oxcoder, 77.3 against
@@ -261,7 +268,18 @@ switch ($Action) {
       '--host','0.0.0.0','--port','8080','--parallel','1','--ctx-size','262144',
       '-b','4096','-ub','2048',
       '--cache-type-k','q8_0','--cache-type-v','q8_0',
-      '--temp','1.0','--top-p','0.95'
+      # -cram sizes the PROMPT cache in host RAM, where an idle conversation is parked
+      # before another overwrites it; same role as on the 5090 box, see its qwen block.
+      # 12288 and not 24576: this box has 32 GB, and 19_358 MiB were free with the model
+      # loaded under mlock on 2026-09-12. A budget, not a measured optimum.
+      '-cram','12288',
+      # Qwen thinking-mode calibration, the same four values as the qwen profile on
+      # the 5090 box. The model card gives only benchmark protocols and no general
+      # use values, read on 2026-09-12. Its Claude Code protocol, top_p 1.0 with no
+      # top_k, was tried that day and REJECTED: through Claude Code the unfiltered
+      # tail produced broken French ("Je relia vous", "confirm ez"). Left unset,
+      # llama.cpp silently applies top_k 40 and min_p 0.05 instead, read in /props.
+      '--temp','1.0','--top-p','0.95','--top-k','20','--min-p','0'
     )
     break
   }
@@ -275,9 +293,19 @@ switch ($Action) {
     # being a value no profile on the 5090 box uses. It is set here because the
     # publisher reports its numbers with it, and removing it would measure
     # something the publisher never claimed.
+    #
+    # Reasoning stays ON, same note as oxcoder: the hand-added `--reasoning off`
+    # of 2026-09-12 is gone. The card benches with enable_thinking=true.
     Start-LLM 'neohorse' @(
       '-m',"$ModelsDir\neohorse-1-9b\NeoHorse-1-9B-Q5_K_M.gguf",
-      '--n-gpu-layers','99','--flash-attn','on','--jinja',
+      '--n-gpu-layers','99','--load-mode','mlock','--flash-attn','on','--jinja',
+      # Chat template DERIVED from the embedded one, a single line changed, the same
+      # fix the qwen profiles carry on the 5090 box. The original raises 'System
+      # message must be at the beginning' as soon as a system message arrives after a
+      # user message. Claude Code injects those mid-session, so every turn failed with
+      # HTTP 500 while a hand-written /v1/messages call worked. The derived template
+      # renders a late system message as an ordinary ChatML system turn instead.
+      '--chat-template-file',"$ModelsDir\chat-template-system-anywhere.jinja",
       # 262144 and not 131072: that IS the trained context of these weights, read
       # in the GGUF header (qwen35.context_length). Measured on 2026-09-11, the
       # doubling is FREE here: 80.9 tok/s at both sizes for oxcoder, 77.3 against
@@ -291,6 +319,11 @@ switch ($Action) {
       '--host','0.0.0.0','--port','8080','--parallel','1','--ctx-size','262144',
       '-b','4096','-ub','2048',
       '--cache-type-k','q8_0','--cache-type-v','q8_0',
+      # -cram sizes the PROMPT cache in host RAM, where an idle conversation is parked
+      # before another overwrites it; same role as on the 5090 box, see its qwen block.
+      # 12288 and not 24576: this box has 32 GB, and 19_358 MiB were free with the model
+      # loaded under mlock on 2026-09-12. A budget, not a measured optimum.
+      '-cram','12288',
       '--temp','1.0','--top-p','0.95','--top-k','20','--min-p','0','--presence-penalty','1.5'
     )
     break

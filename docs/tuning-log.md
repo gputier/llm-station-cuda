@@ -9,6 +9,34 @@ hardware listed in [prerequisites.md](prerequisites.md).
 
 ---
 
+## 2026-09-12, on the 16 GB box: the two profiles brought back in line with qwen, kat and nex
+
+The box was serving a hand-edited `llm-ctl.ps1` that the repository never saw. It
+carried `--reasoning off` on both models, on the theory that a thinking block
+placed before a `tool_use` block made Claude Code skip the tool call. **That
+theory is false**, measured end to end with reasoning back on: NeoHorse wrote
+209 characters of reasoning and OxCoder 1,747 on a one-line question, and both
+then created the requested file through Claude Code.
+
+What changed, to match the 5090 profiles:
+
+- `--reasoning off` removed from both.
+- `--load-mode mlock` and `-cram 12288` added. 12288 rather than 24576 because
+  this box has 32 GB of RAM, 19,358 MiB free with the model locked.
+- OxCoder pins `--top-k 20 --min-p 0`, the qwen values. Unset, llama.cpp applied
+  top_k 40 and min_p 0.05. The card's Claude Code protocol, top_p 1.0 and no
+  top_k, was tried and rejected: it produced broken French through the client.
+- NeoHorse's derived chat template moved into the repository copy. OxCoder's
+  embedded template does not raise on a late system message and needs none.
+- Client side, `CLAUDE_CODE_MAX_CONTEXT_TOKENS` goes from 262,144 to 245,760,
+  the window minus the output budget, the rule kat and nex follow.
+
+**What still blocks real use is not the server.** Same model, same prompt, same
+server: with the global instructions loaded, both models ask for approval and
+write nothing; with `--bare`, both write the file on the first try.
+
+---
+
 ## 2026-09-11, on the 16 GB box: the window doubles for free, and every road to speculation is closed
 
 **Different hardware.** This campaign ran on an RTX 4080 SUPER, 16,376 MiB, not
