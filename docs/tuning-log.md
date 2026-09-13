@@ -9,6 +9,76 @@ hardware listed in [prerequisites.md](prerequisites.md).
 
 ---
 
+## 2026-09-13, on the 16 GB box: Qwen3.8-27B with its full 262,144 window, and what it took
+
+The target was the 5090 box's `qwen` model on this card, with nothing cut from its
+trained window. Everything below is at `--ctx-size 262144`, measured with
+`bench/vitesse.ps1 -Runs 1 -Chars 30000 -Predict 150` (one 6,018-token prompt)
+unless stated.
+
+### The cache decides, and the official binary cannot hold it
+
+Only 16 of the 64 layers cache K/V, 32,768 elements per token, so the cache is
+about 4.6 GiB in q4_0 at full window. Weights have to leave room for it:
+
+| Weights | Cache | Engine | Prefill | Decode | Note |
+|---|---|---|---|---|---|
+| UD-IQ4_XS, 13.27 GiB | q8_0 in host RAM (`-nkvo`) | b10908 | - | 14.5 tok/s, 4.85 at 45k | dead end |
+| UD-IQ3_XXS, 10.18 GiB | q4_0 | b10908 | 485 tok/s | 48 tok/s | spills 1,450 MiB |
+| UD-IQ3_XXS | KVarN 4 | BeeLlama v0.4.6 | 1,581 tok/s | 46 tok/s | spills 754 MiB |
+| UD-IQ3_XXS | KVarN 3 | BeeLlama v0.4.6 | 1,572 tok/s | 46 tok/s | 14,378 MiB |
+| UD-IQ4_XS | KVarN 2 | BeeLlama v0.4.6 | 61 tok/s | 15 tok/s | overflows |
+
+**The spill column is the one nvidia-smi does not show.** When dedicated VRAM
+runs dry, Windows hands the process shared system memory instead of failing, the
+server starts, answers, and reads three times slower. It is visible only in the
+`\GPU Process Memory(*)\Shared Usage` counter, which `vitesse.ps1` now reports
+on its `debordement` line.
+
+The official release builds flash attention for q4_0 and q8_0 only
+(`GGML_CUDA_FA_ALL_QUANTS` is OFF upstream, read in `ggml/CMakeLists.txt`), so a
+more compact cache is not an option there. BeeLlama ships prebuilt Windows CUDA
+13.3 zips with KVarN, deployed exactly like b10908: unzip, no install.
+
+### Speculation needs its own cache compressed too
+
+| Setting | Prefill | Decode | Accepted |
+|---|---|---|---|
+| KVarN 3, no MTP | 1,572 tok/s | 46.3 tok/s | - |
+| **KVarN 3, MTP n-max 2, draft cache KVarN 3** | 1,410 tok/s | **63.2 tok/s** | 86/124 |
+| KVarN 3, MTP n-max 3 | 1,459 tok/s | 61.9 tok/s | 96/155 |
+| KVarN 4, MTP n-max 2 | 133 tok/s | 26.7 tok/s | overflows |
+| q4_0 official, MTP n-max 2, draft cache f16 | 37 tok/s | - | spills 3,820 MiB |
+
+The MTP head allocates a draft cache over the same window. Left at its f16
+default it pushed 3.8 GB into shared memory. On a 45k-token prompt the retained
+setting decodes at 53.0 tok/s and reads at 1,460 tok/s.
+
+### Long prompts: the prefill window was the second spill
+
+With BeeLlama's default `GGML_KVARN_WINDOW_CHUNK=65536`, a 240k-token prompt read
+at 288 tok/s once past 76k tokens, with 1,244 MiB spilled. KVarN prefill
+materialises transient F16 K/V windows of that many tokens, about 800 MiB each at
+this geometry. At 16384 an 87,297-token prompt read at 1,342 tok/s and the needle
+at 50% depth was found in 76 s. On a 243,053-token prompt the needle was found at
+10, 50 and 90% depth, 3 out of 3, in 278 to 371 s, spill steady at 1,048 MiB.
+`Start-LLM` in `llm-ctl-16gb.ps1` takes the variable as `-envVars` from the profile
+branch and hands it to the child through `Win32_ProcessStartup`.
+
+**Setting a variable on the calling process does not reach the child**, contrary
+to what the 5090 box's `llm-ctl.ps1` states for its `PATH`. Measured on this box
+with `cmd /c set` launched through `Win32_Process.Create`: the caller-side variable
+came out "not defined", the startup-block one came out set. The first attempt at
+this refactor used the caller-side route, and prefill on an 87k-token prompt fell
+back to about 235 tok/s, the symptom of the default 65,536 window.
+
+### Through Claude Code, end to end
+
+The `qwen27` launcher, asked to create a file: done in 12 s with `--bare`, and in
+95 s with the full global instructions loaded, the file on disk both times.
+
+---
+
 ## 2026-09-12, on the 16 GB box: the two profiles brought back in line with qwen, kat and nex
 
 The box was serving a hand-edited `llm-ctl.ps1` that the repository never saw. It

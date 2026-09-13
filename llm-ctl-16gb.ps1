@@ -1,5 +1,5 @@
 param(
-  [ValidateSet('oxcoder','neohorse','stop','status','logs')]
+  [ValidateSet('qwen27','stop','status','logs')]
   [string]$Action,
   [string]$Name,   # optional: for 'stop' and 'logs', targets a named instance
   [int]$Tail = 40, # for 'logs': history lines to show before following live
@@ -19,21 +19,19 @@ param(
 # Adapted from the 5090 box's llm-ctl.ps1; the control functions are copied
 # unchanged, the profiles are this machine's own.
 #
-# ONE build here, and that is the point: the official b10908 release binary,
-# CUDA 13.3, unpacked flat with its cudart, no compilation. The 5090 box needs
-# four builds because one of its models is NVFP4, a format whose CUDA kernels
-# only exist in a build compiled for sm_120. Ada is sm_89 and none of the models
-# below need anything but upstream, so a second build here would be dead weight.
+# ONE build here: BeeLlama v0.4.6, a llama.cpp fork, from its official Windows
+# CUDA 13.3 release zip plus cudart, unpacked flat, no compilation. It replaced
+# the upstream b10908 binary on 2026-09-13 for one reason, the KVarN cache types:
+# upstream release binaries build flash attention for q4_0 and q8_0 only
+# (GGML_CUDA_FA_ALL_QUANTS is OFF upstream), and at q4_0 the full 262,144 window
+# of Qwen3.8-27B overflows this card. Measured figures in the qwen27 block.
 #
-# Verified by execution on 2026-09-11, driver 616.92:
+# Verified by execution on 2026-09-13, driver 616.92:
 #   llama-server.exe --list-devices
-#   CUDA0: NVIDIA GeForce RTX 4080 SUPER (16375 MiB, 15061 MiB free)
+#   CUDA0: NVIDIA GeForce RTX 4080 SUPER (16375 MiB, 14839 MiB free)
 # ---------------------------------------------------------------------------
 $RootDir   = 'D:\LLM-Setup'
 $ModelsDir = 'D:\models'
-
-$exeMain     = "$RootDir\llama-cpp-b10908\llama-server.exe"
-$workDirMain = "$RootDir\llama-cpp-b10908"
 
 $instDir    = "$RootDir\instances"
 $logDir     = "$RootDir\logs"
@@ -41,9 +39,10 @@ $serverPort = 8080
 
 New-Item -ItemType Directory -Force -Path $instDir, $logDir | Out-Null
 
+# Which build serves which profile, and nothing else: a model's own settings
+# live in its switch branch.
 $builds = @{
-  oxcoder  = @{ Exe = $exeMain; WorkDir = $workDirMain }
-  neohorse = @{ Exe = $exeMain; WorkDir = $workDirMain }
+  qwen27 = @{ Exe = "$RootDir\beellama-v0.4.6\llama-server.exe"; WorkDir = "$RootDir\beellama-v0.4.6" }
 }
 
 function Quote($s) {
@@ -140,7 +139,7 @@ function Show-Logs($name, $tail) {
   Get-Content $errLog -Tail $tail -Wait
 }
 
-function Start-LLM($name, $modelArgs, $exePath = $null, $workDirPath = $null) {
+function Start-LLM($name, $modelArgs, $exePath = $null, $workDirPath = $null, $envVars = @{}) {
   # -NoSpec first, so a trial can REPLACE a profile's speculation instead of
   # stacking on top of it.
   if ($NoSpec) {
@@ -159,8 +158,8 @@ function Start-LLM($name, $modelArgs, $exePath = $null, $workDirPath = $null) {
     Write-Output ("EXTRA " + ($sup -join ' '))
   }
   $b = $builds[$name]
-  if (-not $exePath)     { $exePath     = if ($b) { $b.Exe }     else { $exeMain }     }
-  if (-not $workDirPath) { $workDirPath = if ($b) { $b.WorkDir } else { $workDirMain } }
+  if (-not $exePath)     { $exePath     = $b.Exe }
+  if (-not $workDirPath) { $workDirPath = $b.WorkDir }
   $port = $serverPort
 
   # Free the port: kill any tracked instance on it.
@@ -186,8 +185,21 @@ function Start-LLM($name, $modelArgs, $exePath = $null, $workDirPath = $null) {
   # line, after which `set PATH=<value> && <rest>` swallows ` && <rest>` INTO
   # the value: nothing after it runs, no log file is created, and
   # Win32_Process.Create still returns 0. `cd /d` is still required.
+  #
+  # The profile's environment goes through Win32_ProcessStartup. Setting it on
+  # THIS process before the call does NOT reach the child: WMI starts it from its
+  # own environment. Measured on this box on 2026-09-13 with `cmd /c set`: the
+  # caller-side variable came out "not defined", the startup-block one came out
+  # set. That block REPLACES the child's environment rather than extending it, so
+  # the current one is copied and the profile's variables are laid over it.
   $inner = "cd /d `"$workDirPath`" && `"$exePath`" $quoted > NUL 2> `"$errLog`""
-  $r = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{ CommandLine = "cmd.exe /c $inner"; CurrentDirectory = $workDirPath }
+  $createArgs = @{ CommandLine = "cmd.exe /c $inner"; CurrentDirectory = $workDirPath }
+  if ($envVars.Count -gt 0) {
+    $vars = @(Get-ChildItem Env: | Where-Object { -not $envVars.ContainsKey($_.Name) } | ForEach-Object { "$($_.Name)=$($_.Value)" })
+    foreach ($k in $envVars.Keys) { $vars += "$k=$($envVars[$k])"; Write-Output "ENV $k=$($envVars[$k])" }
+    $createArgs.ProcessStartupInformation = New-CimInstance -ClassName Win32_ProcessStartup -ClientOnly -Property @{ EnvironmentVariables = [string[]]$vars }
+  }
+  $r = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments $createArgs
   if ($r.ReturnValue -ne 0) { Write-Output "ERROR Win32_Process.Create rc=$($r.ReturnValue)"; return }
 
   # Resolve the real llama-server PID (child of the cmd.exe we launched).
@@ -238,99 +250,66 @@ function Get-Status {
 # ---------------------------------------------------------------------------
 switch ($Action) {
 
-
-  'oxcoder' {
-    # OxCoder-9B, a coding model published 2026-09-07 on a Qwen3.5 base
-    # (Qwen3_5ForConditionalGeneration, 32 layers, 262K context). The 5090 box
-    # has no Qwen3.5 anything: its two coders, tiel and kat, are both qwen35moe
-    # mixtures of experts, and its Qwen weights are 3.8.
+  'qwen27' {
+    # Qwen3.8-27B, the same weights as the 5090 box's qwen profile, in unsloth's
+    # UD-IQ3_XXS (10.18 GiB). The NVFP4 file served there needs sm_120 kernels and
+    # cannot run on Ada. This GGUF carries the MTP head (qwen35.nextn_predict_layers
+    # = 1, four blk.64.nextn tensors), read in its header on 2026-09-13. It replaced
+    # OxCoder-9B and NeoHorse-1-9B, whose profiles are in the git history.
     #
-    # Reasoning stays ON, like every profile on the 5090 box. A `--reasoning off`
-    # was added here by hand on 2026-09-12, never measured and never committed:
-    # it served a model chosen BECAUSE it reasons, and benched with its reasoning,
-    # with that reasoning cut. Removed the same day.
+    # The target is the full trained window, 262,144. Only the 16 full-attention
+    # layers cache K/V: 16 x 4 heads x 256 x 2 = 32,768 elements per token, so the
+    # cache is what decides, and every road below was measured on 2026-09-13 at
+    # 262,144 on this card (bench/vitesse.ps1, 6,018-token prompt, then 45k):
     #
-    # No derived chat template, unlike neohorse: the embedded one does not raise on
-    # a late system message, read from /props on 2026-09-12.
-    Start-LLM 'oxcoder' @(
-      '-m',"$ModelsDir\oxcoder-9b\OxCoder-9B.Q5_K_M.gguf",
+    #   UD-IQ4_XS, cache in host RAM (--no-kv-offload) ... decode 14.5 tok/s short,
+    #                                                       4.85 at 45k: dead end
+    #   UD-IQ4_XS, KVarN 2 on the card ................... prefill 61, decode 15
+    #   UD-IQ3_XXS, q4_0, official b10908 ................ prefill 485, decode 48
+    #   UD-IQ3_XXS, KVarN 4, BeeLlama .................... prefill 1,581, decode 46
+    #   UD-IQ3_XXS, KVarN 3, BeeLlama .................... prefill 1,572, decode 46,
+    #                                                       14,378 MiB
+    #   UD-IQ3_XXS, KVarN 3 + MTP n-max 2 ................ prefill 1,410, decode 63.2
+    #   UD-IQ3_XXS, KVarN 3 + MTP n-max 3 ................ prefill 1,459, decode 61.9
+    #   UD-IQ3_XXS, KVarN 4 + MTP n-max 2 ................ prefill 133, decode 26.7
+    #
+    # q4_0 loses to KVarN on prefill by a factor of three at equal decode: the
+    # official build overflows into the shared system memory Windows hands out
+    # once dedicated VRAM runs dry, which nvidia-smi does not show. KVarN 4 with MTP
+    # overflows the same way. KVarN 3 with the MTP head is the one setting that
+    # holds the full window, speculates, and stays on the card.
+    Start-LLM 'qwen27' @(
+      '-m',"$ModelsDir\qwen3.8-27b-gguf\Qwen3.8-27B-UD-IQ3_XXS.gguf",
       '--n-gpu-layers','99','--load-mode','mlock','--flash-attn','on','--jinja',
-      # 262144 and not 131072: that IS the trained context of these weights, read
-      # in the GGUF header (qwen35.context_length). Measured on 2026-09-11, the
-      # doubling is FREE here: 80.9 tok/s at both sizes for oxcoder, 77.3 against
-      # 77.5 for neohorse, 13_018 MiB of 16_376 either way. The 5090 box pays for
-      # its window; this card does not, and halving it would only have thrown
-      # away half the window for nothing.
-      #
-      # Asking for MORE is the trap. At --ctx-size 524288 the server still serves
-      # 262144, says so in one log line ("exceeds the training context - capping"),
-      # and keeps 15_882 MiB allocated: three gigabytes burned for zero context.
+      # MTP head inside the GGUF, drafting two tokens. Its own cache follows the
+      # target window, so it is kept in KVarN 3 too: left at the f16 default it
+      # spilled 3,820 MiB into shared memory and prefill fell to 37 tok/s.
+      '--spec-type','draft-mtp','--spec-draft-n-max','2',
+      '--spec-draft-type-k','kvarn3','--spec-draft-type-v','kvarn3',
+      # Same derived template as the 5090 box's qwen profile, copied from there: the
+      # embedded one raises 'System message must be at the beginning' on the late
+      # system messages Claude Code injects.
+      '--chat-template-file',"$ModelsDir\qwen3.8-27b-gguf\chat-template-system-anywhere.jinja",
       '--host','0.0.0.0','--port','8080','--parallel','1','--ctx-size','262144',
-      '-b','4096','-ub','2048',
-      '--cache-type-k','q8_0','--cache-type-v','q8_0',
-      # -cram sizes the PROMPT cache in host RAM, where an idle conversation is parked
-      # before another overwrites it; same role as on the 5090 box, see its qwen block.
-      # 12288 and not 24576: this box has 32 GB, and 19_358 MiB were free with the model
-      # loaded under mlock on 2026-09-12. A budget, not a measured optimum.
+      # -ub 512, not 2048: the larger physical batch pushed KVarN 4 into shared
+      # memory (2,222 MiB spilled, prefill 83 tok/s) and 1024 already cost 278 MiB
+      # more spill on KVarN 3 for no gain in prefill.
+      '-b','512','-ub','512',
+      '--cache-type-k','kvarn3','--cache-type-v','kvarn3',
       '-cram','12288',
-      # Qwen thinking-mode calibration, the same four values as the qwen profile on
-      # the 5090 box. The model card gives only benchmark protocols and no general
-      # use values, read on 2026-09-12. Its Claude Code protocol, top_p 1.0 with no
-      # top_k, was tried that day and REJECTED: through Claude Code the unfiltered
-      # tail produced broken French ("Je relia vous", "confirm ez"). Left unset,
-      # llama.cpp silently applies top_k 40 and min_p 0.05 instead, read in /props.
+      # Qwen thinking-mode calibration, identical to the qwen profile.
       '--temp','1.0','--top-p','0.95','--top-k','20','--min-p','0'
-    )
-    break
-  }
-
-
-
-  'neohorse' {
-    # NeoHorse-1-9B, TokenRhythm, published 2026-09-05. Qwen3_5ForCausalLM,
-    # 32 layers, 262K context. Its reported protocol is temperature 1.0,
-    # top_p 0.95, top_k 20, min_p 0.0 AND presence_penalty 1.5, that last one
-    # being a value no profile on the 5090 box uses. It is set here because the
-    # publisher reports its numbers with it, and removing it would measure
-    # something the publisher never claimed.
-    #
-    # Reasoning stays ON, same note as oxcoder: the hand-added `--reasoning off`
-    # of 2026-09-12 is gone. The card benches with enable_thinking=true.
-    Start-LLM 'neohorse' @(
-      '-m',"$ModelsDir\neohorse-1-9b\NeoHorse-1-9B-Q5_K_M.gguf",
-      '--n-gpu-layers','99','--load-mode','mlock','--flash-attn','on','--jinja',
-      # Chat template DERIVED from the embedded one, a single line changed, the same
-      # fix the qwen profiles carry on the 5090 box. The original raises 'System
-      # message must be at the beginning' as soon as a system message arrives after a
-      # user message. Claude Code injects those mid-session, so every turn failed with
-      # HTTP 500 while a hand-written /v1/messages call worked. The derived template
-      # renders a late system message as an ordinary ChatML system turn instead.
-      '--chat-template-file',"$ModelsDir\chat-template-system-anywhere.jinja",
-      # 262144 and not 131072: that IS the trained context of these weights, read
-      # in the GGUF header (qwen35.context_length). Measured on 2026-09-11, the
-      # doubling is FREE here: 80.9 tok/s at both sizes for oxcoder, 77.3 against
-      # 77.5 for neohorse, 13_018 MiB of 16_376 either way. The 5090 box pays for
-      # its window; this card does not, and halving it would only have thrown
-      # away half the window for nothing.
-      #
-      # Asking for MORE is the trap. At --ctx-size 524288 the server still serves
-      # 262144, says so in one log line ("exceeds the training context - capping"),
-      # and keeps 15_882 MiB allocated: three gigabytes burned for zero context.
-      '--host','0.0.0.0','--port','8080','--parallel','1','--ctx-size','262144',
-      '-b','4096','-ub','2048',
-      '--cache-type-k','q8_0','--cache-type-v','q8_0',
-      # -cram sizes the PROMPT cache in host RAM, where an idle conversation is parked
-      # before another overwrites it; same role as on the 5090 box, see its qwen block.
-      # 12288 and not 24576: this box has 32 GB, and 19_358 MiB were free with the model
-      # loaded under mlock on 2026-09-12. A budget, not a measured optimum.
-      '-cram','12288',
-      '--temp','1.0','--top-p','0.95','--top-k','20','--min-p','0','--presence-penalty','1.5'
-    )
+    # GGML_KVARN_WINDOW_CHUNK: BeeLlama's KVarN prefill materialises transient F16
+    # K/V windows of this many tokens, 65,536 by default. At 16 x 4 heads x 256 x 2
+    # x 2 bytes, one such window is about 800 MiB, and on 2026-09-13 a 240k-token
+    # prompt spilled 1,244 MiB into shared memory and read at 288 tok/s once past
+    # 76k tokens. At 16384, 243,053 tokens read in 278 to 371 s, needle 3/3.
+    ) -envVars @{ GGML_KVARN_WINDOW_CHUNK = '16384' }
     break
   }
 
   'stop'   { if ($Name) { Stop-One $Name } else { Stop-All }; break }
   'status' { Get-Status; break }
   'logs'   { Show-Logs $Name $Tail; break }
-  default  { Write-Output "USAGE: llm-ctl.ps1 -Action oxcoder|neohorse|stop|status|logs" }
+  default  { Write-Output "USAGE: llm-ctl.ps1 -Action qwen27|stop|status|logs" }
 }
