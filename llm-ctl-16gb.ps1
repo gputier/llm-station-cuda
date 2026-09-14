@@ -349,6 +349,12 @@ switch ($Action) {
     # trained (kurtosis 25.1 against 3.0 for a random init) after an earlier
     # release shipped it untrained.
     #
+    # Runs without --n-cpu-moe and was never measured deep. On this same recipe
+    # qwen36 lost three quarters of its decode at 200k tokens on 2026-09-14, see
+    # its block; tiel holds 448 MiB less on the card at short context, which
+    # proves nothing at depth. If it shows the same step drop, the same setting
+    # applies.
+    #
     # Sampling copied from the 5090 tiel profile: temp 0.3 set there by hand on
     # real usage and read back, never 0 on these weights. Embedded template
     # kept: on the 5090 box tiel needs no derived template.
@@ -374,7 +380,15 @@ switch ($Action) {
     # Code, where Qwen3.8-27B's raised 'System message must be at the beginning'
     # on the late system messages Claude Code injects and needed a derived one.
     Start-LLM 'qwen36' (@(
-      '-m',"$ModelsDir\qwen3.6-35b-a3b-mtp\Qwen3.6-35B-A3B-UD-IQ3_XXS.gguf"
+      '-m',"$ModelsDir\qwen3.6-35b-a3b-mtp\Qwen3.6-35B-A3B-UD-IQ3_XXS.gguf",
+      # --n-cpu-moe 2 since 2026-09-14: the experts of the first two layers stay in
+      # host RAM and run on the CPU. That day decode fell from 80 to 21 tok/s in one
+      # step at 200k tokens of context, card at 16,084 MiB of 16,376; cause not
+      # proven, a full card the probable one. Two layers buy 442 MiB for 5 to 7% of
+      # decode and 15% of prefill, three lose over 10% of decode. Measured at 112k
+      # tokens only, not at the 200k of the drop: a long session that does not
+      # repeat it is the proof still owed. Table in docs/tuning-log.md, 2026-09-14.
+      '--n-cpu-moe','2'
     ) + $cardRecipe + @(
       '--temp','1.0','--top-p','0.95','--top-k','20','--min-p','0'
     )) -envVars $cardEnv

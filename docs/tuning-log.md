@@ -120,7 +120,9 @@ The GPU spill also fell from 1,048 to 650 MiB, unexplained and not chased.
 **Both A3B candidates roughly double the box.** Decode 139.3 and 137.1 against
 72.1, prefill 2,893 and 2,684 against 1,394. They fit the card at the full
 262,144 window with no `--n-cpu-moe` and no window cut: 15,413 and 15,861 MiB,
-spill 620 MiB, the same order as the dense 27B they replace. The prediction
+spill 620 MiB, the same order as the dense 27B they replace. That was read on a
+6,018-token prompt: in real use qwen36 dropped at 200k tokens, see the section
+on real use below. The prediction
 made from the 5090 box transposed, and the reason is the one written there: 3B
 of 35B parameters work per token, and the attention cache is 3.2x smaller per
 token.
@@ -159,6 +161,52 @@ to the Windows Recycle Bin on D:, whose quota was read first (46,424 MiB,
 the first user turn, checked with a direct request and then through Claude
 Code, so it needs no derived template where Qwen3.8-27B's raised on the late
 system messages Claude Code injects.
+
+### In real use: a step drop at 200k tokens, and two layers of experts moved to RAM
+
+A Claude Code agent ran on qwen36 for ninety minutes. Two effects show in the
+log of its 197 requests, and they are not the same thing.
+
+The wait before the first prefill block grows smoothly with the context: 5.7 s
+at 93k tokens, 13.6 s at 150k, 26 s at 200k, then about 1,400 tok/s per block
+once it starts. It did not change when decode dropped, so it is a cost of depth,
+probably the KVarN cache being unpacked at the start of each prompt. Not proven.
+
+Decode held 74 to 87 tok/s up to 200,099 tokens, then read 20.9 on the very
+next request at 200,166, and stayed between 20 and 25 until restart. After the
+client compacted to 56k tokens it still read 58 to 66, against 100 to 103 at the
+same depth before the drop. The context barely moved across the drop, so an
+event caused it, not depth. Ruled out: thermal or power throttling (counters at
+zero), any system or display-driver event in the ten minutes around it, any
+interactive session on the box. The card sat at 16,084 MiB dedicated of 16,376.
+The probable cause, not proven, is Windows moving part of the server's
+allocations to system memory once the card was full.
+
+Measured after a fresh restart, same bench, long prompt 112,724 tokens:
+
+| `--n-cpu-moe` | Card after 112k | Decode short | Decode 112k | Prefill 112k |
+|---|---|---|---|---|
+| 0 | 15,866 MiB | 145.3 tok/s | 107.6 | 2,523 tok/s |
+| 2 | 15,424 | 135.9 | 101.9 | 2,154 |
+| 3 | 15,146 | 127.1 | 97.3 | 1,977 |
+
+The plan was to keep the smallest setting that emptied the shared GPU memory.
+That criterion does not hold: the shared counter read 610 to 620 MiB in all
+three runs, fresh or deep, so it counts a fixed allocation and says nothing
+about overflow. Margin is read on dedicated memory instead. Two layers buy 442
+MiB for 5 to 7% of decode and 15% of prefill, three lose more than 10% of decode
+at short context, and qwen36 now runs with `--n-cpu-moe 2`. Whether that ends
+the step drop is proven only by a long session that does not repeat it.
+
+Two alternatives were set aside with evidence. `--no-kv-offload` is the dead
+end of the 2026-09-13 entry below, host-RAM cache row. Cutting the window to
+196,608 frees an estimated 300 MiB, computed from the attention geometry and
+not measured, and would make the client compact earlier. The 5090 box's
+`-cram 24576` is not a way to unload a card either: it keeps copies of past
+conversations in host RAM, while the active one stays on the GPU. One mechanism
+stays untried: `--fit on` with `--fit-target`, listed in this build's help,
+would choose the offload at load time from the memory then free, and was not
+measured.
 
 ---
 
