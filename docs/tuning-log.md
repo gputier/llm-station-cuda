@@ -203,10 +203,42 @@ end of the 2026-09-13 entry below, host-RAM cache row. Cutting the window to
 196,608 frees an estimated 300 MiB, computed from the attention geometry and
 not measured, and would make the client compact earlier. The 5090 box's
 `-cram 24576` is not a way to unload a card either: it keeps copies of past
-conversations in host RAM, while the active one stays on the GPU. One mechanism
-stays untried: `--fit on` with `--fit-target`, listed in this build's help,
-would choose the offload at load time from the memory then free, and was not
-measured.
+conversations in host RAM, while the active one stays on the GPU. `--fit on` was
+measured afterwards, in the next section.
+
+### The same evening, benched at depth: the drop does not reproduce
+
+Prompts of 196,613 and 237,502 tokens cut from the llama.cpp sources with
+`/tokenize`, same bench otherwise. The card figure is the whole card, of 16,376
+MiB.
+
+| qwen36 | Card after load | Decode short | Decode 196.6k | Prefill 196.6k | Card after 196.6k | Decode 237.5k | Card after 237.5k |
+|---|---|---|---|---|---|---|---|
+| no offload | 15,694 MiB | 145.3 tok/s | 79.2 | 2,007 tok/s | 15,890 | 72.5 | 15,918 |
+| `--n-cpu-moe 2` | 15,232 | 135.9 | 68.9 | 1,788 | 15,428 | 62.4 | 15,456 |
+| `--fit on --fit-target 1024` | 14,488 | 127.3 | 70.1 | 1,499 | 14,686 | not run | not run |
+
+No configuration dropped. Without offload the card still kept 458 MiB at
+237.5k tokens and decoded at 72.5 tok/s, where real use had fallen to 21 at
+200k: the bench does not reproduce the event, so it neither proves nor rules
+out the full-card explanation. What it measures is the price of margin at
+depth. Two layers of experts double the margin, 948 MiB against 486 at 196.6k,
+for 13% of decode there, more than the 5% read at 112k. `--fit` with a 1 GB
+target offloads about 1.2 GB of weights, keeps 1,690 MiB and decodes at 70.1 at
+depth, level with two layers, but pays 6% of short decode and 16% of deep
+prefill against them. Two layers stay: an agent that re-reads long contexts
+pays prefill on every turn. At this verbosity `--fit` logs nothing of what it
+chose, only a warning that CPU tensor overrides run with mmap on and that
+`--load-mode none` would be faster; that mode is not measured here.
+
+Two protocol points cost a run. The 237.5k prompt shares its first 196.6k
+tokens with the 200k one, so its first pass reads the prompt cache and reports
+a prefill of about 700 tok/s over 41k new tokens, not comparable and left out
+of the table. And `-Extra "--n-cpu-moe 0"` on a profile carrying
+`--n-cpu-moe 2` did not remove the offload: both values sat in the command line
+and dedicated memory matched the offloaded run to the megabyte. The run was
+stopped and redone with the server started directly, and the `-Extra` comment
+in both `llm-ctl` scripts now says which flags it cannot override.
 
 ---
 

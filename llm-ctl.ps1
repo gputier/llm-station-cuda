@@ -6,7 +6,11 @@ param(
   # Extra llama-server flags appended to the profile, for a trial that should not
   # become a commit. Space separated, quoted as one string so it survives ssh:
   #   -Action nex -Extra "--spec-type ngram-cache --spec-draft-n-max 4"
-  # They are appended LAST, so they win over the profile on any repeated flag.
+  # They are appended LAST, which wins only for a flag that takes one value. A
+  # flag that accumulates keeps the profile's value as well: --spec-type, see
+  # -NoSpec below, and --n-cpu-moe, where a trailing 0 left the profile's 2 in
+  # force on the 16 GB box on 2026-09-14. To take such a flag away, start the
+  # server without it.
   # Nothing that proves itself here should stay here: a setting worth keeping
   # goes into its profile, where a comment can say why.
   [string]$Extra = '',

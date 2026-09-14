@@ -5,7 +5,11 @@ param(
   [int]$Tail = 40, # for 'logs': history lines to show before following live
   # Extra llama-server flags appended to the profile, for a trial that should not
   # become a commit. Space separated, quoted as one string so it survives ssh.
-  # They are appended LAST, so they win over the profile on any repeated flag.
+  # They are appended LAST, which wins only for a flag that takes one value. A
+  # flag that accumulates keeps the profile's value as well: --spec-type ran both
+  # types on 2026-09-10, and on 2026-09-14 --n-cpu-moe 0 after qwen36's
+  # --n-cpu-moe 2 left 2 in force, read in the command line and in dedicated
+  # memory to the megabyte. To take a flag away, start the server without it.
   [string]$Extra = '',
   # Strips the profile's own speculation flags before -Extra is appended, which
   # -Extra alone cannot do: --spec-type accumulates rather than replaces, so
@@ -383,11 +387,13 @@ switch ($Action) {
       '-m',"$ModelsDir\qwen3.6-35b-a3b-mtp\Qwen3.6-35B-A3B-UD-IQ3_XXS.gguf",
       # --n-cpu-moe 2 since 2026-09-14: the experts of the first two layers stay in
       # host RAM and run on the CPU. That day decode fell from 80 to 21 tok/s in one
-      # step at 200k tokens of context, card at 16,084 MiB of 16,376; cause not
-      # proven, a full card the probable one. Two layers buy 442 MiB for 5 to 7% of
-      # decode and 15% of prefill, three lose over 10% of decode. Measured at 112k
-      # tokens only, not at the 200k of the drop: a long session that does not
-      # repeat it is the proof still owed. Table in docs/tuning-log.md, 2026-09-14.
+      # step at 200k tokens of real use, card at 16,084 MiB of 16,376; cause not
+      # proven, a full card the probable one. Benched fresh at 196,613 tokens, two
+      # layers keep 948 MiB of margin against 486 without, for 68.9 tok/s of decode
+      # against 79.2. --fit with a 1 GB target keeps 1,690 MiB at 70.1 tok/s but
+      # loses 6% of short decode and 16% of deep prefill against two layers. No
+      # bench reproduced the drop, with or without offload: a long session that
+      # does not repeat it is the proof still owed. Tables in docs/tuning-log.md.
       '--n-cpu-moe','2'
     ) + $cardRecipe + @(
       '--temp','1.0','--top-p','0.95','--top-k','20','--min-p','0'
