@@ -9,6 +9,87 @@ hardware listed in [prerequisites.md](prerequisites.md).
 
 ---
 
+## 2026-09-14, on the 16 GB box: what 29 hours of real use say that the bench did not
+
+Read-only pass over the running `qwen27` instance, started 2026-09-13 at 02:01
+and left in service. Nothing was restarted. The bench of the day before said
+63.2 tok/s at short context; the question was why the box felt as slow as the
+8 GB Vulkan card next to it.
+
+### The log, 924 requests
+
+| | Value |
+|---|---|
+| Decode, median / p10 / p90 | **45.1** / 37.0 / 57.1 tok/s |
+| Decode by total context: under 10k, 10k-30k, 30k-60k, 60k-100k, over 100k | 43.2, 47.1, 52.0, 50.7, 43.3 tok/s |
+| Prompt tokens read / time | 23.2 M in 8.0 h |
+| Tokens generated / time | 2.34 M in 14.7 h |
+| **Share of machine time spent in prefill** | **35%** |
+| Prefill on turns adding under 200 tokens, median / p10 | 153 / 59 tok/s |
+| Prefill on blocks of 20k to 100k new tokens, median | 1,219 tok/s |
+| Prompt-cache evictions | **350**, 670 GiB churned, median entry 1.76 GiB, largest 6.25 GiB |
+| Requests that re-read more than 20k tokens | 206 between 20k and 100k, 72 above 100k |
+| MTP acceptance, median | 0.74, mean draft length 2.48, active on every request |
+| Largest context reached | 179,200 tokens |
+
+Three readings. **Short contexts decode slower than long ones**, which is the
+signature of a fixed cost per request, not of attention. **The draft head earns
+nothing measurable in real use**: 44.7 tok/s at acceptance 0.5-0.7 against 46.8
+above 0.85, the same lesson as the 5090 in a third form. And the **278 re-reads
+of contexts already seen** are the bench's blind spot: a single-prompt bench
+never evicts anything.
+
+### The host RAM, which nobody had looked at
+
+This box has 32 GB, the 5090 box 128. The profile was copied with
+`--load-mode mlock` and `-cram 12288`:
+
+| | Value |
+|---|---|
+| llama-server private bytes | 29,955 MiB |
+| llama-server resident set | **11,792 MiB**, peak 18,496 |
+| Free RAM | 6.8 GiB of 31.7 |
+| Page file | 996 MiB in use, **peak 9,965 MiB** |
+
+The locked weights (10 GiB) and the prompt cache (12 GiB) do not both fit, and
+the one Windows paged out is the cache. A return to an evicted conversation
+therefore reads from disk before it reads from the card. The loader source
+settles what mlock buys here: with plain mmap, every fragment is unmapped once
+it sits on the card (`llama-model-loader.cpp`, `unmap_fragment` after load), so
+without the flag the host RAM goes to the cache. The effect is not measured yet:
+the flag comes out at the next restart, and `llm-ctl-16gb.ps1` now refuses it
+in `Start-LLM` as a constraint of the machine rather than of a profile. Then
+`vitesse.ps1` and ten real turns decide whether `-cram` can go up.
+
+### The GPU spill grew
+
+15,506 MiB dedicated plus **1,322 MiB in shared memory**, against 1,048 the day
+before under the same profile. Two display processes hold 304 and 151 MiB.
+Decode did not collapse the way the 5090 does past its cliff, so the spill is
+noted, not blamed.
+
+### What transposes from the 5090 box, and what does not
+
+The 5090 moved from this same dense 27B to a 35B-A3B on 2026-09-01: +54%
+decode, x2 prefill, +8 MMLU points on the 2026-09-10 re-run. The gain is
+structural and does transpose: about 3B parameters work per token, and the
+attention cache is 3.2x smaller per token (10 full-attention layers x 2 KV
+heads x 256, against 16 x 4 x 256, from both `config.json`). NVFP4 does not
+transpose, its kernels are sm_120 only. Two candidates were fetched the same
+day, `Tiel-Coder-35B-A3B-MTP-UD-IQ3_XXS` (13.6 GB) and
+`Qwen3.6-35B-A3B-UD-IQ3_XXS` with MTP head (14.1 GB), with profiles `tiel` and
+`qwen36` in `llm-ctl-16gb.ps1` on the `qwen27` recipe. Nothing measured yet;
+the quality of the served 27B at IQ3_XXS is not measured either, and it is the
+first thing to run when the box is free, so that the candidates have a control.
+
+The fetch itself: no `hf` client on this box and the Windows Docker client
+refuses a non-interactive session, so the download runs in a `python:3.12-slim`
+container started from the Ubuntu WSL distribution with a neutral
+`DOCKER_CONFIG`, `D:\models` mounted, `hf download` inside. The container
+survives the SSH session that started it.
+
+---
+
 ## 2026-09-13, on the 16 GB box: Qwen3.8-27B with its full 262,144 window, and what it took
 
 The target was the 5090 box's `qwen` model on this card, with nothing cut from its
