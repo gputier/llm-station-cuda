@@ -1,118 +1,27 @@
 #!/usr/bin/env bash
-# qwen - launch Claude Code against the local Qwen3.8-27B server.
+# qwen - Claude Code on a Qwen model, picked with its box at start-up.
 #
-# Sibling of `muse`. Same mechanism: the llama.cpp build serving both models
-# exposes a native Anthropic-compatible /v1/messages endpoint, including SSE
-# streaming, count_tokens and tool_use blocks. Only the base URL is redirected,
-# no translation proxy involved.
+# Replaces the qwen and qwenu launchers since 2026-09-14.
 #
-# Scope: the exported variables live in this process only. A plain `claude` in
-# another shell keeps talking to Anthropic.
-
-set -euo pipefail
-
-HOST="${LLM_HOST:-llm-server.local}"
-PORT="8080"
-BASE="http://${HOST}:${PORT}"
-SSH_TARGET="${LLM_SSH_USER:-youruser}@${HOST}"
-CTL='D:\LLM-Setup\llm-ctl.ps1'
-LOAD_TIMEOUT=180
-
-err() { printf '%s\n' "$*" >&2; }
-
-is_up() { curl -sS -m 3 "${BASE}/health" 2>/dev/null | grep -q '"status":"ok"'; }
-
-# The server is single-slot: whichever model sits on port 8080 answers every
-# request, whatever model id the client asks for. Checking health is therefore
-# not enough, we must confirm Qwen itself is the one loaded.
-loaded_model() {
-  curl -sS -m 3 "${BASE}/props" 2>/dev/null \
-    | sed -n 's/.*"model_path":"\([^"]*\)".*/\1/p'
-}
-
-# Both the aligned and the uncensored builds carry "qwen3.8" in their path, so a
-# bare substring match would treat the uncensored model as if it were this one
-# and skip the reload. The aligned build is the one WITHOUT "uncensored".
-is_qwen() {
-  local m; m=$(loaded_model)
-  printf '%s' "$m" | grep -qi 'qwen3.8' && ! printf '%s' "$m" | grep -qi 'uncensored'
-}
-
-load_qwen() {
-  err "Loading Qwen3.8-27B on ${HOST}..."
-  ssh -o ConnectTimeout=10 "$SSH_TARGET" \
-    "powershell -NoProfile -ExecutionPolicy Bypass -File ${CTL} -Action qwen" >&2
-
-  local waited=0
-  while (( waited < LOAD_TIMEOUT )); do
-    if is_up && is_qwen; then
-      err "Qwen3.8-27B ready."
-      return 0
-    fi
-    sleep 5
-    waited=$(( waited + 5 ))
-  done
-
-  err "Failed: the model did not answer within ${LOAD_TIMEOUT}s."
-  err "See D:\\LLM-Setup\\llm-err-qwen.log on ${HOST}."
-  return 1
-}
-
-if ! is_up; then
-  load_qwen
-elif ! is_qwen; then
-  err "Port ${PORT} is serving $(loaded_model | sed 's/.*\\//'), not Qwen3.8-27B."
-  read -r -p "Replace it with Qwen3.8-27B? [y/N] " answer
-  [[ "$answer" =~ ^[yY]$ ]] || { err "Aborted."; exit 1; }
-  load_qwen
-fi
-
-# AUTH_TOKEN and not API_KEY: the latter triggers Claude Code's custom-key
-# approval prompt. llama-server started without --api-key accepts any bearer.
-export ANTHROPIC_AUTH_TOKEN="local"
-export ANTHROPIC_BASE_URL="$BASE"
-
-# Every model id resolves to the single loaded model, but naming them keeps the
-# UI honest and stops Claude Code from reaching for a real Anthropic model.
-export ANTHROPIC_MODEL="qwen3.8-27b"
-export ANTHROPIC_DEFAULT_OPUS_MODEL="qwen3.8-27b"
-export ANTHROPIC_DEFAULT_SONNET_MODEL="qwen3.8-27b"
-export ANTHROPIC_DEFAULT_HAIKU_MODEL="qwen3.8-27b"
-export ANTHROPIC_SMALL_FAST_MODEL="qwen3.8-27b"
-
-# 376_832 = the 393_216 the server serves, MINUS the 16_384 of output below.
+#   1. Qwen3.8-27B NVFP4 on the 32 GB box, reasoning and coding, 393,216 window.
+#      Recall past the native 262,144 is NOT proven on these weights.
+#   2. Qwen3.8-27B Uncensored on the 32 GB box, only when the aligned build
+#      refuses a legitimate task, 262,144 window.
+#   3. Qwen3.6-35B-A3B UD-IQ3_XXS on the 16 GB box, 137.1 tok/s decode and 90.2%
+#      on the 500-question MMLU set on 2026-09-14, 262,144 window.
 #
-# It said 262_144 until 2026-09-10, and that was wrong in the direction nobody
-# notices: the client compacted at two thirds of the window while the server
-# still had 131_072 tokens free. The 262_144 ceiling was real when this comment
-# was written, the GGUF declaring context_length=262144 and llama.cpp capping on
-# the file. The profile then took exactly the way out this comment described,
-# --override-kv qwen35.context_length=int:393216, and the client was never
-# updated to follow.
+# The aligned and the uncensored builds both carry "qwen3.8" in their path, so
+# the first variant excludes "uncensored": a bare match once took the
+# uncensored model for the aligned one and skipped the reload.
 #
-# The other half of the correction, from 2026-09-08: this variable is an INPUT
-# budget, not the window. n_ctx counts input and output in one pool, so
-# announcing the total lets the client fill the last token, after which the
-# server has no room left to write and returns an EMPTY response. It hit at
-# 372_738 tokens of 393_216: /compact answered "summarization produced empty
-# response" twice, compaction being itself a request that needs room to write.
-#
-# The rule: n_ctx minus CLAUDE_CODE_MAX_OUTPUT_TOKENS. Change one, change the
-# other. The authority is default_generation_settings.n_ctx in /props, never the
-# --ctx-size passed to the server. A value was briefly set to 524288 on
-# 2026-08-28, twice what the server could then deliver, and caught the same day.
-#
-# Recall at this depth is NOT proven on these weights: a window the server
-# accepts says nothing about what the model still finds inside it.
-export CLAUDE_CODE_MAX_CONTEXT_TOKENS=376832
-export CLAUDE_CODE_MAX_OUTPUT_TOKENS=16384
+# LLM_HOST names the 32 GB box and LLM_HOST_16GB the second one. LLM_CHOICE=1,
+# 2 or 3 skips the menu, which a run without a terminal requires. Everything
+# else lives in llm-launch.sh.
 
-# Telemetry and update pings would otherwise be aimed at the local server.
-export CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=0
+source "$(dirname "${BASH_SOURCE[0]}")/llm-launch.sh"
 
-# MCP servers are dropped, and this is not cosmetic. Measured on `muse`, the full
-# Claude Code prompt is 109_738 tokens, 70 tool schemas weighing 108 KB on their
-# own. That overhead buys little here and costs a much slower first turn, and it
-# bites harder on a 262k window than it did on 1M.
-# Skills, commands, memory and CLAUDE.md are untouched.
-exec claude --strict-mcp-config --mcp-config '{"mcpServers":{}}' "$@"
+llm_variant "Qwen3.8-27B sur la machine 32 Go, fenêtre 393k" "${LLM_HOST:-your-32gb-box}" qwen qwen3.8 uncensored qwen3.8-27b 393216
+llm_variant "Qwen3.8-27B Uncensored sur la machine 32 Go, si l'aligné refuse, fenêtre 262k" "${LLM_HOST:-your-32gb-box}" qwenu uncensored '' qwen3.8-27b-uncensored 262144
+llm_variant "Qwen3.6-35B-A3B sur la machine 16 Go, fenêtre 262k" "${LLM_HOST_16GB:-your-16gb-box}" qwen36 qwen3.6-35b '' qwen3.6-35b-a3b 262144
+
+llm_launch "$@"

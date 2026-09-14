@@ -1,122 +1,19 @@
 #!/usr/bin/env bash
-# tiel - launch Claude Code against the local Tiel-Coder-35B-A3B server.
+# tiel - Claude Code on Tiel-Coder-35B-A3B, on the box picked at start-up.
 #
-# Sibling of `kat`, `qwen` and `muse`, same mechanism: the llama.cpp build
-# serving this model exposes a native Anthropic-compatible /v1/messages
-# endpoint, SSE and tool_use included, so no translation proxy is involved.
+# The same model is served on two boxes. The 32 GB one runs UD-Q4_K_XL at a
+# 393,216 window, recall proven at 378,540 tokens on 2026-09-01. The 16 GB one
+# runs UD-IQ3_XXS at 262,144 (llm-ctl-16gb.ps1): 139.3 tok/s decode and 85.8% on
+# the 500-question MMLU set on 2026-09-14, against 86.6% for the 32 GB build on
+# 2026-09-10, so the 3-bit tier costs no measurable quality.
 #
-# THE DEFAULT for coding and reasoning since 2026-09-01, when it took the seat
-# from `qwen`. Measured 2026-09-10 against every other model on the box: first
-# or joint first on knowledge at 86.6 % MMLU, and the fastest of all at
-# 230.4 tok/s thanks to its MTP head. Its weak spot is arithmetic reasoning,
-# 53/60 on GSM8K where `kat` scores 60/60.
-#
-# Running it STOPS whatever else holds the card, one model at a time.
-#
-# Scope: the exported variables live in this process only. A plain `claude` in
-# another shell keeps talking to Anthropic.
+# LLM_HOST names the 32 GB box, as for every other launcher here, and
+# LLM_HOST_16GB the second one. LLM_CHOICE=1 or 2 skips the menu, which a run
+# without a terminal requires. Everything else lives in llm-launch.sh.
 
-set -euo pipefail
+source "$(dirname "${BASH_SOURCE[0]}")/llm-launch.sh"
 
-HOST="${LLM_HOST:-your-server-hostname-or-ip}"
-PORT="8080"
-BASE="http://${HOST}:${PORT}"
-SSH_TARGET="${LLM_SSH_USER:-youruser}@${HOST}"
-CTL='D:\LLM-Setup\llm-ctl.ps1'
-LOAD_TIMEOUT=240
+llm_variant "Tiel-Coder sur la machine 32 Go, fenêtre 393k" "${LLM_HOST:-your-32gb-box}" tiel tiel-coder '' tiel-coder-35b-a3b 393216
+llm_variant "Tiel-Coder sur la machine 16 Go, fenêtre 262k" "${LLM_HOST_16GB:-your-16gb-box}" tiel tiel-coder '' tiel-coder-35b-a3b 262144
 
-err() { printf '%s\n' "$*" >&2; }
-
-is_up() { curl -sS -m 3 "${BASE}/health" 2>/dev/null | grep -q '"status":"ok"'; }
-
-# The server is single-slot: whichever model sits on port 8080 answers every
-# request, whatever model id the client asks for. Checking health is therefore
-# not enough, we must confirm this model is the one loaded.
-loaded_model() {
-  curl -sS -m 3 "${BASE}/props" 2>/dev/null \
-    | sed -n 's/.*"model_path":"\([^"]*\)".*/\1/p'
-}
-
-is_tiel() { printf '%s' "$(loaded_model)" | grep -qi 'tiel-coder'; }
-
-load_tiel() {
-  err "Chargement de Tiel-Coder-35B-A3B sur ${HOST}..."
-  ssh -o ConnectTimeout=10 "$SSH_TARGET" \
-    "powershell -NoProfile -ExecutionPolicy Bypass -File ${CTL} -Action tiel" >&2
-
-  local waited=0
-  while (( waited < LOAD_TIMEOUT )); do
-    if is_up && is_tiel; then
-      err "Tiel-Coder prêt."
-      return 0
-    fi
-    sleep 5
-    waited=$(( waited + 5 ))
-  done
-
-  err "Échec : le modèle n'a pas répondu en ${LOAD_TIMEOUT} s."
-  err "Journal : ssh ${SSH_TARGET} \"powershell -NoProfile -ExecutionPolicy Bypass -File ${CTL} -Action logs -Name tiel\""
-  err "Ou directement D:\\LLM-Setup\\llm-err-tiel.log sur ${HOST}."
-  return 1
-}
-
-if ! is_up; then
-  load_tiel
-elif ! is_tiel; then
-  err "Le port ${PORT} sert « $(loaded_model | sed 's/.*\\//') », pas Tiel-Coder."
-  read -r -p "Le remplacer par Tiel-Coder ? [o/N] " answer
-  [[ "$answer" =~ ^[oOyY]$ ]] || { err "Abandon."; exit 1; }
-  load_tiel
-fi
-
-# AUTH_TOKEN and not API_KEY: the latter triggers Claude Code's custom-key
-# approval prompt. llama-server started without --api-key accepts any bearer.
-export ANTHROPIC_AUTH_TOKEN="local"
-export ANTHROPIC_BASE_URL="$BASE"
-
-export ANTHROPIC_MODEL="tiel-coder-35b-a3b"
-export ANTHROPIC_DEFAULT_OPUS_MODEL="tiel-coder-35b-a3b"
-export ANTHROPIC_DEFAULT_SONNET_MODEL="tiel-coder-35b-a3b"
-export ANTHROPIC_DEFAULT_HAIKU_MODEL="tiel-coder-35b-a3b"
-export ANTHROPIC_SMALL_FAST_MODEL="tiel-coder-35b-a3b"
-
-# Must equal what the server actually serves, read from /props as
-# default_generation_settings.n_ctx. Promise more and a session crossing the
-# real ceiling is truncated server-side with no warning; promise less and the
-# client compacts early while the server still has window free.
-#
-# The whole 393216, because the server holds ONE slot. It ran two for a few
-# hours on 2026-09-08, which forced this figure down to 180000, half the shared
-# pool: agents spawned inside a session then compacted their context away long
-# before the model would have run out. The server went back to a single slot the
-# same day and this went back to the full window. Concurrent callers now queue.
-# If --parallel ever goes above 1 again, this MUST be divided by the slot count.
-#
-# Recall in this window was proven on 2026-09-01 by needle-in-a-haystack at
-# 269,274 then 378,540 tokens, needle at 10/50/90 % depth, 6 hits out of 6.
-#
-# 376832 and not 393216, since 2026-09-08. This variable is not the window, it
-# is the INPUT budget: 393216 is the total, output included. Announcing the
-# total lets the client fill the last token, after which the server has no room
-# left to answer and returns an EMPTY response. That is what killed a session
-# at 372,738 tokens of 393,216, 95% full: /compact answered "summarization
-# produced empty response" twice, because compacting is itself a request that
-# needs 16,384 tokens of room to write its summary.
-#
-# The rule: n_ctx minus CLAUDE_CODE_MAX_OUTPUT_TOKENS. Change one, change the
-# other.
-export CLAUDE_CODE_MAX_CONTEXT_TOKENS=376832
-export CLAUDE_CODE_MAX_OUTPUT_TOKENS=16384
-
-# Read for PRESENCE, not for value: any non-empty string turns the disabling ON.
-export CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1
-
-# Read by VALUE, unlike the line above. Dropping the attribution block keeps the
-# first tokens of every request stable, so the server recognises the
-# conversation as a continuation instead of re-prefilling the whole context.
-export CLAUDE_CODE_ATTRIBUTION_HEADER=0
-
-# MCP servers dropped: 70 tool schemas weigh 108 KB of prompt on their own, which
-# buys little here and costs a much slower first turn. Skills, commands, memory
-# and CLAUDE.md are untouched.
-exec claude --strict-mcp-config --mcp-config '{"mcpServers":{}}' "$@"
+llm_launch "$@"

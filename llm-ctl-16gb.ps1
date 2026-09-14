@@ -1,5 +1,5 @@
 param(
-  [ValidateSet('qwen27','tiel','qwen36','stop','status','logs')]
+  [ValidateSet('tiel','qwen36','stop','status','logs')]
   [string]$Action,
   [string]$Name,   # optional: for 'stop' and 'logs', targets a named instance
   [int]$Tail = 40, # for 'logs': history lines to show before following live
@@ -24,7 +24,7 @@ param(
 # the upstream b10908 binary on 2026-09-13 for one reason, the KVarN cache types:
 # upstream release binaries build flash attention for q4_0 and q8_0 only
 # (GGML_CUDA_FA_ALL_QUANTS is OFF upstream), and at q4_0 the full 262,144 window
-# of Qwen3.8-27B overflows this card. Measured figures in the qwen27 block.
+# of Qwen3.8-27B overflowed this card. Measured figures in the card recipe below.
 #
 # Verified by execution on 2026-09-13, driver 616.92:
 #   llama-server.exe --list-devices
@@ -42,7 +42,6 @@ New-Item -ItemType Directory -Force -Path $instDir, $logDir | Out-Null
 # Which build serves which profile, and nothing else: a model's own settings
 # live in its switch branch.
 $builds = @{
-  qwen27 = @{ Exe = "$RootDir\beellama-v0.4.6\llama-server.exe"; WorkDir = "$RootDir\beellama-v0.4.6" }
   tiel   = @{ Exe = "$RootDir\beellama-v0.4.6\llama-server.exe"; WorkDir = "$RootDir\beellama-v0.4.6" }
   qwen36 = @{ Exe = "$RootDir\beellama-v0.4.6\llama-server.exe"; WorkDir = "$RootDir\beellama-v0.4.6" }
 }
@@ -166,7 +165,8 @@ function Start-LLM($name, $modelArgs, $exePath = $null, $workDirPath = $null, $e
   # private for 11,792 resident, a page file peak of 9,965 MiB and 350
   # prompt-cache evictions (docs/tuning-log.md, entry of that day). Without it
   # the loader unmaps every fragment once it sits on the card, and the RAM goes
-  # to the cache. A profile copied from llm-ctl.ps1 would bring the flag back
+  # to the cache: the same model restarted without the flag held 18,787 MiB
+  # private. A profile copied from llm-ctl.ps1 would bring the flag back
   # silently, which is why it is checked here and not left to each branch.
   for ($i = 0; $i -lt @($modelArgs).Count - 1; $i++) {
     if ($modelArgs[$i] -eq '--load-mode' -and $modelArgs[$i + 1] -eq 'mlock') {
@@ -258,20 +258,17 @@ function Get-Status {
 # Profiles.
 #
 # Sampling values are the ones each publisher asks for, read from its model card
-# or generation_config.json on 2026-09-11, NOT copied from a neighbouring
-# profile. Copying Qwen's shape onto nex and spark produced wrong and credible
-# numbers on the 5090 box the day before.
-#
-# Context sizes are a starting point sized for 16 GB, to be corrected by the
-# first VRAM reading, not by intuition.
+# or generation_config.json, NOT copied from a neighbouring profile. Copying
+# Qwen's shape onto nex and spark produced wrong and credible numbers on the
+# 5090 box on 2026-09-10.
 # ---------------------------------------------------------------------------
-# ---------------------------------------------------------------------------
+
 # The card recipe, shared by every profile: what 16 GB and BeeLlama impose
 # whatever the model. Each profile adds its weights, its template if it needs
-# one, and its sampling. Everything here was measured on qwen27 on 2026-09-13
-# at the full 262,144 window (bench/vitesse.ps1, 6,018-token prompt, then 45k);
-# the two A3B profiles inherit it as a starting point, to be corrected by
-# their own first reading.
+# one, and its sampling. Everything here was measured on Qwen3.8-27B, the model
+# this box served from 2026-09-13 to 2026-09-14, at the full 262,144 window
+# (bench/vitesse.ps1, 6,018-token prompt, then 45k). Both A3B profiles run on it
+# unchanged, and their first reading held, figures below.
 #
 #   UD-IQ4_XS, cache in host RAM (--no-kv-offload) ... decode 14.5 tok/s short,
 #                                                       4.85 at 45k: dead end
@@ -305,8 +302,9 @@ $cardRecipe = @(
   # more spill on KVarN 3 for no gain in prefill.
   '-b','512','-ub','512',
   '--cache-type-k','kvarn3','--cache-type-v','kvarn3',
-  # 12288 and not the 5090 box's 24576: 32 GB of host RAM. Whether it can go up
-  # now that mlock is gone is the first thing to measure at the next restart.
+  # 12288 and not the 5090 box's 24576: 32 GB of host RAM. Removing mlock handed
+  # close to ten gigabytes back, but a larger cache was not measured before the
+  # campaign of 2026-09-14 closed, so the value stays where it was proven.
   '-cram','12288'
 )
 # GGML_KVARN_WINDOW_CHUNK: BeeLlama's KVarN prefill materialises transient F16
@@ -318,53 +316,38 @@ $cardEnv = @{ GGML_KVARN_WINDOW_CHUNK = '16384' }
 
 switch ($Action) {
 
-  'qwen27' {
-    # Qwen3.8-27B, the same weights as the 5090 box's qwen profile, in unsloth's
-    # UD-IQ3_XXS (10.18 GiB). The NVFP4 file served there needs sm_120 kernels and
-    # cannot run on Ada. This GGUF carries the MTP head (qwen35.nextn_predict_layers
-    # = 1, four blk.64.nextn tensors), read in its header on 2026-09-13. It replaced
-    # OxCoder-9B and NeoHorse-1-9B, whose profiles are in the git history.
-    #
-    # The target is the full trained window, 262,144. Only the 16 full-attention
-    # layers cache K/V: 16 x 4 heads x 256 x 2 = 32,768 elements per token, so the
-    # cache is what decides; the recipe above is the road that held it.
-    Start-LLM 'qwen27' (@(
-      '-m',"$ModelsDir\qwen3.8-27b-gguf\Qwen3.8-27B-UD-IQ3_XXS.gguf",
-      # Same derived template as the 5090 box's qwen profile, copied from there: the
-      # embedded one raises 'System message must be at the beginning' on the late
-      # system messages Claude Code injects.
-      '--chat-template-file',"$ModelsDir\qwen3.8-27b-gguf\chat-template-system-anywhere.jinja"
-    ) + $cardRecipe + @(
-      # Qwen thinking-mode calibration, identical to the qwen profile.
-      '--temp','1.0','--top-p','0.95','--top-k','20','--min-p','0'
-    )) -envVars $cardEnv
-    break
-  }
-
   # ---------------------------------------------------------------------------
-  # Two 35B-A3B candidates, fetched on 2026-09-14, NOT yet measured on this card.
-  # Why they are here: the 5090 box moved from the same dense 27B to tiel on
-  # 2026-09-01 and gained +54% decode, x2 prefill and 8 MMLU points, for a
-  # structural reason that transposes: about 3B of the 35B parameters work per
-  # token, so far fewer bytes are re-read per token, and the bandwidth ceiling
-  # is what a 16 GB card hits first. The attention cache is also 3.2x smaller
-  # per token than the 27B's: 10 full-attention layers x 2 KV heads x 256 x 2
-  # against 16 x 4 x 256 x 2 (GGUF headers of both files, read 2026-09-14).
+  # Two 35B-A3B profiles since 2026-09-14. They replaced the dense Qwen3.8-27B,
+  # whose profile is in the git history, because the 5090 box had made the same
+  # move on 2026-09-01 for a structural reason that transposes: about 3B of the
+  # 35B parameters work per token, so far fewer bytes are re-read per token, and
+  # the attention cache is 3.2x smaller per token (10 full-attention layers x 2
+  # KV heads x 256 x 2, against 16 x 4 x 256 x 2, GGUF headers read 2026-09-14).
   #
-  # Both run on the card recipe and without their vision projector: this box
-  # does text. If the card overflows at 262,144, the roads to try in this
-  # order: --n-cpu-moe 4 then 8 (each layer of experts sent to the CPU frees
-  # about 0.3 GB at this tier, per the model card), then a 196,608 window.
-  # Never a smaller quant before measuring.
+  # Measured that day on the card recipe: bench/vitesse.ps1, 6,018-token prompt,
+  # decode median of 3; then bench/banc.ps1, 500 MMLU and 60 GSM8K, temperature 0.
+  #
+  #   profile        decode       prefill      VRAM         spill     MMLU    GSM8K
+  #   27B, retired   72.1 tok/s   1,394 tok/s  15,851 MiB   650 MiB
+  #   tiel           139.3        2,893        15,413       620       85.8%   55/60
+  #   qwen36         137.1        2,684        15,861       620       90.2%   56/60
+  #
+  # Both fit the full window with no --n-cpu-moe. Neither wins on everything:
+  # level on speed, a 4.4-point MMLU gap under the 4.5 needed to separate two
+  # models on 500 questions, and qwen36 needed 27.2 minutes of bench against 10.9.
+  # Both stay, and the launchers ask which one. No vision projector is loaded:
+  # this box does text.
   # ---------------------------------------------------------------------------
 
   'tiel' {
     # Tiel-Coder-35B-A3B MTP, unsloth-style UD-IQ3_XXS (13.6 GB), the 16 GB tier
     # the publisher names. Same weights family as the 5090 box's tiel profile,
-    # which is the coding model there. The MTP head is inside the GGUF (41
-    # blocks, blk.40.nextn, read in the header on 2026-09-14); the publisher
-    # verified it trained (kurtosis 25.1 against 3.0 for a random init) after
-    # an earlier release shipped it untrained.
+    # which is the coding model there: 85.8% MMLU here against 86.6% for the
+    # UD-Q4_K_XL build on that box on 2026-09-10, so the 3-bit tier costs no
+    # measurable quality. The MTP head is inside the GGUF (41 blocks,
+    # blk.40.nextn, read in the header on 2026-09-14); the publisher verified it
+    # trained (kurtosis 25.1 against 3.0 for a random init) after an earlier
+    # release shipped it untrained.
     #
     # Sampling copied from the 5090 tiel profile: temp 0.3 set there by hand on
     # real usage and read back, never 0 on these weights. Embedded template
@@ -378,19 +361,18 @@ switch ($Action) {
   }
 
   'qwen36' {
-    # Qwen3.6-35B-A3B, unsloth UD-IQ3_XXS with MTP head (14.1 GB). The publisher's
-    # own MoE, announced ahead of Qwen3.5-35B-A3B on agentic coding; never on
-    # any of the three boxes' benches yet.
+    # Qwen3.6-35B-A3B, unsloth UD-IQ3_XXS with MTP head (14.1 GB), the
+    # publisher's own MoE.
     #
     # Sampling from unsloth's page for the thinking mode, read 2026-09-14:
     # temp 1.0, top-p 0.95, top-k 20, min-p 0. The page also lists
     # presence_penalty 1.5, which the 5090 qwen profile never set; left unset
     # here for the same reason, so that a bench compares like with like.
     #
-    # OPEN before any Claude Code use: whether its embedded template raises
-    # 'System message must be at the beginning' like Qwen3.8-27B's does. The
-    # qwen27 derived template is for that model's template, not this one; if
-    # the error shows on the first agentic turn, derive one the same way.
+    # Embedded template kept. It accepts a system message after the first user
+    # turn, checked on 2026-09-14 with a direct request and then through Claude
+    # Code, where Qwen3.8-27B's raised 'System message must be at the beginning'
+    # on the late system messages Claude Code injects and needed a derived one.
     Start-LLM 'qwen36' (@(
       '-m',"$ModelsDir\qwen3.6-35b-a3b-mtp\Qwen3.6-35B-A3B-UD-IQ3_XXS.gguf"
     ) + $cardRecipe + @(
@@ -402,5 +384,5 @@ switch ($Action) {
   'stop'   { if ($Name) { Stop-One $Name } else { Stop-All }; break }
   'status' { Get-Status; break }
   'logs'   { Show-Logs $Name $Tail; break }
-  default  { Write-Output "USAGE: llm-ctl.ps1 -Action qwen27|tiel|qwen36|stop|status|logs" }
+  default  { Write-Output "USAGE: llm-ctl.ps1 -Action tiel|qwen36|stop|status|logs" }
 }

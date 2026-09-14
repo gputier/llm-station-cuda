@@ -92,15 +92,18 @@ On the Windows box:
 From the macOS client:
 
 ```bash
-export LLM_HOST=your-server-hostname-or-ip
+export LLM_HOST=your-32gb-box
+export LLM_HOST_16GB=your-16gb-box   # only for tiel and qwen, see clients/README.md
 export LLM_SSH_USER=your-ssh-user
 
-./clients/tiel        # loads Tiel if needed, then runs Claude Code against it
+./clients/tiel        # asks which box, loads Tiel there if needed, then runs Claude Code
 ```
 
-There is one launcher per served model, nine in all, listed with what each is
-good at in [clients/README.md](clients/README.md). `embed` has none on purpose:
-it serves embeddings, not a chat endpoint.
+There is one launcher per model family, eight in all, listed with what each is
+good at in [clients/README.md](clients/README.md). `tiel` and `qwen` open with a
+menu because their models are served on both boxes: `qwen` covers the aligned
+and the uncensored Qwen3.8 here, and Qwen3.6 on the 16 GB box. `embed` has none
+on purpose: it serves embeddings, not a chat endpoint.
 
 The three paths at the top of `llm-ctl.ps1` (`$RootDir`, `$ModelsDir`,
 `$CudaRoot`) are the only installation-specific values. Everything else is

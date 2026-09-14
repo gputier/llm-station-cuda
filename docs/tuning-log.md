@@ -90,6 +90,76 @@ went through the native `curl.exe`. Both GGUF headers were read before any
 load: `qwen35moe`, 41 blocks, 2 KV heads, key length 256, full-attention
 interval 4, one `nextn` layer, four `blk.40.nextn` tensors, on both files.
 
+### The same evening, the box freed: three models, one bench
+
+`bench/vitesse.ps1 -Runs 3 -Chars 30000 -Predict 150`, the 6,018-token prompt,
+seed 42, decode as the median of three runs and prefill from the first, the
+later ones reading the prompt cache. The reference line is the run of
+2026-09-13 on the same prompt, `vitesse-qwen27-final-court`.
+
+| | Decode | Prefill | VRAM | Spill, end | Acceptance |
+|---|---|---|---|---|---|
+| qwen27, 2026-09-13, with mlock | 72.8 tok/s | 1,464 tok/s | 15,815 MiB | 1,048 MiB | 82.1% |
+| qwen27, no mlock | 72.1 | 1,394 | 15,851 | 650 | 79.8% |
+| **tiel** (Tiel-Coder-35B-A3B) | **139.3** | **2,893** | 15,413 | 620 | 71.3% |
+| qwen36 (Qwen3.6-35B-A3B) | 137.1 | 2,684 | 15,861 | 620 | 82.1% |
+
+Three readings, and the first one corrects this file. The 63.2 tok/s quoted in
+the 2026-09-13 entry above was an intermediate figure; the final run of that
+night, after the launcher was cleaned up, read 72.8 on this prompt, and that is
+the number the A3B candidates have to beat.
+
+Dropping `mlock` changes decode by nothing, 72.1 against 72.8, inside the noise
+on a bench that loads cold and never returns to a context. It was never meant to
+show there. What it changes is the host RAM, read on the same process before and
+after: private bytes **28,322 MiB down to 18,787**, peak working set 18,496 down
+to 11,918, page file in use 1,370 MiB down to 1,108. Close to ten gigabytes
+handed back to the prompt cache, which is where the 350 evictions came from.
+The GPU spill also fell from 1,048 to 650 MiB, unexplained and not chased.
+
+**Both A3B candidates roughly double the box.** Decode 139.3 and 137.1 against
+72.1, prefill 2,893 and 2,684 against 1,394. They fit the card at the full
+262,144 window with no `--n-cpu-moe` and no window cut: 15,413 and 15,861 MiB,
+spill 620 MiB, the same order as the dense 27B they replace. The prediction
+made from the 5090 box transposed, and the reason is the one written there: 3B
+of 35B parameters work per token, and the attention cache is 3.2x smaller per
+token.
+
+The two candidates are level on speed, 139.3 against 137.1 being inside the
+spread of a three-run median. Tiel is 448 MiB lighter on the card. Acceptance
+splits them, 71.3% against 82.1%, and this repository has said three times now
+that acceptance does not decide anything: throughput does, and throughput calls
+them equal. Quality has to break the tie.
+
+### Quality, and what stays on the box
+
+`bench/banc.ps1`, the 500 MMLU questions and 60 GSM8K problems every campaign in
+this file uses, temperature 0, seed 42, thinking disabled.
+
+| | MMLU | GSM8K | Empty | Bench time |
+|---|---|---|---|---|
+| qwen36 | 90.2% | 56/60 | 0 | 27.2 min |
+| tiel | 85.8% | 55/60 | 0 | 10.9 min |
+
+The 27B control was stopped at 303 of its 560 requests: its model left the box
+the same hour, so the figure would have served no decision.
+
+The 4.4-point MMLU gap sits just under the 4.5 points needed to separate two
+models on 500 questions, on a public set this repository already caught
+flattering two 9B models by fifteen points (`jeu-inedit-2026-09-11.md`). Bench
+time does separate them: qwen36 took two and a half times longer, which at
+equal decode speed means much longer answers with thinking disabled. Tiel at
+IQ3_XXS scores 85.8% here against 86.6% for the UD-Q4_K_XL build on the 5090 box
+on 2026-09-10, so the 3-bit tier costs no measurable quality.
+
+Both stay, since neither wins on everything, and the launchers now ask for the
+model and the machine at start-up. The dense 27B left the box: its weights went
+to the Windows Recycle Bin on D:, whose quota was read first (46,424 MiB,
+`NukeOnDelete` 0). Qwen3.6's embedded template accepts a system message after
+the first user turn, checked with a direct request and then through Claude
+Code, so it needs no derived template where Qwen3.8-27B's raised on the late
+system messages Claude Code injects.
+
 ---
 
 ## 2026-09-13, on the 16 GB box: Qwen3.8-27B with its full 262,144 window, and what it took
