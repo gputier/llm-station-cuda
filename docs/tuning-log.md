@@ -82,11 +82,13 @@ day, `Tiel-Coder-35B-A3B-MTP-UD-IQ3_XXS` (13.6 GB) and
 the quality of the served 27B at IQ3_XXS is not measured either, and it is the
 first thing to run when the box is free, so that the candidates have a control.
 
-The fetch itself: no `hf` client on this box and the Windows Docker client
-refuses a non-interactive session, so the download runs in a `python:3.12-slim`
-container started from the Ubuntu WSL distribution with a neutral
-`DOCKER_CONFIG`, `D:\models` mounted, `hf download` inside. The container
-survives the SSH session that started it.
+The fetch itself: this box has no `hf` client and no Python, and its Docker
+Desktop and WSL are the owner's, not to be borrowed for a download. The two
+weights were fetched once through a throwaway container before that rule was
+restated, the container and its image removed the same hour; the binaries
+went through the native `curl.exe`. Both GGUF headers were read before any
+load: `qwen35moe`, 41 blocks, 2 KV heads, key length 256, full-attention
+interval 4, one `nextn` layer, four `blk.40.nextn` tensors, on both files.
 
 ---
 
