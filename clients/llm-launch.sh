@@ -1,13 +1,20 @@
-# llm-launch.sh - shared body of the tiel and qwen launchers. Sourced, never run.
+# llm-launch.sh - shared body of every launcher. Sourced, never run.
 #
 # A launcher lists its variants with llm_variant, then calls llm_launch "$@". A
 # variant is one model on one machine: the menu picks it, the body loads it
-# there if needed, and Claude Code is pointed at that machine.
+# there if needed, and Claude Code is pointed at that machine. A launcher that
+# declares a single variant asks nothing and goes straight to it.
 #
 # One launcher per model family with a menu, rather than one launcher per model
 # per machine: the same families live on a 32 GB box and on a 16 GB box, and a
 # name per box doubled what there is to remember. Decided 2026-09-14, when this
 # replaced the qwenu launcher.
+#
+# The six single-model launchers joined on 2026-09-14 as well. They each carried
+# their own copy of the same hundred lines, and the copies had drifted: some
+# announced a window the rule below forbids, and all six read a busy server as
+# an empty one and reloaded over it without asking. One body means one place
+# where that is decided.
 #
 # Written for the bash 3.2 that ships with macOS: no associative arrays, no
 # ${var,,}, no mapfile.
@@ -19,6 +26,11 @@ LLM_CTL='D:\LLM-Setup\llm-ctl.ps1'
 # The largest value the per-model launchers used before this one.
 LLM_LOAD_TIMEOUT=240
 LLM_OUTPUT_TOKENS=16384
+# Which MCP servers Claude Code keeps. "none" gives it no server at all;
+# "mail-imap" keeps a mail server expected at ~/.claude/bin/mail-imap-mcp, which
+# this repository does not ship. A launcher overrides it between sourcing this
+# file and calling llm_launch.
+LLM_MCP=none
 
 _llm_labels=(); _llm_hosts=(); _llm_actions=(); _llm_match=(); _llm_exclude=()
 _llm_ids=(); _llm_windows=()
@@ -102,6 +114,9 @@ llm_launch() {
   # from a pipe would take the caller's input as a choice.
   if [[ -n "${LLM_CHOICE:-}" ]]; then
     choice=$LLM_CHOICE
+  elif (( n == 1 )); then
+    # A launcher with one variant has nothing to ask, on a terminal or not.
+    choice=1
   elif [[ -t 0 ]]; then
     for (( i = 0; i < n; i++ )); do
       if _llm_serves "$i"; then
@@ -170,8 +185,12 @@ llm_launch() {
   export CLAUDE_CODE_ATTRIBUTION_HEADER=0
 
   err "Claude Code sur ${_llm_labels[$i]}, fenêtre annoncée ${CLAUDE_CODE_MAX_CONTEXT_TOKENS}."
-  # MCP servers dropped: measured on muse, their 70 tool schemas weigh 108 KB of
-  # prompt, overhead that bites hard on a local window. Skills, commands, memory
-  # and CLAUDE.md are untouched.
-  exec claude --strict-mcp-config --mcp-config '{"mcpServers":{}}' "$@"
+  # At most one mail server. The others stay dropped: measured on muse, their 70
+  # tool schemas weigh 108 KB of prompt, overhead that bites hard on a local
+  # window. Skills, commands, memory and CLAUDE.md are untouched.
+  local mcp='{"mcpServers":{}}'
+  if [[ "$LLM_MCP" == mail-imap ]]; then
+    mcp="{\"mcpServers\":{\"mail-imap\":{\"command\":\"${HOME}/.claude/bin/mail-imap-mcp\"}}}"
+  fi
+  exec claude --strict-mcp-config --mcp-config "$mcp" "$@"
 }

@@ -11,16 +11,19 @@ in practice, and what it costs.
 
 ## What a launcher does
 
-Each script in [../clients/](../clients/) follows the same five steps:
+Every script in [../clients/](../clients/) sources the same body,
+`llm-launch.sh`, which follows four steps:
 
-1. `GET /health` to see if a server is up.
-2. `GET /props` and read `model_path` to see **which** model is loaded. Health
-   alone is not enough: the server is single-slot, so whatever model sits on the
-   port answers every request regardless of the model id the client asks for.
-3. If the wrong model is loaded, ask before swapping it. Someone else may be
-   using it.
-4. Load the right model over SSH, then poll until it actually answers.
-5. `export` the environment and `exec claude`.
+1. `GET /props` and read `model_path` to see **which** model is loaded.
+   `/health` is not enough: the server is single-slot, so whatever model sits on
+   the port answers every request regardless of the model id the client asks
+   for.
+2. If the port refuses the connection, nothing runs and the load goes ahead. If
+   another model answers, or the probe times out, or the answer names no model,
+   ask before loading. Someone else may be using it, and a server busy on a long
+   prompt can miss a three-second probe.
+3. Load the right model over SSH, then poll until it actually answers.
+4. `export` the environment and `exec claude`.
 
 The exported variables live in that process only. A plain `claude` in another
 shell still talks to Anthropic.
@@ -37,9 +40,9 @@ export ANTHROPIC_DEFAULT_SONNET_MODEL="qwen3.8-27b"
 export ANTHROPIC_DEFAULT_HAIKU_MODEL="qwen3.8-27b"
 export ANTHROPIC_SMALL_FAST_MODEL="qwen3.8-27b"
 
-export CLAUDE_CODE_MAX_CONTEXT_TOKENS=393216
+export CLAUDE_CODE_MAX_CONTEXT_TOKENS=376832   # a 393,216 window minus the output budget
 export CLAUDE_CODE_MAX_OUTPUT_TOKENS=16384
-export CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=0
+export CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1  # read for presence: "0" turns it on too
 ```
 
 **`ANTHROPIC_AUTH_TOKEN` and not `ANTHROPIC_API_KEY`.** The latter triggers

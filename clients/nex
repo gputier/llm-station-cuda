@@ -1,9 +1,5 @@
 #!/usr/bin/env bash
-# nex - launch Claude Code against the local Nex-N2.5-mini server.
-#
-# Sibling of `kat` and `tiel`, same mechanism: the llama.cpp build serving this
-# model exposes a native Anthropic-compatible /v1/messages endpoint, SSE and
-# tool_use included, so no translation proxy is involved.
+# nex - Claude Code on Nex-N2.5-mini, served by the 32 GB box.
 #
 # CANDIDATE since 2026-09-10, replacing nothing. Running it STOPS whatever else
 # holds the card, one model at a time. Come back with `tiel` or `kat`.
@@ -17,101 +13,12 @@
 #
 # Scope: the exported variables live in this process only. A plain `claude` in
 # another shell keeps talking to Anthropic.
-
-set -euo pipefail
-
-HOST="${LLM_HOST:-your-server-hostname-or-ip}"
-PORT="8080"
-BASE="http://${HOST}:${PORT}"
-SSH_TARGET="${LLM_SSH_USER:-youruser}@${HOST}"
-# Explicit key, and IdentitiesOnly with it. The agent on this Mac holds six keys
-# and offers them all: the box refuses at the sixth with "Too many
-# authentication failures" before the right one is ever tried.
-SSH_KEY="${LLM_SSH_KEY:-$HOME/.ssh/id_ed25519}"
-SSH_OPTS=(-o IdentitiesOnly=yes -i "$SSH_KEY" -o ConnectTimeout=10)
-CTL='D:\LLM-Setup\llm-ctl.ps1'
-LOAD_TIMEOUT=240
-
-err() { printf '%s\n' "$*" >&2; }
-
-is_up() { curl -sS -m 3 "${BASE}/health" 2>/dev/null | grep -q '"status":"ok"'; }
-
-# The server is single-slot: whichever model sits on port 8080 answers every
-# request, whatever model id the client asks for. Checking health is therefore
-# not enough, we must confirm this model is the one loaded.
-loaded_model() {
-  curl -sS -m 3 "${BASE}/props" 2>/dev/null \
-    | sed -n 's/.*"model_path":"\([^"]*\)".*/\1/p'
-}
-
-is_nex() { printf '%s' "$(loaded_model)" | grep -qi 'nex-n2.5'; }
-
-load_nex() {
-  err "Chargement de Nex-N2.5-mini sur ${HOST}..."
-  ssh "${SSH_OPTS[@]}" "$SSH_TARGET" \
-    "powershell -NoProfile -ExecutionPolicy Bypass -File ${CTL} -Action nex" >&2
-
-  local waited=0
-  while (( waited < LOAD_TIMEOUT )); do
-    if is_up && is_nex; then
-      err "Nex prêt."
-      return 0
-    fi
-    sleep 5
-    waited=$(( waited + 5 ))
-  done
-
-  err "Échec : le modèle n'a pas répondu en ${LOAD_TIMEOUT} s."
-  err "Journal : ssh ${SSH_TARGET} \"powershell -NoProfile -ExecutionPolicy Bypass -File ${CTL} -Action logs -Name nex\""
-  err "Ou directement D:\\LLM-Setup\\llm-err-nex.log sur ${HOST}."
-  return 1
-}
-
-if ! is_up; then
-  load_nex
-elif ! is_nex; then
-  err "Le port ${PORT} sert « $(loaded_model | sed 's/.*\\//') », pas Nex."
-  read -r -p "Le remplacer par Nex ? [o/N] " answer
-  [[ "$answer" =~ ^[oOyY]$ ]] || { err "Abandon."; exit 1; }
-  load_nex
-fi
-
-# AUTH_TOKEN and not API_KEY: the latter triggers Claude Code's custom-key
-# approval prompt. llama-server started without --api-key accepts any bearer.
-export ANTHROPIC_AUTH_TOKEN="local"
-export ANTHROPIC_BASE_URL="$BASE"
-
-export ANTHROPIC_MODEL="nex-n2.5-mini"
-export ANTHROPIC_DEFAULT_OPUS_MODEL="nex-n2.5-mini"
-export ANTHROPIC_DEFAULT_SONNET_MODEL="nex-n2.5-mini"
-export ANTHROPIC_DEFAULT_HAIKU_MODEL="nex-n2.5-mini"
-export ANTHROPIC_SMALL_FAST_MODEL="nex-n2.5-mini"
-
-# 245_760 = the 262_144 the server serves, MINUS the 16_384 of output below.
-# This variable is an INPUT budget, not the window: n_ctx counts input and
-# output in one pool, so announcing the total lets the client fill the last
-# token, after which the server has no room left to write and returns an EMPTY
-# response. That cost a working session on 2026-09-08.
 #
-# The rule: n_ctx minus CLAUDE_CODE_MAX_OUTPUT_TOKENS. Change one, change the
-# other. The authority is default_generation_settings.n_ctx in /props, never the
-# --ctx-size passed to the server.
-#
-# Recall in this window is NOT proven on these weights: no needle-in-a-haystack
-# has been run, and the family has an open defect where generation stops
-# silently at long context, issue 27756. Treat long sessions with suspicion.
-export CLAUDE_CODE_MAX_CONTEXT_TOKENS=245760
-export CLAUDE_CODE_MAX_OUTPUT_TOKENS=16384
+# One variant, so no menu and nothing to answer. Everything else lives in
+# llm-launch.sh.
 
-# Read for PRESENCE, not for value: any non-empty string turns the disabling ON.
-export CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1
+source "$(dirname "${BASH_SOURCE[0]}")/llm-launch.sh"
 
-# Read by VALUE, unlike the line above. Dropping the attribution block keeps the
-# first tokens of every request stable, so the server recognises the
-# conversation as a continuation instead of re-prefilling the whole context.
-export CLAUDE_CODE_ATTRIBUTION_HEADER=0
+llm_variant "Nex-N2.5-mini sur la machine 32 Go, fenêtre 262k" "${LLM_HOST:-your-32gb-box}" nex nex-n2.5 '' nex-n2.5-mini 262144
 
-# MCP servers dropped: 70 tool schemas weigh 108 KB of prompt on their own, which
-# buys little here and costs a much slower first turn. Skills, commands, memory
-# and CLAUDE.md are untouched.
-exec claude --strict-mcp-config --mcp-config '{"mcpServers":{}}' "$@"
+llm_launch "$@"

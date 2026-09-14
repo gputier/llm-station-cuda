@@ -1,9 +1,5 @@
 #!/usr/bin/env bash
-# kat - launch Claude Code against the local KAT-Coder-V2.5-Dev-35B-A3B server.
-#
-# Sibling of `tiel`, `qwen` and `muse`, same mechanism: the llama.cpp build
-# serving this model exposes a native Anthropic-compatible /v1/messages
-# endpoint, SSE and tool_use included, so no translation proxy is involved.
+# kat - Claude Code on KAT-Coder-V2.5-Dev-35B-A3B, served by the 32 GB box.
 #
 # ON TRIAL since 2026-09-08. This model replaces nothing: it is the only one of
 # four candidates benched that day to match Tiel everywhere and beat it on
@@ -12,108 +8,12 @@
 #
 # Scope: the exported variables live in this process only. A plain `claude` in
 # another shell keeps talking to Anthropic.
-
-set -euo pipefail
-
-HOST="${LLM_HOST:-your-server-hostname-or-ip}"
-PORT="8080"
-BASE="http://${HOST}:${PORT}"
-SSH_TARGET="${LLM_SSH_USER:-youruser}@${HOST}"
-CTL='D:\LLM-Setup\llm-ctl.ps1'
-LOAD_TIMEOUT=240
-
-err() { printf '%s\n' "$*" >&2; }
-
-is_up() { curl -sS -m 3 "${BASE}/health" 2>/dev/null | grep -q '"status":"ok"'; }
-
-# The server is single-slot: whichever model sits on port 8080 answers every
-# request, whatever model id the client asks for. Checking health is therefore
-# not enough, we must confirm this model is the one loaded.
-loaded_model() {
-  curl -sS -m 3 "${BASE}/props" 2>/dev/null \
-    | sed -n 's/.*"model_path":"\([^"]*\)".*/\1/p'
-}
-
-is_kat() { printf '%s' "$(loaded_model)" | grep -qi 'kat-coder'; }
-
-load_kat() {
-  err "Chargement de KAT-Coder-V2.5-Dev-35B-A3B sur ${HOST}..."
-  ssh -o ConnectTimeout=10 "$SSH_TARGET" \
-    "powershell -NoProfile -ExecutionPolicy Bypass -File ${CTL} -Action kat" >&2
-
-  local waited=0
-  while (( waited < LOAD_TIMEOUT )); do
-    if is_up && is_kat; then
-      err "KAT-Coder prêt."
-      return 0
-    fi
-    sleep 5
-    waited=$(( waited + 5 ))
-  done
-
-  err "Échec : le modèle n'a pas répondu en ${LOAD_TIMEOUT} s."
-  err "Journal : ssh ${SSH_TARGET} \"powershell -NoProfile -ExecutionPolicy Bypass -File ${CTL} -Action logs -Name kat\""
-  err "Ou directement D:\\LLM-Setup\\llm-err-kat.log sur ${HOST}."
-  return 1
-}
-
-if ! is_up; then
-  load_kat
-elif ! is_kat; then
-  err "Le port ${PORT} sert « $(loaded_model | sed 's/.*\\//') », pas KAT-Coder."
-  read -r -p "Le remplacer par KAT-Coder ? [o/N] " answer
-  [[ "$answer" =~ ^[oOyY]$ ]] || { err "Abandon."; exit 1; }
-  load_kat
-fi
-
-# AUTH_TOKEN and not API_KEY: the latter triggers Claude Code's custom-key
-# approval prompt. llama-server started without --api-key accepts any bearer.
-export ANTHROPIC_AUTH_TOKEN="local"
-export ANTHROPIC_BASE_URL="$BASE"
-
-export ANTHROPIC_MODEL="kat-coder-v25-35b-a3b"
-export ANTHROPIC_DEFAULT_OPUS_MODEL="kat-coder-v25-35b-a3b"
-export ANTHROPIC_DEFAULT_SONNET_MODEL="kat-coder-v25-35b-a3b"
-export ANTHROPIC_DEFAULT_HAIKU_MODEL="kat-coder-v25-35b-a3b"
-export ANTHROPIC_SMALL_FAST_MODEL="kat-coder-v25-35b-a3b"
-
-# Must equal what the server actually serves, read from /props as
-# default_generation_settings.n_ctx. Promise more and a session crossing the
-# real ceiling is truncated server-side with no warning; promise less and the
-# client compacts early while the server still has window free.
 #
-# The whole 393216, because the server holds ONE slot. It ran two for a few
-# hours on 2026-09-08, which forced this figure down to 180000, half the shared
-# pool: agents spawned inside a session then compacted their context away long
-# before the model would have run out. The server went back to a single slot the
-# same day and this went back to the full window. Concurrent callers now queue.
-# If --parallel ever goes above 1 again, this MUST be divided by the slot count.
-#
-# Recall in this window is NOT proven on these weights, unlike `tiel`: no
-# needle-in-a-haystack has been run. Treat long sessions with suspicion.
-#
-# 376832 and not 393216, since 2026-09-08. This variable is not the window, it
-# is the INPUT budget: 393216 is the total, output included. Announcing the
-# total lets the client fill the last token, after which the server has no room
-# left to answer and returns an EMPTY response. That is what killed a session
-# at 372,738 tokens of 393,216, 95% full: /compact answered "summarization
-# produced empty response" twice, because compacting is itself a request that
-# needs 16,384 tokens of room to write its summary.
-#
-# The rule: n_ctx minus CLAUDE_CODE_MAX_OUTPUT_TOKENS. Change one, change the
-# other.
-export CLAUDE_CODE_MAX_CONTEXT_TOKENS=376832
-export CLAUDE_CODE_MAX_OUTPUT_TOKENS=16384
+# One variant, so no menu and nothing to answer. Everything else lives in
+# llm-launch.sh.
 
-# Read for PRESENCE, not for value: any non-empty string turns the disabling ON.
-export CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1
+source "$(dirname "${BASH_SOURCE[0]}")/llm-launch.sh"
 
-# Read by VALUE, unlike the line above. Dropping the attribution block keeps the
-# first tokens of every request stable, so the server recognises the
-# conversation as a continuation instead of re-prefilling the whole context.
-export CLAUDE_CODE_ATTRIBUTION_HEADER=0
+llm_variant "KAT-Coder sur la machine 32 Go, fenêtre 393k" "${LLM_HOST:-your-32gb-box}" kat kat-coder '' kat-coder-v25-35b-a3b 393216
 
-# MCP servers dropped: 70 tool schemas weigh 108 KB of prompt on their own, which
-# buys little here and costs a much slower first turn. Skills, commands, memory
-# and CLAUDE.md are untouched.
-exec claude --strict-mcp-config --mcp-config '{"mcpServers":{}}' "$@"
+llm_launch "$@"

@@ -20,14 +20,27 @@ export LLM_SSH_KEY=~/.ssh/id_ed25519     # optional, see below
 ./qwen        # Qwen3.8 aligned or uncensored on the 32 GB box, Qwen3.6 on the 16 GB one
 ```
 
+## One body for all eight
+
+Every launcher is a few lines that declare its model and source
+[llm-launch.sh](llm-launch.sh), never run on its own. Until 2026-09-14 the six
+single-model launchers each carried their own hundred lines, and the copies had
+drifted apart: two announced a window the rule below forbids, and all six
+reloaded over a busy server without asking. Whatever is decided about loading,
+asking and the environment is now decided in one place.
+
+A launcher sets two things of its own when the default does not suit it:
+`LLM_LOAD_TIMEOUT`, see below, and `LLM_MCP`, `none` here, or `mail-imap` for a
+mail server this repository does not ship.
+
 ## tiel and qwen ask which model, and on which box
 
 The same families now live on two boxes, so these two launchers open with a
 numbered menu instead of carrying one script per model per machine. The menu
 marks the variant already loaded, if any. `LLM_CHOICE=2 ./tiel -p "..."` skips
 it, and a run without a terminal must set it: a menu read from a pipe would take
-the caller's input as a choice. Their shared body is
-[llm-launch.sh](llm-launch.sh), sourced and never run on its own.
+the caller's input as a choice. A launcher that declares one variant shows no
+menu.
 
 Proven on 2026-09-14 against both boxes: an out-of-range choice is refused, a
 box serving another model triggers the swap question and a "no" leaves it
@@ -40,7 +53,9 @@ asking. A timeout, or an answer that names no model, counts as busy and asks: a
 server deep in a long prompt can miss a three-second probe, and reading that as
 an empty box would load over whoever is using it. Found by review on 2026-09-14
 and replayed the same day against stubbed `curl`, `ssh` and `claude`, seven
-cases out of seven.
+cases out of seven. The same stubs, run on the old `ornith` with a probe that
+times out, showed it loading over the server without a word; the shared body
+refuses.
 
 Which one to reach for, with the figures behind each line, is in
 [../docs/quel-modele-pour-quel-usage.md](../docs/quel-modele-pour-quel-usage.md).
@@ -49,14 +64,15 @@ Which one to reach for, with the figures behind each line, is in
 
 ## LLM_SSH_KEY, and why it exists
 
-The newer launchers name their key explicitly and pass `IdentitiesOnly=yes`. An
-ssh agent holding several keys offers them all, and a server that caps
-authentication attempts refuses the connection before the right key is ever
-tried, with a `Too many authentication failures` that says nothing about the
-cause. Set `LLM_SSH_KEY` if you hit that; leave it alone otherwise.
+The launchers call plain `ssh` unless `LLM_SSH_KEY` names a key, in which case
+they pass it with `IdentitiesOnly=yes`. An ssh agent holding several keys offers
+them all, and a server that caps authentication attempts refuses the connection
+before the right key is ever tried, with a `Too many authentication failures`
+that says nothing about the cause. Set `LLM_SSH_KEY` if you hit that; leave it
+alone otherwise.
 
 Put them somewhere on your `PATH` to call them by name, with `llm-launch.sh` next
-to `tiel` and `qwen`. They pass their arguments through, so `kat -p "..."` works
+to them. They pass their arguments through, so `kat -p "..."` works
 as expected, and `LLM_CHOICE=1 qwen -p "..."` for the two launchers with a menu.
 
 ## They check which model is loaded, not just whether one is
@@ -86,8 +102,8 @@ before `printf` has written, and a match then reads as a failure.
 ## They warm up on their own
 
 Loading happens over SSH before `exec claude`, and the script polls until the
-model answers, up to `LOAD_TIMEOUT` (180 s, 240 s for `tiel` and `qwen`). There is never a manual warm-up to
-perform. A failure prints the server-side log path rather than dropping you into
+model answers, up to `LLM_LOAD_TIMEOUT` (240 s, 180 s for `spark` and `muse`).
+There is never a manual warm-up to perform. A failure prints the server-side log path rather than dropping you into
 a client that cannot reach anything.
 
 Non-interactive SSH is required: the scripts call `ssh` without a TTY, so a key
