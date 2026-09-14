@@ -240,6 +240,23 @@ and dedicated memory matched the offloaded run to the megabyte. The run was
 stopped and redone with the server started directly, and the `-Extra` comment
 in both `llm-ctl` scripts now says which flags it cannot override.
 
+### And `--load-mode none` on top of the two layers
+
+The `--fit` run logged that CPU tensor overrides are slower with mmap on.
+Measured the same evening, profile otherwise unchanged, same prompts:
+
+| qwen36, `--n-cpu-moe 2` | Decode short | Prefill short | Decode 196.6k | Prefill 196.6k | Card after 196.6k | Host RAM free after 196.6k |
+|---|---|---|---|---|---|---|
+| mmap, as before | 135.9 tok/s | 2,518 tok/s | 68.9 | 1,788 tok/s | 15,428 MiB | 5,645 MiB |
+| `--load-mode none` | 132.8 | 2,709 | 71.9 | 1,910 | 15,446 | 16,838 |
+
+Deep decode and prefill gain 4 and 7%, short decode loses 2%, the card does not
+move, and 11 GB of host RAM come back. On a 32 GB box that last figure matters
+more than the speeds: it is the room the prompt cache was paged out of earlier
+the same day. The shared GPU counter rose from 620 to 1,566 MiB, probably the
+offloaded experts held in pinned host memory; as measured above, that counter
+does not mark an overflow. qwen36 keeps both flags.
+
 ---
 
 ## 2026-09-13, on the 16 GB box: Qwen3.8-27B with its full 262,144 window, and what it took

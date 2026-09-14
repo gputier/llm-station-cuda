@@ -170,8 +170,10 @@ function Start-LLM($name, $modelArgs, $exePath = $null, $workDirPath = $null, $e
   # prompt-cache evictions (docs/tuning-log.md, entry of that day). Without it
   # the loader unmaps every fragment once it sits on the card, and the RAM goes
   # to the cache: the same model restarted without the flag held 18,787 MiB
-  # private. A profile copied from llm-ctl.ps1 would bring the flag back
-  # silently, which is why it is checked here and not left to each branch.
+  # private. That is the default mmap path, still tiel's; qwen36 loads with
+  # --load-mode none instead, see its block. A profile copied from llm-ctl.ps1
+  # would bring the flag back silently, which is why it is checked here and not
+  # left to each branch.
   for ($i = 0; $i -lt @($modelArgs).Count - 1; $i++) {
     if ($modelArgs[$i] -eq '--load-mode' -and $modelArgs[$i + 1] -eq 'mlock') {
       Write-Output 'REFUSED --load-mode mlock: 32 GB of host RAM on this box, see docs/tuning-log.md 2026-09-14'
@@ -357,7 +359,7 @@ switch ($Action) {
     # qwen36 lost three quarters of its decode at 200k tokens on 2026-09-14, see
     # its block; tiel holds 448 MiB less on the card at short context, which
     # proves nothing at depth. If it shows the same step drop, the same setting
-    # applies.
+    # applies, with --load-mode none alongside: qwen36 measured the two together.
     #
     # Sampling copied from the 5090 tiel profile: temp 0.3 set there by hand on
     # real usage and read back, never 0 on these weights. Embedded template
@@ -394,7 +396,15 @@ switch ($Action) {
       # loses 6% of short decode and 16% of deep prefill against two layers. No
       # bench reproduced the drop, with or without offload: a long session that
       # does not repeat it is the proof still owed. Tables in docs/tuning-log.md.
-      '--n-cpu-moe','2'
+      '--n-cpu-moe','2',
+      # --load-mode none since the same evening, after the server warned that CPU
+      # tensor overrides run slower from an mmap. Measured with the two layers on:
+      # decode at 196,613 tokens 71.9 against 68.9, prefill there 1,910 against
+      # 1,788, short decode 132.8 against 135.9, card unchanged, and 11 GB of host
+      # RAM handed back, 16,838 MiB free against 5,645 after the deep bench.
+      # Tied to the offload above: without it nothing runs on the CPU, and this
+      # mode is unmeasured. Re-evaluate the two together.
+      '--load-mode','none'
     ) + $cardRecipe + @(
       '--temp','1.0','--top-p','0.95','--top-k','20','--min-p','0'
     )) -envVars $cardEnv
