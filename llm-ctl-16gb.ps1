@@ -103,6 +103,9 @@ function Wait-VramReleased($timeoutSec = 30) {
     $previous = $used
     Start-Sleep -Milliseconds 500
   }
+  # Reached only when the deadline ran out, possibly inside the first loop, in
+  # which case the card was never read at all. Say so rather than load in silence.
+  Write-Output "WARN device memory not confirmed released after $timeoutSec s"
 }
 
 function Stop-One($name) {
@@ -151,7 +154,9 @@ function Start-LLM($name, $modelArgs, $exePath = $null, $workDirPath = $null, $e
     $garde = @(); $saut = $false
     foreach ($a in @($modelArgs)) {
       if ($saut) { $saut = $false; continue }
-      if ($a -in @('--spec-type','--spec-draft-n-max','--spec-draft-p-min','-md','--spec-draft-model')) { $saut = $true; continue }
+      # The draft cache types too: the card recipe sets them, and left behind
+      # they reached the server with no draft to apply to.
+      if ($a -in @('--spec-type','--spec-draft-n-max','--spec-draft-p-min','-md','--spec-draft-model','--spec-draft-type-k','--spec-draft-type-v')) { $saut = $true; continue }
       $garde += $a
     }
     $modelArgs = $garde

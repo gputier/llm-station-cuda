@@ -222,6 +222,9 @@ function Wait-VramReleased($timeoutSec = 30) {
     $previous = $used
     Start-Sleep -Milliseconds 500
   }
+  # Reached only when the deadline ran out, possibly inside the first loop, in
+  # which case the card was never read at all. Say so rather than load in silence.
+  Write-Output "WARN device memory not confirmed released after $timeoutSec s"
 }
 
 function Stop-One($name) {
