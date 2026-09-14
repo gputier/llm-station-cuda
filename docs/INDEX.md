@@ -26,12 +26,14 @@ and the script disagree, the script wins and the document is the bug.
 
 There are two of them, one per machine, and they are not interchangeable.
 `llm-ctl.ps1` drives the 32 GB box this repository was built around.
-[../llm-ctl-16gb.ps1](../llm-ctl-16gb.ps1) drives a second box with an RTX 4080
-SUPER, whose profiles were tuned separately because the same flags land
-differently on half the memory: there, doubling the context window is free and a
-draft model for speculative decoding is not affordable at all. Copying a profile
-from one to the other is how the 16 GB box ended up serving half the window its
-weights offer.
+[../llm-ctl-16gb.ps1](../llm-ctl-16gb.ps1) drives a second box, an RTX 4080 SUPER
+with 32 GB of host RAM. Since 2026-09-14 it serves `tiel` and `qwen36`, both
+35B-A3B in UD-IQ3_XXS at the full 262,144 window, on the BeeLlama fork for its
+KVarN cache, with one card recipe shared by both profiles; it refuses `mlock`
+because of that host RAM. Its profiles were tuned separately because the same
+flags land differently on half the memory. Copying a profile from one box to the
+other is how the 16 GB box once served half the window its weights offer, and
+how it locked 10 GB of host RAM the 32 GB box could spare.
 
 The per-model notes live next to the weights they describe, under
 [../models/](../models/), and carry provenance, checksums and the traps specific

@@ -71,6 +71,12 @@ window was brought down from 1,048,576 to 262,144 on 2026-08-31 because a
 million tokens cost more than they returned. The model still reaches a million,
 recall proven at 556,390 tokens; this box just does not serve it there.
 
+A second box, an RTX 4080 SUPER with 16 GB, serves two model families from
+[llm-ctl-16gb.ps1](llm-ctl-16gb.ps1) since 2026-09-14: `tiel`, the same
+Tiel-Coder in UD-IQ3_XXS, and `qwen36`, Qwen3.6-35B-A3B in UD-IQ3_XXS, both at
+the full 262,144 window. Their pages: [models/tiel-coder-35b-a3b/](models/tiel-coder-35b-a3b/)
+and [models/qwen3.6-35b-a3b/](models/qwen3.6-35b-a3b/).
+
 ## Quick start
 
 On the Windows box:

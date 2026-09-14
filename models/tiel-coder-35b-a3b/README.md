@@ -20,6 +20,25 @@ model of this box.
 | Slots | 1. It ran 2 from 2026-09-06 to 2026-09-08, see below. |
 | Build | `b10826` (2026-09-06), official release binary, no compilation. Only build serving this profile. |
 
+## On the 16 GB box
+
+The same model also runs on the RTX 4080 SUPER box since 2026-09-14, from
+[../../llm-ctl-16gb.ps1](../../llm-ctl-16gb.ps1), in a smaller tier:
+`Tiel-Coder-35B-A3B-MTP-UD-IQ3_XXS.gguf`, 13.6 GB, from
+`peculiar-ragdoll/Tiel-Coder-35B-A3B-GGUF-MTP`. BeeLlama v0.4.6, KVarN 3 cache,
+MTP depth 2, window 262,144, no vision projector, temperature 0.3 like here.
+
+Measured that day on a 6,018-token prompt: 139.3 tok/s decode, 2,893 tok/s
+prefill, 15,413 MiB of VRAM. MMLU 85.8% and GSM8K 55/60 on the set of the
+2026-09-10 campaign, against 86.6% and 53/60 for the UD-Q4_K_XL build here: the
+3-bit tier costs no measurable quality.
+
+Two things are not measured there yet. Nothing past short prompts, where
+`qwen36` on the same recipe lost three quarters of its decode at 200k tokens in
+real use; and no run through Claude Code. The launcher `tiel` asks which box to
+use. Details of both boxes: [../qwen3.6-35b-a3b/](../qwen3.6-35b-a3b/) and
+[../../docs/tuning-log.md](../../docs/tuning-log.md).
+
 ## Why this model over `qwen`
 
 Measured 2026-09-01 against the `qwen` profile, same 37,981-token prompt, seed
