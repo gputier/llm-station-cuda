@@ -88,6 +88,15 @@ client stops trying for the rest of the session, then refuses the next turn
 with `Context limit reached`. A manual `/compact` may still succeed once the
 context is lower.
 
+The launchers answer this per variant: an optional eighth field of
+`llm_variant` sets where compaction starts, and `llm-launch.sh` turns it into
+`CLAUDE_CODE_AUTO_COMPACT_WINDOW`, that size plus the output budget plus the
+client's 13,000-token summary buffer. Only the trigger moves; the client still
+refuses a turn at the real window. The Qwen3.6-35B-A3B variant of `qwen` starts
+at 180,000, checked against a stub server on 2026-09-15 (effective window
+193,000, `level=compact` past 180,000, no refusal below the real limit). That
+the model writes its summary at 180,000 is not proven; it did at 186,351 once.
+
 **A second slot forces you to divide it, and that is why there is no second
 slot.** Every profile here runs `--parallel 1`, so `/props` and this variable
 agree. The rule if that ever changes: `n_ctx` divided by the slot count, minus

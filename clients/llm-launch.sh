@@ -33,18 +33,24 @@ LLM_OUTPUT_TOKENS=16384
 LLM_MCP=none
 
 _llm_labels=(); _llm_hosts=(); _llm_actions=(); _llm_match=(); _llm_exclude=()
-_llm_ids=(); _llm_windows=()
+_llm_ids=(); _llm_windows=(); _llm_compact_at=()
+
+# Tokens Claude Code keeps between its compaction trigger and the window it
+# compacts against, read in the 2.1.271 binary on 2026-09-15.
+LLM_SUMMARY_BUFFER=13000
 
 err() { printf '%s\n' "$*" >&2; }
 
-# llm_variant LABEL HOST ACTION MATCH EXCLUDE MODEL_ID WINDOW
-#   ACTION   the llm-ctl.ps1 action that loads the model on HOST
-#   MATCH    lowercase text the served model_path must contain
-#   EXCLUDE  lowercase text it must NOT contain, or '' when none is needed
-#   WINDOW   the window the server really serves, n_ctx in /props
+# llm_variant LABEL HOST ACTION MATCH EXCLUDE MODEL_ID WINDOW [COMPACT_AT]
+#   ACTION      the llm-ctl.ps1 action that loads the model on HOST
+#   MATCH       lowercase text the served model_path must contain
+#   EXCLUDE     lowercase text it must NOT contain, or '' when none is needed
+#   WINDOW      the window the server really serves, n_ctx in /props
+#   COMPACT_AT  optional: the context size where automatic compaction starts,
+#               for a model that stops writing its summary past that size
 llm_variant() {
   _llm_labels+=("$1"); _llm_hosts+=("$2"); _llm_actions+=("$3"); _llm_match+=("$4")
-  _llm_exclude+=("$5"); _llm_ids+=("$6"); _llm_windows+=("$7")
+  _llm_exclude+=("$5"); _llm_ids+=("$6"); _llm_windows+=("$7"); _llm_compact_at+=("${8:-}")
 }
 
 # What port 8080 on HOST says, printed as one of three states:
@@ -180,7 +186,17 @@ llm_launch() {
   # exported 16384 plus a settings value of 64000 sends max_tokens 64000, while
   # --settings wins over the user file.
   local context_tokens=$(( ${_llm_windows[$i]} - LLM_OUTPUT_TOKENS ))
-  local budget="{\"env\":{\"CLAUDE_CODE_MAX_OUTPUT_TOKENS\":\"${LLM_OUTPUT_TOKENS}\",\"CLAUDE_CODE_MAX_CONTEXT_TOKENS\":\"${context_tokens}\"}}"
+  local budget="\"CLAUDE_CODE_MAX_OUTPUT_TOKENS\":\"${LLM_OUTPUT_TOKENS}\",\"CLAUDE_CODE_MAX_CONTEXT_TOKENS\":\"${context_tokens}\""
+  # CLAUDE_CODE_AUTO_COMPACT_WINDOW moves only the compaction trigger: the
+  # client still refuses a turn at the real window. The trigger sits at that
+  # window minus the output budget and the summary buffer, so the variable is
+  # derived back from the size wanted. Without it the gap between trigger and
+  # refusal is about 10,000 tokens, a few turns.
+  local compact_at=${_llm_compact_at[$i]}
+  if [[ -n "$compact_at" ]]; then
+    budget="${budget},\"CLAUDE_CODE_AUTO_COMPACT_WINDOW\":\"$(( compact_at + LLM_OUTPUT_TOKENS + LLM_SUMMARY_BUFFER ))\""
+  fi
+  budget="{\"env\":{${budget}}}"
 
   # Read for PRESENCE, not for value: any non-empty string turns the disabling
   # on, "0" included (checked 2026-08-31 against the env-vars page).

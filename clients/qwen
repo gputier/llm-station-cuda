@@ -8,7 +8,9 @@
 #   2. Qwen3.8-27B Uncensored on the 32 GB box, only when the aligned build
 #      refuses a legitimate task, 262,144 window.
 #   3. Qwen3.6-35B-A3B UD-IQ3_XXS on the 16 GB box, 137.1 tok/s decode and 90.2%
-#      on the 500-question MMLU set on 2026-09-14, 262,144 window.
+#      on the 500-question MMLU set on 2026-09-14, 262,144 window. Compaction
+#      starts at 180,000: replayed at 222,000 on 2026-09-15, the model answered
+#      the summary request with a shell command instead of a summary.
 #
 # The aligned and the uncensored builds both carry "qwen3.8" in their path, so
 # the first variant excludes "uncensored": a bare match once took the
@@ -22,6 +24,6 @@ source "$(dirname "${BASH_SOURCE[0]}")/llm-launch.sh"
 
 llm_variant "Qwen3.8-27B sur la machine 32 Go, fenêtre 393k" "${LLM_HOST:-your-32gb-box}" qwen qwen3.8 uncensored qwen3.8-27b 393216
 llm_variant "Qwen3.8-27B Uncensored sur la machine 32 Go, si l'aligné refuse, fenêtre 262k" "${LLM_HOST:-your-32gb-box}" qwenu uncensored '' qwen3.8-27b-uncensored 262144
-llm_variant "Qwen3.6-35B-A3B sur la machine 16 Go, fenêtre 262k" "${LLM_HOST_16GB:-your-16gb-box}" qwen36 qwen3.6-35b '' qwen3.6-35b-a3b 262144
+llm_variant "Qwen3.6-35B-A3B sur la machine 16 Go, fenêtre 262k" "${LLM_HOST_16GB:-your-16gb-box}" qwen36 qwen3.6-35b '' qwen3.6-35b-a3b 262144 180000
 
 llm_launch "$@"
