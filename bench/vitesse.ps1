@@ -79,6 +79,11 @@ for ($i = 1; $i -le $Runs; $i++) {
     max_tokens  = $Predict
     seed        = 42
     temperature = 0
+    # Since 2026-09-15. The protocol line below always claimed the prompt cache was off, and
+    # nothing turned it off: runs 2 and 3 re-read the cache, so only run 1 measured ingestion.
+    # That run is also the one that pays for cold weights, which on a model whose experts are
+    # memory-mapped from disk ('flash') is most of what it measures.
+    cache_prompt = $false
   } | ConvertTo-Json -Depth 6 -Compress
 
   $r = Invoke-RestMethod -Uri "$Uri/v1/chat/completions" -Method Post `
@@ -110,10 +115,10 @@ $lignes = @(
   ("date        : {0}" -f (Get-Date -Format 'yyyy-MM-dd HH:mm')),
   ("modele      : {0}" -f $modele),
   ("generation  : {0:N1} tok/s (mediane de {1})" -f (Mediane $decode), $Runs),
-  # First run only: the OpenAI-compatible endpoint keeps its prompt cache, so runs
-  # 2 and 3 report an ingestion of about 50 tok/s that measures a cache hit and
-  # nothing else. Decode is unaffected and stays a median.
-  ("ingestion   : {0:N0} tok/s (premiere passe, les suivantes lisent le cache)" -f $prefill[0]),
+  # Median over every run now that cache_prompt is off, with run 1 alongside: the gap
+  # between the two is the cost of cold weights. Figures recorded before 2026-09-15 are
+  # run 1 only and compare with the second number, not the median.
+  ("ingestion   : {0:N0} tok/s (mediane de {1}), premiere passe {2:N0}" -f (Mediane $prefill), $Runs, $prefill[0]),
   ("speculation : {0}" -f $tauxTxt),
   ("vram        : {0}" -f $vram),
   ("debordement : {0} Mio au depart, {1} Mio a la fin" -f $spillAvant, (Get-SpillMb)),

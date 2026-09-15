@@ -9,6 +9,89 @@ hardware listed in [prerequisites.md](prerequisites.md).
 
 ---
 
+## 2026-09-15: Qwen3.8-Flash-Next, the first model that does not fit on the card
+
+A 125B-A6B model in UD-Q4_K_XL, 103.7 GiB, served with the experts of 42 of its
+48 layers in host RAM, from `unsloth/Qwen3.8-Flash-Next-GGUF`, with its MTP head
+`MTP/mtp-Qwen3.8-Flash-Next-shared-Q8_0.gguf`. It was chosen as the largest
+recent coding model the box can hold whole; an earlier pick of the
+same session, Qwen3-Coder-30B-A3B, was dropped before any weight arrived once
+its release date was read: 2025-07-31, older than every model already here.
+
+### The speed bench measured one cold run and called it a protocol
+
+`bench\vitesse.ps1` printed `cache d invite desactive` and never sent
+`cache_prompt: false`. Runs 2 and 3 read the prompt cache, so ingestion was only
+ever run 1, which is also the run that pays for cold weights. On a model whose
+experts are read from a memory-mapped file, that run measured the disk. The
+field is now sent, ingestion is the median of all runs with run 1 alongside, and
+ingestion figures logged before this date compare with that second number.
+
+The copy of the script on the box was also behind the repository: it had neither
+`-Chars` nor the spill reading. It was replaced, backup
+`bench\vitesse.ps1.bak-20260915`.
+
+### The split, the load mode, the draft depth
+
+Same prompt, 400 tokens, three runs, median, the profile otherwise as committed.
+
+| Configuration | Decode | Prefill | MTP accepted | Card, dedicated |
+|---|---|---|---|---|
+| `--n-cpu-moe 38`, mmap | not benched | not benched | | 31,719 MiB and 7,838 MiB spilled |
+| `--n-cpu-moe 42`, mmap, depth 2 | 28.9 tok/s | 452 tok/s | 74.4% | 30,739 MiB |
+| same, `-b 8192 -ub 4096` | 23.6 | 251 | 71.7% | 31,747 MiB and 13,656 MiB spilled |
+| `--n-cpu-moe 42`, `--load-mode none`, depth 2 | 30.6 | 788 | 78.1% | 31,066 MiB |
+| same, depth 3 | 27.7 | 790 | 61.1% | 31,180 MiB |
+| **the committed profile, reloaded** | **29.1** | **783** | 69.7% | 31,066 MiB |
+
+`--load-mode none` is the one lever that paid: +74% prefill, the card unchanged.
+The process then holds about 67 GB of host RAM, which Windows reports as shared
+GPU memory because the experts sit in pinned buffers. As on the 16 GB box, that
+counter is a fixed allocation here and not a spill; the spill readings in the
+table are the ones where the shared figure grew with the change, and where
+speed fell with it.
+
+Two failures before the first token. `-ngl 99` disables `--fit`, which aborts
+and lets everything head for the card. And the MTP head dies with `invalid
+vector subscript` unless `--tensor-split 1` is given, ggml-org/llama.cpp issues
+27454 and 27717: once the target fills the card the draft's layer split is
+computed from zero free memory.
+
+For scale: `tiel` reads the same prompt at about 8,700 tok/s and decodes near
+200. This model is an order of magnitude slower on both, and the prefill is the
+figure that will be felt: a fresh 45,000-token Claude Code prompt waits close to
+a minute.
+
+### Quality, interrupted, and the verdict
+
+`bench\banc.ps1 -Label flash` was stopped at 23:12 on Guillaume's call, after
+350 of the 500 MMLU questions: 328 right, 93.7%. GSM8K never ran. A partial
+score covers the first 350 lines of the set only, not all 25 subjects, so it
+does not rank against the full-set 86.6% of `tiel` and `nex`; it says the model
+is strong, not by how much.
+
+Judged unusable for daily work at 29 tok/s decode and 783 tok/s prefill. `tiel`
+was put back the same evening, and the weights, the Unsloth engine and the
+`flash` profile were removed. The profile as it ran, for anyone retrying on
+other hardware: Unsloth prebuild b10909-mix-bea84f7 cuda13-newer (the only build
+with MTP for `qwen4exp`, ggml-org/llama.cpp#28243 being unmerged),
+`--n-gpu-layers 99 --n-cpu-moe 42 --tensor-split 1 --load-mode none`,
+`--spec-type draft-mtp --spec-draft-n-max 2`, `--ctx-size 262144`,
+`-b 4096 -ub 2048`, cache `q8_0`, `-cram 24576`, temperature 1.0, top-p 0.95,
+top-k 20, min-p 0.
+
+Why there is no cheaper split. llama.cpp does not page the experts a token needs
+into VRAM: the 10 experts chosen per layer change at every token, and on 42
+layers they weigh about 1.2 GB per token at this quant (10 experts x 3 matrices
+x 640 x 2,560 weights, 4.5 bits, computed from the header, not measured). Moving
+that over PCIe 5.0 x16, about 63 GB/s, is slower than computing it where it
+sits, in dual-channel DDR5-5200 (four 32 GB DIMMs, read the same evening) at
+about 83 GB/s. That bandwidth, not the card, sets the ceiling: roughly 65 tok/s
+before compute and before the n-gram table, halved in practice, and MTP is what
+brings it back to 30. Only prefill borrows the card, by shipping whole batches
+of experts to it. The one way to go faster on this box is a model whose experts
+fit on the card.
+
 ## 2026-09-14, on the 16 GB box: what 29 hours of real use say that the bench did not
 
 Read-only pass over the running `qwen27` instance, started 2026-09-13 at 02:01
