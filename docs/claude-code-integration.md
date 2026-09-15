@@ -70,6 +70,24 @@ that is 376,832. Change one, change the other. Never read the number you passed
 to `--ctx-size`: we briefly set 524288 on a server capped at 262144 and caught
 it the same day.
 
+**An `env` block in `~/.claude/settings.json` beats an exported variable.** The
+client applies that block over its own process environment. A
+`CLAUDE_CODE_MAX_OUTPUT_TOKENS` of 64000 there replaced the 16,384 exported by
+the launchers in every local session, until 2026-09-15: `max_tokens` 64000 went
+out with each request, and the compaction thresholds moved with it. Passing the
+two budgets with `--settings '{"env":{...}}'` wins over the user file, measured
+on Claude Code 2.1.271. That is what `clients/llm-launch.sh` does.
+
+**Automatic compaction fails when the model answers it with a tool call.** The
+summary request keeps the full tool list and forbids tools only in its text
+("Respond with TEXT ONLY"). Replayed on 2026-09-15 from a real session at
+222,000 tokens, Qwen3.6-35B-A3B answered with a `Bash` call of 102 tokens, and
+the client reported `summarization produced empty response`. The same model
+writes the summary on a short context. After three consecutive failures the
+client stops trying for the rest of the session, then refuses the next turn
+with `Context limit reached`. A manual `/compact` may still succeed once the
+context is lower.
+
 **A second slot forces you to divide it, and that is why there is no second
 slot.** Every profile here runs `--parallel 1`, so `/props` and this variable
 agree. The rule if that ever changes: `n_ctx` divided by the slot count, minus

@@ -172,8 +172,15 @@ llm_launch() {
   # answered "summarization produced empty response" twice at 372,738 tokens of
   # 393,216 on 2026-09-08; that cause is probable, not proven, and the rule is
   # kept on that basis.
-  export CLAUDE_CODE_MAX_OUTPUT_TOKENS=$LLM_OUTPUT_TOKENS
-  export CLAUDE_CODE_MAX_CONTEXT_TOKENS=$(( ${_llm_windows[$i]} - LLM_OUTPUT_TOKENS ))
+  #
+  # Both go through --settings, not export: an env block in the user's
+  # settings.json is applied over the process environment, so an exported value
+  # loses to it. A CLAUDE_CODE_MAX_OUTPUT_TOKENS of 64000 there silently replaced
+  # this budget in every local session, measured on 2.1.271 on 2026-09-15:
+  # exported 16384 plus a settings value of 64000 sends max_tokens 64000, while
+  # --settings wins over the user file.
+  local context_tokens=$(( ${_llm_windows[$i]} - LLM_OUTPUT_TOKENS ))
+  local budget="{\"env\":{\"CLAUDE_CODE_MAX_OUTPUT_TOKENS\":\"${LLM_OUTPUT_TOKENS}\",\"CLAUDE_CODE_MAX_CONTEXT_TOKENS\":\"${context_tokens}\"}}"
 
   # Read for PRESENCE, not for value: any non-empty string turns the disabling
   # on, "0" included (checked 2026-08-31 against the env-vars page).
@@ -184,7 +191,7 @@ llm_launch() {
   # cache instead of re-reading the whole context.
   export CLAUDE_CODE_ATTRIBUTION_HEADER=0
 
-  err "Claude Code sur ${_llm_labels[$i]}, fenêtre annoncée ${CLAUDE_CODE_MAX_CONTEXT_TOKENS}."
+  err "Claude Code sur ${_llm_labels[$i]}, fenêtre annoncée ${context_tokens}."
   # At most one mail server. The others stay dropped: measured on muse, their 70
   # tool schemas weigh 108 KB of prompt, overhead that bites hard on a local
   # window. Skills, commands, memory and CLAUDE.md are untouched.
@@ -192,5 +199,5 @@ llm_launch() {
   if [[ "$LLM_MCP" == mail-imap ]]; then
     mcp="{\"mcpServers\":{\"mail-imap\":{\"command\":\"${HOME}/.claude/bin/mail-imap-mcp\"}}}"
   fi
-  exec claude --strict-mcp-config --mcp-config "$mcp" "$@"
+  exec claude --settings "$budget" --strict-mcp-config --mcp-config "$mcp" "$@"
 }
