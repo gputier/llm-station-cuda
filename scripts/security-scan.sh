@@ -6,8 +6,8 @@
 # .gitignore says what the danger is: the control script was scrubbed of the
 # addresses and the API key it used to carry, and backups of it are excluded by
 # name. A secret that reaches a public remote is burned the moment it lands,
-# and no later commit takes it back. The scan is the only thing standing
-# between a careless paste and that.
+# and no later commit takes it back. This scan and the history scan next to it
+# are the last things standing between a careless paste and that.
 #
 # Blocking policy, identical to the other repositories of the house (settled
 # 2026-08-29, split in two on 2026-09-04):
