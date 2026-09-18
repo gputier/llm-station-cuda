@@ -1040,6 +1040,22 @@ switch ($Action) {
       # nothing useful. Six tokens accepted out of 2,028, 0.3%, decode halved to 44.9 tok/s from
       # 98.3 and 10,780 MiB spilled into shared memory. The demo repository says drafters are
       # target-specific; this is what that costs when you do not believe it.
+      #
+      # BLACKWELL INVESTIGATION, 2026-09-18. Measured decode of 97.2-103.4 tok/s here against the
+      # model card's 129.9 tok/s looked like a 25% loss to chase. It is not a configuration defect:
+      # `cuobjdump --list-elf` on this build's ggml-cuda.dll lists sm_120a and sm_121a cubins
+      # alongside sm_86/sm_89, and the card reports compute_cap 12.0, so the native Blackwell
+      # kernels are already in use. Cut the bench prompt from 56k to roughly 500 tokens and decode
+      # rose to 130.4 tok/s, matching the card's figure almost exactly; a live /v1/chat/completions
+      # call with a 105-token prompt independently measured 129.26 tok/s. The model card's number
+      # comes from llama-bench at "batch size 1 and depth 0, no vision tower", i.e. decode from a
+      # near-empty context. This profile serves 262,144 tokens of context with the mmproj loaded,
+      # and full attention over a long KV cache is the more expensive regime. The gap is structural,
+      # not a missing flag: three trials on the full-length prompt, three runs each, gained nothing
+      # outside noise: `--no-cont-batching` gave 102.6 against 103.2 baseline, `-ub 4096` gave 102.8
+      # at the cost of 1,416 MiB more VRAM and 1,104 MiB more shared-memory spill, and
+      # `--no-mmproj-offload` gave 102.6 while only freeing 1.1 GB of VRAM. None kept. See
+      # docs/tuning-log.md, 2026-09-18 entry, for the raw numbers.
       '--n-gpu-layers','99','--load-mode','mlock','--flash-attn','on','--jinja',
       # THE THIRD TIME THE SAME DEFECT HAS HAD TO BE WORKED AROUND HERE. Claude Code puts system
       # turns in the middle of a conversation; this model's own template raises

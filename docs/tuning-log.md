@@ -9,6 +9,80 @@ hardware listed in [prerequisites.md](prerequisites.md).
 
 ---
 
+## 2026-09-18 : l'écart Blackwell, 97 contre 130 tok/s, expliqué et non corrigé
+
+Mandat : rapprocher le décodage mesuré sur `bonsai2` (97,2 tok/s consigné plus
+bas, 103,2 tok/s en médiane de trois passes ce jour-là, l'écart entre les deux
+tenant au bruit de mesure normal) des 129,9 tok/s annoncés par la fiche PrismML
+sur RTX 5090. Deux questions : le moteur porte-t-il des noyaux CUDA natifs pour
+Blackwell (sm_120), et d'où vient l'écart. Aucune des deux réponses n'a mené à
+changer le profil.
+
+### Les noyaux sm_120 sont bien présents, natifs, dans le binaire déjà en service
+
+`cuobjdump --list-elf` sur `D:\LLM-Setup\llama-cpp-prism-b10685\ggml-cuda.dll`
+liste, pour chaque noyau, quatre variantes : `sm_86`, `sm_89`, `sm_120a` et
+`sm_121a`. La carte annonce `compute_cap 12.0` par `nvidia-smi`, qui correspond
+à `sm_120`. Le moteur en service contient donc déjà des noyaux compilés pour
+cette architecture précise, avec le suffixe `a` propre aux fonctionnalités
+spécifiques à la génération (les tensor cores de cinquième génération). Il n'y
+avait rien à remplacer de ce côté, et aucune release plus récente n'a été
+installée sur cette base : `prism-b10687-5d80cff` existe (17/09) mais ses notes
+de publication ne mentionnent aucun correctif CUDA, Blackwell ou de
+performance, seulement la prise en charge de `Q1_0`.
+
+### L'écart tient à la profondeur de contexte, pas à un réglage
+
+La fiche du modèle précise que ses 129,9 tok/s viennent de `llama-bench`, en
+« batch size 1 and depth 0, no vision tower » : un décodage mesuré depuis un
+contexte quasiment vide, sans le projecteur de vision chargé. Le profil
+`bonsai2` de ce dépôt sert 262 144 tokens de contexte, avec le mmproj chargé, et
+le banc `vitesse.ps1` mesure le décodage après ingestion d'une longue invite
+réelle d'environ 56 000 caractères : l'attention complète coûte alors bien plus
+cher par token.
+
+Preuve directe : en tronquant l'invite du banc à 2 000 caractères (environ 500
+tokens), le décodage remonte à **130,4 tok/s** (médiane de 3 passes), quasiment
+identique au chiffre publié. Confirmation indépendante par le chemin client
+réel : un appel `/v1/chat/completions` avec une invite de 105 tokens a mesuré
+**129,26 tok/s** de décodage dans `timings.predicted_per_second`. L'écart n'est
+donc pas un défaut de ce profil : c'est la comparaison entre deux régimes de
+charge différents, et le régime que sert réellement `bonsai2` est
+structurellement plus coûteux.
+
+### Trois essais sur l'invite complète, aucun gain retenu
+
+Chaque essai a redémarré `bonsai2` via `llm-ctl.ps1 -Extra`, trois passes,
+graine fixe, sur la même invite complète que la mesure de référence.
+
+| Réglage | Décodage | Ingestion | VRAM dédiée | Débordement |
+|---|---|---|---|---|
+| Référence (profil inchangé) | 103,2 tok/s | 3 320 tok/s | 20 854 MiB | 1 508 MiB |
+| `--no-cont-batching` | 102,6 tok/s | 3 293 tok/s | 20 854 MiB | 1 508 MiB |
+| `-ub 4096` | 102,8 tok/s | 3 191 tok/s | 22 270 MiB | 2 612 MiB |
+| `--no-mmproj-offload` | 102,6 tok/s | 3 260 tok/s | 19 716 MiB | 1 508 MiB |
+
+Les trois écarts de décodage tiennent dans le bruit de mesure. `-ub 4096` coûte
+1 416 MiB de VRAM et 1 104 MiB de débordement supplémentaires pour rien.
+`--no-mmproj-offload` libère 1,1 GB de VRAM mais ne change rien au décodage : le
+projecteur de vision n'est pas ce qui coûte cher pendant la génération de texte.
+Le débordement de 1 508 MiB en mémoire partagée est constant sur toutes les
+configurations sauf `-ub 4096`, mmproj retiré de la carte compris : il ne vient
+donc pas du projecteur. Sa cause n'est pas établie, alors que 11 Go restent
+libres sur la carte ; le compteur `Shared Usage` compte aussi la mémoire hôte
+épinglée, ce qui en fait peut-être autre chose qu'un débordement. Le décodage
+à 130,4 tok/s sur invite courte montre qu'il ne pèse pas sur la génération.
+Aucun des trois réglages n'a été conservé ; le profil du dépôt reste inchangé.
+
+### Validation client
+
+Un appel `/v1/chat/completions` avec un tour `system` placé après un tour
+`user` (le cas qui faisait échouer ce profil avant la correction de gabarit du
+même jour, voir plus bas) a répondu **200**, avec un texte cohérent en
+français.
+
+---
+
 ## 2026-09-18: Bonsai 2, and two ways to spend VRAM that buy nothing
 
 `bonsai2` was installed on PrismML's fork and benched the same day, same prompt

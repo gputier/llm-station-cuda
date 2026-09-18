@@ -99,6 +99,38 @@ with `llama-kv-mean-center` and kept in step with the weights. Paying in quality
 and in maintenance for headroom nobody needs is the wrong trade. On a 16 GB box
 it would be the right one.
 
+## L'écart Blackwell : 97 contre 130 tok/s, expliqué et non corrigé
+
+La fiche PrismML annonce 129,9 tok/s en décodage sur RTX 5090 pour `PQ2_0`,
+contre 97,2 tok/s mesurés ici, un écart de 25 %. Deux questions se posaient :
+le moteur porte-t-il des noyaux CUDA natifs pour Blackwell (`sm_120`), et d'où
+vient l'écart. Investigation menée le 2026-09-18, rien n'a été changé au
+profil.
+
+`cuobjdump --list-elf` sur `ggml-cuda.dll` du build `prism-b10685-7dffb15`
+liste, pour chaque noyau, des variantes `sm_86`, `sm_89`, `sm_120a` et
+`sm_121a`. La carte annonce `compute_cap 12.0` par `nvidia-smi`. Les noyaux
+natifs pour cette architecture sont donc déjà présents et utilisés ; rien à
+remplacer côté binaire.
+
+L'écart tient à la profondeur de contexte, pas à un réglage manquant. La fiche
+PrismML précise que ses 129,9 tok/s viennent de `llama-bench` en « batch size 1
+and depth 0, no vision tower », un décodage mesuré depuis un contexte quasiment
+vide. Ce profil sert 262 144 tokens de contexte avec le projecteur de vision
+chargé, et le banc de ce dépôt mesure le décodage après ingestion d'une invite
+réelle d'environ 56 000 caractères, où l'attention complète coûte bien plus
+cher par token. Preuve : la même invite tronquée à 500 tokens environ a rendu
+130,4 tok/s, quasiment le chiffre publié ; un appel `/v1/chat/completions` réel
+à 105 tokens de prompt a mesuré 129,26 tok/s indépendamment. L'écart est donc
+structurel, pas un défaut de ce profil.
+
+Trois réglages ont été essayés sur l'invite complète et rejetés, aucun gain de
+décodage hors bruit de mesure : `--no-cont-batching` (102,6 tok/s), `-ub 4096`
+(102,8 tok/s, au prix de 1 416 MiB de VRAM et 1 104 MiB de débordement
+supplémentaires) et `--no-mmproj-offload` (102,6 tok/s, ne libère que la VRAM
+du projecteur sans toucher au décodage). Détail chiffré dans
+[docs/tuning-log.md](../../docs/tuning-log.md).
+
 ## The chat template had to be patched, as it did twice before
 
 Claude Code puts system turns in the middle of a conversation. This model's
