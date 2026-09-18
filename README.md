@@ -212,7 +212,8 @@ That is safe only on a trusted network segment. A firewall does not protect you
 from the browser case: any web page open on any machine of your LAN can reach a
 LAN-bound server behind its user's back. If your network is not fully trusted,
 set `--api-key` and `--cors-origins ""`, as the sibling
-[llm-station-vulkan](../llm-station-vulkan) repository does.
+[llm-station-vulkan](https://github.com/gputier/llm-station-vulkan) repository
+does.
 
 ## License
 
