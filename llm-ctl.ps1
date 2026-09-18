@@ -1,5 +1,5 @@
 param(
-  [ValidateSet('bonsai','embed','kat','muse','nex','ornith','qwen','qwenu','spark','tiel','stop','status','logs')]
+  [ValidateSet('bonsai','bonsai2','embed','kat','muse','nex','ornith','qwen','qwenu','spark','tiel','stop','status','logs')]
   [string]$Action,
   [string]$Name,  # optional: for 'stop' and 'logs', targets a named instance
   [int]$Tail = 40, # for 'logs': history lines to show before following live
@@ -103,6 +103,24 @@ $workDirB10826 = "$RootDir\llama-cpp-b10826"
 # cost of two full compilations for a gain of nothing.
 $exeB10883     = "$RootDir\llama-cpp-b10883\llama-server.exe"
 $workDirB10883 = "$RootDir\llama-cpp-b10883"
+
+# THE ONE BINARY HERE THAT IS NOT AN UPSTREAM RELEASE. PrismML's fork of
+# llama.cpp, release prism-b10685-7dffb15 (2026-09-15), win-cuda-13.3-x64,
+# unpacked like the others and serving one profile: 'bonsai2'.
+#
+# It exists because the rule it breaks had no third option. Bonsai 2 ships only
+# PQ2_0 and PTQ1_0, both of which upstream rejects as unknown types, and there
+# is no Q2_g64 in that repository the way there was for Bonsai 1. Worse than a
+# clean refusal: the model card states that upstream loads a Q2_0 file without a
+# warning and produces garbage, having no Hadamard activation runtime. So the
+# choice was this fork or no Bonsai 2 at all.
+#
+# Taken as a prebuilt release archive, not compiled, which keeps the one thing
+# that mattered in the rule: nothing is built on this box. The cost is that the
+# fork tracks upstream at its own pace, b10685 here against b10883 next door.
+# Do not move any other profile onto it.
+$exePrism      = "$RootDir\llama-cpp-prism-b10685\llama-server.exe"
+$workDirPrism  = "$RootDir\llama-cpp-prism-b10685"
 $instDir   = "$RootDir\instances"
 New-Item -ItemType Directory -Force -Path $instDir | Out-Null
 
@@ -141,6 +159,8 @@ $builds = @{
   nex    = @{ Exe = $exeB10883;   WorkDir = $workDirB10883;   CudaBin = $cudaBinUp }
   spark  = @{ Exe = $exeB10883;   WorkDir = $workDirB10883;   CudaBin = $cudaBinUp }
   bonsai = @{ Exe = $exeB10883;   WorkDir = $workDirB10883;   CudaBin = $cudaBinUp }
+  # The only row pointing at the fork. See the $exePrism block above.
+  bonsai2 = @{ Exe = $exePrism;   WorkDir = $workDirPrism;    CudaBin = $cudaBinUp }
 }
 
 function Quote($s) {
@@ -283,7 +303,7 @@ function Start-LLM($name, $modelArgs, $cudaDevices = $null, $exePath = $null, $w
     $modelArgs = $garde
     Write-Output 'NOSPEC drapeaux de speculation du profil retires'
   }
-  # -Extra flags land here rather than in each of the ten branches.
+  # -Extra flags land here rather than in each of the eleven branches.
   if ($Extra) {
     $sup = @($Extra -split '\s+' | Where-Object { $_ })
     $modelArgs = @($modelArgs) + $sup
@@ -955,9 +975,10 @@ switch ($Action) {
     # group-wise FP16 scaling, about 1.71 bits per weight. 27B parameters in 7.06 GiB.
     Start-LLM 'bonsai' @(
       # Q2_g64 and NOT PQ2_0. The two files are the same model: PQ2_0 is packed for PrismML's
-      # own fork of llama.cpp, Q2_g64 is the variant meant for upstream builds. Taking PQ2_0
-      # would mean compiling and maintaining a fifth engine here, against the rule that this
-      # box runs official release binaries.
+      # own fork of llama.cpp, Q2_g64 is the variant meant for upstream builds, and this
+      # profile stays on upstream because its file exists. The fork was read at install time
+      # as a compilation to maintain; that was wrong, it publishes binary archives, and it
+      # now serves 'bonsai2' below. See models/ternary-bonsai-27b/README.md.
       '-m',"$ModelsDir\ternary-bonsai-27b\Ternary-Bonsai-27B-Q2_g64.gguf",
       '--mmproj',"$ModelsDir\ternary-bonsai-27b\Ternary-Bonsai-27B-mmproj-BF16.gguf",
       # DSpark, the model's own semi-autoregressive drafter, announced by its authors at
@@ -978,6 +999,13 @@ switch ($Action) {
       # Do not reach for ngram-cache as a replacement: measured on nex and tiel the same
       # day, it HALVES decode on conversational use. See the nex block.
       '--n-gpu-layers','99','--load-mode','mlock','--flash-attn','on','--jinja',
+      # Added 2026-09-18, and it should have been here from the start: this profile could never
+      # answer Claude Code. Its template raises 'System message must be at the beginning.' and
+      # the server returns 500 on the first request, because Claude Code puts system turns in
+      # the middle of a conversation. The bench campaign of 2026-09-10 never saw it, having
+      # driven the raw endpoint rather than a client. Same one-line fix as the other profiles,
+      # applied to this model's own template.
+      '--chat-template-file',"$ModelsDir\ternary-bonsai-27b\chat-template-system-anywhere.jinja",
       '--host','0.0.0.0','--port','8080','--parallel','1',
       '--ctx-size','262144',
       '-b','4096','-ub','2048',
@@ -990,6 +1018,57 @@ switch ($Action) {
       # 0.7 and not 0.6: this is what the model card gives for its own benchmark runs, and
       # unlike the Qwen profiles there is no second recommended value for general use.
       '--temp','0.7','--top-p','0.95','--top-k','20','--min-p','0'
+    )
+  }
+
+  'bonsai2' {
+    # Bonsai 2 27B, the successor to 'bonsai' and a different base model: Qwen3.8-27B where the
+    # first one was Qwen3.6-27B. Same ternary idea, {-1, 0, +1} with FP16 scaling per group of
+    # 128, but the weights are now stored in a Hadamard-rotated basis, which is exactly what
+    # upstream llama.cpp cannot undo. Hence the fork. Installed 2026-09-18.
+    Start-LLM 'bonsai2' @(
+      # PQ2_0 and NOT PTQ1_0, on this card and no other. The two packs are a real trade and the
+      # model card measures both on an RTX 5090: PQ2_0 decodes at 129.9 tok/s against 120.5, and
+      # processes prompts at 3893 against 1805, more than twice as fast. PTQ1_0 wins on the Ada
+      # parts and the L4, where memory is the binding constraint; here it is not. The price is
+      # 1.26 GB more on disk and in VRAM.
+      '-m',"$ModelsDir\ternary-bonsai-2-27b\Ternary-Bonsai-2-27B-PQ2_0.gguf",
+      '--mmproj',"$ModelsDir\ternary-bonsai-2-27b\Ternary-Bonsai-2-27B-mmproj-BF16.gguf",
+      # No drafter at all, unlike 'bonsai'. Bonsai 2's repository ships none, and Bonsai 1's does
+      # not transfer: measured 2026-09-18, its published bf16 drafter converted with
+      # gguf-dspark-to-dflash against THIS model as tokenizer donor loads and runs, and drafts
+      # nothing useful. Six tokens accepted out of 2,028, 0.3%, decode halved to 44.9 tok/s from
+      # 98.3 and 10,780 MiB spilled into shared memory. The demo repository says drafters are
+      # target-specific; this is what that costs when you do not believe it.
+      '--n-gpu-layers','99','--load-mode','mlock','--flash-attn','on','--jinja',
+      # THE THIRD TIME THE SAME DEFECT HAS HAD TO BE WORKED AROUND HERE. Claude Code puts system
+      # turns in the middle of a conversation; this model's own template raises
+      # 'System message must be at the beginning.' and the server answers 500 before generating
+      # anything. Measured 2026-09-18 with `claude -p`, which failed on its first request.
+      #
+      # The file is this model's OWN template with exactly one line changed: where it raised, it
+      # now emits a system block. Not the qwen3.8-27b file two profiles up, although Bonsai 2
+      # derives from that base and the two templates are nearly identical: that one is Unsloth's
+      # rework and carries changes of its own (a developer role, tool-call argument validation,
+      # high mapped onto xhigh) that this model never declared. Sharing it would import them
+      # silently.
+      '--chat-template-file',"$ModelsDir\ternary-bonsai-2-27b\chat-template-system-anywhere.jinja",
+      '--host','0.0.0.0','--port','8080','--parallel','1',
+      '--ctx-size','262144',
+      '-b','4096','-ub','2048',
+      # q8_0 and not q4_0, which the upstream demo offers as BONSAI_KV4 for long contexts.
+      # Measured here on 2026-09-18, same bench, same prompt: q4_0 frees 4,098 MiB of VRAM and
+      # changes nothing else, 98.3 tok/s against 97.2 and identical ingestion. It buys memory
+      # this box does not need, 12 GB being free either way and 262,144 already the model's
+      # ceiling, and its own page warns that the K cache loses a little accuracy without a
+      # calibration bias that has to be built and kept in step with the weights.
+      '--cache-type-k','q8_0','--cache-type-v','q8_0',
+      '-cram','24576',
+      # 1.0 and not the 0.7 of the first Bonsai. The card gives two sets and says which is which:
+      # these are the thinking-mode values, and thinking mode is what produced its published
+      # figures. The model thinks by default at 'xhigh' effort and its authors state that 'low'
+      # is not supported, behaving close to xhigh when asked for.
+      '--temp','1.0','--top-p','0.95','--top-k','20','--min-p','0'
     )
   }
 

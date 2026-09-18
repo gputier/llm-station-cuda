@@ -139,6 +139,18 @@ this natively; it was the template refusing, not the format. Load it with
 See [../models/qwen3.8-27b/README.md](../models/qwen3.8-27b/README.md) for the
 exact change.
 
+**It bites every profile whose model comes from that family, and it bit two more
+on 2026-09-18.** Both Bonsai generations were found raising it, each now carrying
+its own `chat-template-system-anywhere.jinja` next to its weights. The first had
+been doing it since its install of 2026-09-10 without anyone seeing it, because
+the bench campaign of that day drove `/v1/chat/completions` directly and never a
+client. The templates are close enough to look interchangeable and are not: the
+Qwen one is Unsloth's rework and carries a developer role, tool-call argument
+validation and a reasoning-effort mapping that the Bonsai models never declared.
+Patch each model's own template, one line, and prove it with a real tool call
+through the launcher. A profile that has only ever been driven by curl is not a
+profile that works.
+
 ## Dropping MCP servers is not cosmetic
 
 The launchers pass `--strict-mcp-config --mcp-config '{"mcpServers":{}}'`.

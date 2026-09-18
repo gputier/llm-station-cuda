@@ -1,27 +1,48 @@
 #!/usr/bin/env bash
-# bonsai - Claude Code on Ternary-Bonsai-27B, served by the 32 GB box.
+# bonsai - Claude Code on a Bonsai model, served by the .99.
 #
-# CANDIDATE since 2026-09-10, replacing nothing. Running it STOPS whatever else
-# holds the card, one model at a time. Come back with `tiel` or `kat`.
+# CANDIDATES, both of them. Running either STOPS whatever else holds the card,
+# one model at a time. Come back with `tiel` or `kat`.
 #
-# Twenty-seven billion parameters in 7 GiB: the weights are ternary, {-1, 0, +1}
-# with group-wise scaling, about 1.71 bits each. The file served is Q2_g64, the
-# variant meant for upstream llama.cpp; the PQ2_0 file in the same repository
-# needs PrismML's own fork and is deliberately not used here.
+# Twenty-seven billion parameters in about 7 GiB: the weights are ternary,
+# {-1, 0, +1} with group-wise FP16 scaling, near 1.7 bits each. Two generations
+# sit here because they are not the same model underneath, Qwen3.6-27B for the
+# first and Qwen3.8-27B for the second, and because they run on two different
+# engines.
+#
+#   1. Bonsai 1, since 2026-09-10. Q2_g64, the packing meant for upstream
+#      llama.cpp. 102.6 tok/s generating, and 56 tok/s ingesting.
+#   2. Bonsai 2, since 2026-09-18. PQ2_0, which only PrismML's fork of
+#      llama.cpp can read. 97.2 tok/s generating, and 3,347 ingesting.
+#
+# THE DIFFERENCE IS INGESTION, sixty times over, measured on the same prompt by
+# the same bench. Generation is a wash. For Claude Code, which re-reads a long
+# conversation at every turn, that is the whole story: prefer the second.
 #
 # Its drafter may refuse to load, llama.cpp issue 26337, open and never fixed.
-# If the server dies at startup complaining about a dspark tensor offset, drop
-# the three speculation flags from the profile: the model still serves without
-# them, only the 1.34x speed claim goes.
+# That is a Bonsai 1 matter only: the second generation publishes no drafter at
+# all, and the first one's does not transfer, measured 2026-09-18 at 0.3%
+# acceptance and half the decode speed.
 #
 # Scope: the exported variables live in this process only. A plain `claude` in
 # another shell keeps talking to Anthropic.
 #
-# One variant, so no menu and nothing to answer. Everything else lives in
-# llm-launch.sh.
+# LLM_CHOICE=1 or 2 skips the menu, which a run without a terminal requires.
+# Everything else lives in llm-launch.sh.
 
 source "$(dirname "${BASH_SOURCE[0]}")/llm-launch.sh"
 
-llm_variant "Ternary-Bonsai-27B sur la machine 32 Go, fenêtre 262k" "${LLM_HOST:-your-32gb-box}" bonsai bonsai '' ternary-bonsai-27b 262144
+# No MCP server: 70 tool schemas weigh 108 KB of prompt, which a candidate bench
+# has no use for.
+LLM_MCP=none
+
+# The match strings do not need an exclusion between them: 'ternary-bonsai-27b'
+# is not a substring of 'ternary-bonsai-2-27b', the '-2-' breaks it in both
+# directions. Checked rather than assumed, because the two names are one
+# character apart.
+llm_variant "Bonsai 1, Ternary-Bonsai-27B sur la .99, fenêtre 262k" \
+  192.168.4.99 bonsai ternary-bonsai-27b '' ternary-bonsai-27b 262144
+llm_variant "Bonsai 2, ingestion soixante fois plus rapide, fenêtre 262k" \
+  192.168.4.99 bonsai2 ternary-bonsai-2-27b '' ternary-bonsai-2-27b 262144
 
 llm_launch "$@"

@@ -9,6 +9,71 @@ hardware listed in [prerequisites.md](prerequisites.md).
 
 ---
 
+## 2026-09-18: Bonsai 2, and two ways to spend VRAM that buy nothing
+
+`bonsai2` was installed on PrismML's fork and benched the same day, same prompt
+and same bench as everything else here. The headline is ingestion: **3,347 tok/s
+against 56** for the first generation, sixty times over, with decode a wash at
+97.2 against 102.6. On a client that re-reads a long conversation at every turn,
+that single figure decides between the two.
+
+Two levers the upstream demo repository advertises were tested rather than
+assumed, and both were rejected.
+
+### `BONSAI_KV4`, a 4-bit KV cache, is free memory this box does not need
+
+| Cache | Decode | Prefill | Card, dedicated |
+|---|---|---|---|
+| **`q8_0`** | **97.2 tok/s** | **3,347 tok/s** | 20,282 MiB |
+| `q4_0` | 98.3 tok/s | 3,349 tok/s | 16,184 MiB |
+
+Both deltas sit inside the noise; the only real effect is 4,098 MiB freed. The
+32 GB box has 12 GB spare either way and 262,144 is already the model's own
+ceiling, so there is nothing to buy with that memory. Against it, the demo's own
+page says the K cache loses a little accuracy at 4 bits unless a calibration
+bias is built with `llama-kv-mean-center` and kept in step with the weights.
+Paying in quality and in maintenance for headroom nobody needs is the wrong
+trade. On the 16 GB box the answer would invert.
+
+### A drafter does not transfer between two models of the same family
+
+Bonsai 2 publishes no drafter. Bonsai 1 publishes a dspark one, in a
+pre-migration packing that no current binary loads, which is the real cause of
+llama.cpp issue 26337 and of the failure logged on 2026-09-10. The fork's
+`gguf-dspark-to-dflash` repacks it, taking the target model as tokenizer donor,
+so the first generation's drafter can be pointed at the second. It converts, it
+quantises to 592 MiB, the server loads it, speculation engages.
+
+| | Without | With the converted drafter |
+|---|---|---|
+| Decode | 98.3 tok/s | **44.9 tok/s** |
+| Prefill | 3,349 tok/s | 2,901 tok/s |
+| Acceptance | | **6 of 2,028 tokens, 0.3 %** |
+| Card, dedicated | 16,184 MiB | 24,741 MiB |
+| Spilled | 1,508 MiB | 10,780 MiB |
+
+Both runs on a `q4_0` cache, which is why the left column is the one above and
+not the profile. **Decode halves.** A drafter is trained against one target's
+output distribution: same family, same parameter count and one generation apart
+is not close enough for a single token in three hundred. The upstream claim that
+drafters are target-specific was correct, and it cost an hour to confirm.
+
+### The chat template, a defect that had been live for eight days
+
+Claude Code puts system turns in the middle of `messages`. The Qwen-family
+templates both generations ship raise `System message must be at the beginning.`
+and the server answers 500 before generating a token. So `bonsai` had never once
+been able to serve an agentic client since it was installed on 2026-09-10, and
+nobody saw it: the campaign of that day drove the raw endpoint, never a client.
+
+Each model now carries a `chat-template-system-anywhere.jinja` next to its
+weights, its own template with the raising line replaced by an emitted system
+block, wired through `--chat-template-file`. Both were proved end to end, in
+both directions, on a real tool call. A profile that is never driven the way it
+will be used is not a profile that works.
+
+---
+
 ## 2026-09-15: Qwen3.8-Flash-Next, the first model that does not fit on the card
 
 A 125B-A6B model in UD-Q4_K_XL, 103.7 GiB, served with the experts of 42 of its

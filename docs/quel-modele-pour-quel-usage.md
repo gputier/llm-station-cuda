@@ -33,7 +33,8 @@ Le classement ci-dessous en tient compte : là où la mesure manque, c'est écri
 | Contexte long prouvé | `nex`, 6/6 à 243 969 jetons | **mesuré** |
 | Agentique | `muse` | déduit, voir plus bas |
 | Écriture de code | `tiel` ou `kat` | déduit, voir plus bas |
-| Vision | `nex`, `tiel`, `muse`, `bonsai`, `ornith` | non testé, projecteurs présents |
+| Vision | `nex`, `tiel`, `muse`, `bonsai`, `bonsai2`, `ornith` | non testé, projecteurs présents |
+| Lecture d'un long fil | `bonsai2`, 3 347 jetons par seconde en ingestion | **mesuré**, qualité non mesurée |
 
 ## Les recommandations, une par usage
 
@@ -63,6 +64,15 @@ en vitesse, 215,1 tok/s sans aucune accélération possible.
 place 83,6 % et 59/60 dans 7,06 Go de poids, ce qui en fait le seul modèle du
 parc laissant assez de place pour un second sur la carte. Il paie en vitesse,
 102,6 tok/s. `ornith` fait 83,4 % dans 15,5 Go et va deux fois plus vite.
+
+**Relire un long fil à chaque tour : `bonsai2`, installé le 18/09/2026.** Il
+avale l'invite à 3 347 jetons par seconde là où `bonsai` plafonne à 56, sur le
+même banc et la même invite le même jour, pour une génération équivalente. Un
+client agentique relit toute la conversation à chaque tour, donc c'est ce
+chiffre-là qui décide entre les deux générations. Réserve, et elle est sérieuse :
+sa qualité n'est pas mesurée ici, il n'a pas passé la campagne du 10/09, et les
+83,6 % du tableau restent ceux de `bonsai`. Tant que le banc n'a pas tourné, le
+choix se fait sur la vitesse d'ingestion seule.
 
 **À ne pas utiliser : `spark`.** Dernier partout, 73,0 % et 46/60. Il avait été
 pris comme exécutant agentique léger ; à ce niveau, un exécutant qui se trompe ne

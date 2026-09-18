@@ -32,9 +32,16 @@ The repository publishes both, and they are the same model packed two ways.
 variant meant for upstream builds, and `GGML_TYPE_Q2_0` is type 42 in the
 upstream master, verified in `ggml.h`.
 
-Taking PQ2_0 would mean compiling and maintaining a fifth engine on this box,
-against the standing rule that it runs official release binaries. It was not
-taken.
+Taking PQ2_0 was read at install time as compiling and maintaining a fifth
+engine, against the standing rule that this box runs official release binaries.
+It was not taken.
+
+**That reading was half wrong, and it was corrected on 2026-09-18.** The fork
+publishes release archives per platform, so it unpacks like every other engine
+here and nothing is compiled. The rule was never in danger. It changed nothing
+for this file, which has a `Q2_g64` variant and runs fine on upstream, but it is
+what let the second generation in: Bonsai 2 ships no upstream-readable pack at
+all, and it now serves on that fork under the `bonsai2` profile.
 
 ## The drafter is expected to fail
 
@@ -61,6 +68,15 @@ and never answered: 420 seconds, no health, the runner moved on to the next
 model. So the defect reported against b10197 in February is still there in
 b10883, seven months and several hundred releases later.
 
+**And its cause was found on 2026-09-18.** The published `dspark-Q4_1` file uses
+a pre-migration packing that no current binary reads, which is the whole of
+issue 26337. PrismML's fork ships the repacker, `gguf-dspark-to-dflash` in its
+`gguf-py`, and the converted file loads and engages. Whether it earns its keep
+on this profile has not been measured: on the second generation, pointed at it
+through the same converter, acceptance came out at 0.3 % and decode halved. The
+transfer question and the packing question are separate, and only the packing
+one is settled here.
+
 ### There is a replacement, and it does not come from the model's author
 
 Bonsai is a quantisation of Qwen3.6-27B, and that base has drafters published by
@@ -80,6 +96,27 @@ decode rate settles it.
 Temperature 0.7, top-p 0.95, top-k 20, straight from the model card. Unlike the
 Qwen profiles there is no second recommended value for general use: 0.7 is what
 the authors used for their own benchmark runs and it is all they publish.
+
+## It could not serve an agentic client at all, and nobody noticed for eight days
+
+Claude Code puts system turns in the middle of `messages`. The template embedded
+in these weights raises `System message must be at the beginning.` and the
+server answers 500 before generating a token. Found on 2026-09-18, live since
+the install of 2026-09-10: the bench campaign of that day drove the raw
+endpoint, so the defect never showed.
+
+`chat-template-system-anywhere.jinja`, next to the weights, is the embedded
+template with that one line replaced by an emitted system block, wired through
+`--chat-template-file` in the profile. Proved in both directions on a real tool
+call. Nothing else in the file was touched.
+
+## What the second generation does to this one
+
+`bonsai2` was installed on 2026-09-18 and ingests **sixty times faster**, 3,347
+tok/s against 56 on the same prompt and the same bench the same day. Decode is a
+wash, 97.2 against 102.6. This profile stays because its quality figures are the
+measured ones and the second generation has not been through the bench, but for
+anything that re-reads a long conversation the choice is not close.
 
 ## Two other reported failures, for context
 

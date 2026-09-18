@@ -30,7 +30,7 @@ did not transpose either.
 
 ## Models served
 
-All ten share port 8080 and are mutually exclusive on the GPU: loading one
+All eleven share port 8080 and are mutually exclusive on the GPU: loading one
 unloads the others.
 
 | Action | Model | Context | Role |
@@ -45,10 +45,19 @@ unloads the others.
 | `nex` | Nex-N2.5-mini, i1-Q4_K_M | 262,144 | Candidate since 2026-09-10. Vision, no speculation |
 | `spark` | Spark-X2.5-4B, Q8_0 | 262,144 | Candidate since 2026-09-10. Agentic, text only |
 | `bonsai` | Ternary-Bonsai-27B, Q2_g64 | 262,144 | Candidate since 2026-09-10. Ternary weights, vision |
+| `bonsai2` | Ternary-Bonsai-2-27B, PQ2_0 | 262,144 | Candidate since 2026-09-18. Ternary weights, vision, and sixty times the ingestion of `bonsai` |
 
-The last three were installed on 2026-09-10 and measured the same day. They run
-on their own engine, `b10883`, which serves nothing else, and each carries a
-known defect written at the top of its page under [models/](models/).
+`nex`, `spark` and `bonsai` were installed on 2026-09-10 and measured the same
+day. They run on their own engine, `b10883`, which serves nothing else, and each
+carries a known defect written at the top of its page under [models/](models/).
+
+`bonsai2` is the only profile that does not run an official llama.cpp release.
+Its weights sit in a Hadamard-rotated basis that mainline cannot undo, so it
+serves on PrismML's fork, `prism-b10685`, taken as a published binary archive
+and unpacked like the others. Nothing is compiled on this box, and no other
+profile was moved onto it. Its page under [models/](models/) carries the whole
+reasoning, along with the two hypotheses it closed by measurement: no drafter
+transfers to it, and a 4-bit KV cache buys memory this box does not need.
 
 **Every quality figure in this repository comes from the campaign of
 2026-09-10**, where all nine chat models went through the same 500-question MMLU
@@ -106,9 +115,11 @@ export LLM_SSH_USER=your-ssh-user
 ```
 
 There is one launcher per model family, eight in all, listed with what each is
-good at in [clients/README.md](clients/README.md). `tiel` and `qwen` open with a
-menu because their models are served on both boxes: `qwen` covers the aligned
-and the uncensored Qwen3.8 here, and Qwen3.6 on the 16 GB box. `embed` has none
+good at in [clients/README.md](clients/README.md). Three open with a menu.
+`tiel` and `qwen` do it because their models are served on both boxes: `qwen`
+covers the aligned and the uncensored Qwen3.8 here, and Qwen3.6 on the 16 GB
+box. `bonsai` does it for another reason, both its generations sitting on this
+box on two different engines. `embed` has none
 on purpose: it serves embeddings, not a chat endpoint.
 
 The three paths at the top of `llm-ctl.ps1` (`$RootDir`, `$ModelsDir`,
@@ -120,7 +131,7 @@ portable.
 | File | What it covers |
 |---|---|
 | [docs/prerequisites.md](docs/prerequisites.md) | Everything that must be installed before a first build |
-| [docs/building-llama-cpp.md](docs/building-llama-cpp.md) | The CUDA builds, why there are five, and the two build traps |
+| [docs/building-llama-cpp.md](docs/building-llama-cpp.md) | The CUDA builds, why there are six, five of them official releases and the sixth a fork, and the two build traps |
 | [docs/claude-code-integration.md](docs/claude-code-integration.md) | How a local server replaces the Anthropic API, and what that costs |
 | [docs/api-usage.md](docs/api-usage.md) | Calling the server directly: sampling per model, vision, embeddings |
 | [docs/tuning-log.md](docs/tuning-log.md) | Every measurement campaign, including the ones that found nothing |

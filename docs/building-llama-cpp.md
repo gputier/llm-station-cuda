@@ -1,7 +1,9 @@
 # Building llama.cpp for CUDA on Windows
 
-Five builds coexist on this machine, on purpose. They are **not
+Six builds coexist on this machine, on purpose. They are **not
 interchangeable**, and picking the wrong one fails silently rather than loudly.
+Five are official llama.cpp releases; the sixth is a fork, and the last section
+says why it had to be.
 
 | Build | Date | CUDA | Serves | Why it exists |
 |---|---|---|---|---|
@@ -10,6 +12,7 @@ interchangeable**, and picking the wrong one fails silently rather than loudly.
 | `llama-cpp-20260827` | 2026-08-27 | 13.3 | `qwen` | The only build with NVFP4 CUDA kernels. See below. It also served `ornith` until 2026-09-08; that profile is Q5_K_M and never needed those kernels. |
 | `llama-cpp-b10826` | 2026-09-06 | 13.3 | `tiel`, `ornith`, `kat` | The official release zip and its cudart, unzipped flat, no compilation. Neutral in decode and +5% in prefill on Tiel against the 2026-08-27 build; strictly neutral on Ornith, which moved here on 2026-09-08 to stop owing a profile to the NVFP4 build. See [tuning-log.md](tuning-log.md). `kat` was added here on 2026-09-08 and never ran anywhere else. |
 | `llama-cpp-b10883` | 2026-09-09 | 13.3 | `nex`, `spark`, `bonsai` | Same recipe as b10826, official zip plus cudart unzipped flat. Installed 2026-09-10 for three candidate models and serving only those. See below. |
+| `llama-cpp-prism-b10685` | 2026-09-15 | 13.3 | `bonsai2` | **Not upstream.** PrismML's fork, release `prism-b10685-7dffb15`, `win-cuda-13.3-x64` archive unpacked flat. The only engine that reads Bonsai 2's rotated weights. Installed 2026-09-18. See below. |
 
 ## b10883: taken for one architecture, not for speed
 
@@ -108,3 +111,30 @@ of `--spec-draft-n-max` and `--spec-type`. Do not assume two llama.cpp binaries
 accept the same command line, even a few weeks apart. `llm-ctl.ps1` routes the
 executable per model through the `exePath` / `workDirPath` / `cudaBinPath`
 parameters of `Start-LLM` precisely because of this.
+
+## The fork, and the rule it did not break
+
+Bonsai 2 stores its weights in a Hadamard-rotated basis and expects the runtime
+to apply the matching transform to activations. Mainline llama.cpp has no such
+transform, so it refuses `PQ2_0` and `PTQ1_0` as unknown types, and their
+authors keep a third band, `Q2_0`, in a separate repository precisely because
+that one loads on a stock build and answers gibberish without a warning.
+
+There was no third option, and no `Q2_g64` file as the first generation shipped:
+the fork or nothing. What made it acceptable is that PrismML publishes release
+archives per platform. `win-cuda-13.3-x64` was unzipped flat like every other
+engine here, and the standing rule that this box runs prebuilt binaries holds.
+
+Two things to know before touching it. The release picked matters: the newer
+`prism-b10687` of 2026-09-17 ships only the cudart and no executables, so
+`prism-b10685-7dffb15` of 2026-09-15 is the one that works. And the fork tracks
+upstream at its own pace, `b10685` against `b10883` next door, which is another
+reason no other profile was moved onto it.
+
+Its `--spec-type` accepts values mainline does not: `draft-simple`,
+`draft-eagle3`, `draft-mtp`, `draft-dflash`, `draft-dspark`, `ngram-simple`,
+`ngram-map-k`, `ngram-map-k4v`, `ngram-mod`, `ngram-cache`, and `none`. It also
+ships `gguf-dspark-to-dflash` in its `gguf-py`, which repacks a pre-migration
+dspark drafter into a format current binaries load. That converter is what made
+it possible to test the first generation's drafter against the second, and to
+close the question: see [tuning-log.md](tuning-log.md).

@@ -14,7 +14,7 @@ export LLM_SSH_KEY=~/.ssh/id_ed25519     # optional, see below
 ./kat         # when arithmetic reasoning matters more than speed
 ./ornith      # the small one, a third of the VRAM, better than its size
 ./nex         # best quality measured here, no speculation, vision
-./bonsai      # 27B in 7 GiB, the best quality per byte
+./bonsai      # 27B in 7 GiB, the best quality per byte, asks which generation
 ./spark       # 4B, last on every measure
 ./muse        # agentic, vision, faithful OCR
 ./qwen        # Qwen3.8 aligned or uncensored on the 32 GB box, Qwen3.6 on the 16 GB one
@@ -33,10 +33,13 @@ A launcher sets two things of its own when the default does not suit it:
 `LLM_LOAD_TIMEOUT`, see below, and `LLM_MCP`, `none` here, or `mail-imap` for a
 mail server this repository does not ship.
 
-## tiel and qwen ask which model, and on which box
+## tiel, qwen and bonsai ask which model
 
-The same families now live on two boxes, so these two launchers open with a
-numbered menu instead of carrying one script per model per machine. The menu
+The same families now live on two boxes, so `tiel` and `qwen` open with a
+numbered menu instead of carrying one script per model per machine. `bonsai`
+does the same since 2026-09-18 for a different reason: its two generations both
+sit on the 32 GB box, on two different engines, and the second ingests sixty
+times faster than the first for the same generation speed. The menu
 marks the variant already loaded, if any. `LLM_CHOICE=2 ./tiel -p "..."` skips
 it, and a run without a terminal must set it: a menu read from a pipe would take
 the caller's input as a choice. A launcher that declares one variant shows no
@@ -73,7 +76,8 @@ alone otherwise.
 
 Put them somewhere on your `PATH` to call them by name, with `llm-launch.sh` next
 to them. They pass their arguments through, so `kat -p "..."` works
-as expected, and `LLM_CHOICE=1 qwen -p "..."` for the two launchers with a menu.
+as expected, and `LLM_CHOICE=1 qwen -p "..."` for the three launchers with a
+menu.
 
 ## They check which model is loaded, not just whether one is
 
