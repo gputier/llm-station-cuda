@@ -1,10 +1,11 @@
 # Documentation index
 
-Eleven documents, each answering a different question. Read them in this order
+Twelve documents, each answering a different question. Read them in this order
 the first time; jump straight to one afterwards.
 
 | Document | Answers |
 |---|---|
+| [security-gate.md](security-gate.md) | What runs before a push leaves this machine, how to wire it in a fresh clone, and what to do when it blocks. Read it first: it is the only document whose absence can cost something irreversible. |
 | [prerequisites.md](prerequisites.md) | What hardware, drivers and toolkits this station assumes, and the failure modes that look like something else. |
 | [building-llama-cpp.md](building-llama-cpp.md) | How the six coexisting llama.cpp builds are installed, why five are official releases and the sixth a fork, and why none is interchangeable. |
 | [api-usage.md](api-usage.md) | How to call the server: endpoints, payloads, and the fields that carry the measurements. |
