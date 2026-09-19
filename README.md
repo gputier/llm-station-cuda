@@ -42,6 +42,7 @@ unloads the others.
 | `qwen` | Qwen3.8-27B, NVFP4 LOW | 393,216 | Reasoning and coding, superseded by `tiel` |
 | `qwenu` | Qwen3.8-27B Uncensored, Q5_K_M | 262,144 | Used only when the aligned model refuses a legitimate task |
 | `qwenf` | Qwen3.8-27B TURBO Fable Cold-Fusion Heretic, MTP Q5_K_M | 262,144 | Candidate since 2026-09-19 to replace `qwenu`, not yet benched |
+| `whittle` | Whittle-Qwen-3.8-35B-A3B, MoE distilled from Qwen3.8-27B, Q6_K, n-gram memory in host RAM | 262,144 | Candidate since 2026-09-19, research preview, not yet benched |
 | `embed` | nomic-embed-text-v1.5, Q8_0 | 131,072 | 768-dimension embeddings |
 | `nex` | Nex-N2.5-mini, i1-Q4_K_M | 262,144 | Candidate since 2026-09-10. Vision, no speculation |
 | `spark` | Spark-X2.5-4B, Q8_0 | 262,144 | Candidate since 2026-09-10. Agentic, text only |

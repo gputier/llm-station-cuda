@@ -1,5 +1,5 @@
 param(
-  [ValidateSet('bonsai','bonsai2','embed','kat','muse','nex','ornith','qwen','qwenf','qwenu','spark','tiel','stop','status','logs')]
+  [ValidateSet('bonsai','bonsai2','embed','kat','muse','nex','ornith','qwen','qwenf','qwenu','spark','tiel','whittle','stop','status','logs')]
   [string]$Action,
   [string]$Name,  # optional: for 'stop' and 'logs', targets a named instance
   [int]$Tail = 40, # for 'logs': history lines to show before following live
@@ -161,6 +161,8 @@ $builds = @{
   nex    = @{ Exe = $exeB10883;   WorkDir = $workDirB10883;   CudaBin = $cudaBinUp }
   spark  = @{ Exe = $exeB10883;   WorkDir = $workDirB10883;   CudaBin = $cudaBinUp }
   bonsai = @{ Exe = $exeB10883;   WorkDir = $workDirB10883;   CudaBin = $cudaBinUp }
+  # Candidate of 2026-09-19: 'qwen4exp' is known to b10826 and b10883, checked in llama.dll.
+  whittle = @{ Exe = $exeB10883;  WorkDir = $workDirB10883;   CudaBin = $cudaBinUp }
   # The only row pointing at the fork. See the $exePrism block above.
   bonsai2 = @{ Exe = $exePrism;   WorkDir = $workDirPrism;    CudaBin = $cudaBinUp }
 }
@@ -751,6 +753,38 @@ switch ($Action) {
       '--cache-type-k','q4_0','--cache-type-v','q4_0',
       '-cram','24576',
       '--temp','1.0','--top-p','0.95','--top-k','20','--min-p','0'
+    )
+  }
+
+  'whittle' {
+    # CANDIDATE, not in service. logic65's Whittle-Qwen-3.8-35B-A3B, fetched 2026-09-19. A
+    # one-person distillation of Qwen3.8-27B (1,840 thinking traces, 3.3 h on one GPU) into a
+    # 'qwen4exp' MoE: 180 experts, 8 active, ~3B active parameters, plus a 10B n-gram memory
+    # table the body depends on. The student cannot out-reason its teacher, the base of 'qwenu':
+    # what it can bring is 'tiel'-class speed. That is the question the bench answers. Its own
+    # card calls it a research preview, 2,861 steps on maths and code-review traces only, and
+    # reports 46/60 on MATH levels 2-4 and 44/50 on GSM8K, served Q8_0, thinking on.
+    #
+    # Context: the file declares 262144 and this profile keeps it for parity with the others,
+    # but the author tested reading only up to 75k (5/6 there). Nothing past 75k is known.
+    #
+    # Q6_K (27.27 GiB, SHA-256 checked against Hugging Face). The memory table stays in host RAM
+    # as the author prescribes: it is read one row per token per head, so the GPU holds the
+    # body only and stays under the ~29 GB where throughput collapses on this card.
+    Start-LLM 'whittle' @(
+      '-m',"$ModelsDir\whittle-qwen3.8-35b-a3b\Whittle-Qwen-3.8-35B-A3B-Q6_K.gguf",
+      '-ot','per_layer_token_embd=CPU',
+      '--n-gpu-layers','99','--load-mode','mlock','--flash-attn','on','--jinja',
+      # Embedded template (7,764 chars): it knows enable_thinking, not reasoning_effort, and it
+      # raises 'System message must be at the beginning', so it breaks Claude Code but not the
+      # bench. No MTP head in this model.
+      '--host','0.0.0.0','--port','8080','--ctx-size','262144',
+      '--parallel','1','-b','4096','-ub','2048',
+      '--cache-type-k','q4_0','--cache-type-v','q4_0',
+      '-cram','24576',
+      # The card's sampler. It warns that greedy decoding loops on this family, and both benches
+      # run at temperature 0: count the loops before reading a score.
+      '--temp','0.7','--top-p','0.8','--top-k','20','--min-p','0','--repeat-penalty','1.05'
     )
   }
 
