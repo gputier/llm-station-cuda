@@ -758,8 +758,10 @@ switch ($Action) {
   }
 
   'qwent' {
-    # CANDIDATE, not in service. DavidAU's TWIN-TURBO 709-L, fetched 2026-09-19
-    # to be benched against 'qwenf': the same merge, retrained once more for
+    # CANDIDATE, not in service. Benched 2026-09-19: 225/235 on the unpublished
+    # set against 221 for 'qwenf' and 'qwenu', 460/500 MMLU in 15.3 min. VRAM at
+    # load 31,597 MiB, above the ~29 GB line: measure long-context speed first.
+    # DavidAU's TWIN-TURBO 709-L: the same merge as 'qwenf', retrained once more for
     # shorter thinking (the card claims down to a twentieth) and five instruct
     # modes, at an ARC-C the author puts 2.6 points lower (0.709 vs 0.735).
     # "L" is the lighter de-censoring; the ULTRA-HERETIC sibling loses another

@@ -24,8 +24,12 @@ profile already in service.
 
 The `qwenu` figure is 13 points above the 77.0% of the 2026-09-10 campaign,
 with the same bench script, binary, weights and profile. The raw output of that
-day is gone, so the cause is not established. A control run of `tiel` is
-chained after the other candidates to check whether the old ranking reproduces.
+day is gone, so the cause is not established. A control run of `tiel` the same
+evening gave 433/500 and 53/60, exactly its 2026-09-10 figures: the bench did
+not drift, and the old ranking of the other models holds.
+
+[qwent](../qwen3.8-27b-twin-turbo-709l/), its retrained sibling, benched the
+same day, beats both at 225/235.
 
 ```powershell
 .\llm-ctl.ps1 -Action qwenf

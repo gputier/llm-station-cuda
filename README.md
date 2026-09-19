@@ -42,7 +42,7 @@ unloads the others.
 | `qwen` | Qwen3.8-27B, NVFP4 LOW | 393,216 | Reasoning and coding, superseded by `tiel` |
 | `qwenu` | Qwen3.8-27B Uncensored, Q5_K_M | 262,144 | Used only when the aligned model refuses a legitimate task |
 | `qwenf` | Qwen3.8-27B TURBO Fable Cold-Fusion Heretic, MTP Q5_K_M | 262,144 | Candidate, benched 2026-09-19: ties `qwenu` on the unpublished set, not adopted |
-| `qwent` | Qwen3.8-27B TWIN-TURBO Fable Cold-Fusion 709-L, MTP Q5_K_M | 262,144 | Candidate since 2026-09-19, benched against `qwenf`, shorter thinking claimed |
+| `qwent` | Qwen3.8-27B TWIN-TURBO Fable Cold-Fusion 709-L, MTP Q5_K_M | 262,144 | Candidate, benched 2026-09-19: best of the three on the unpublished set (225/235), long-context speed not yet measured |
 | `whittle` | Whittle-Qwen-3.8-35B-A3B, MoE distilled from Qwen3.8-27B, Q6_K, n-gram memory in host RAM | 262,144 | Rejected 2026-09-19: 75.6% MMLU, 142/235 unpublished with 26 empty answers |
 | `embed` | nomic-embed-text-v1.5, Q8_0 | 131,072 | 768-dimension embeddings |
 | `nex` | Nex-N2.5-mini, i1-Q4_K_M | 262,144 | Candidate since 2026-09-10. Vision, no speculation |
