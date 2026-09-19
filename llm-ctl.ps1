@@ -793,7 +793,9 @@ switch ($Action) {
     # REJECTED on 2026-09-19, kept only so the figures below can be re-run. Public set 378/500
     # MMLU and 46/60 GSM8K in 12 min; unpublished set with thinking 142/235 (60.4%), 26 answers
     # left empty and one decoy, where qwenu and qwenf both score 221. Faster than qwenf by a
-    # tenth, a third less accurate.
+    # tenth, a third less accurate. Re-run the same evening with the author's sampler
+    # (temp 0.7, top-p 0.8, top-k 20): 127/235 with 34 empty, worse, so greedy decoding
+    # was not what held it back.
     #
     # logic65's Whittle-Qwen-3.8-35B-A3B, fetched 2026-09-19. A
     # one-person distillation of Qwen3.8-27B (1,840 thinking traces, 3.3 h on one GPU) into a
