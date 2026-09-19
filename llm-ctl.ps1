@@ -790,7 +790,8 @@ switch ($Action) {
   }
 
   'whittle' {
-    # REJECTED on 2026-09-19, kept only so the figures below can be re-run. Public set 378/500
+    # REJECTED on 2026-09-19, weights deleted from the station the same evening; the profile
+    # stays so the figures below can be re-run after a new download. Public set 378/500
     # MMLU and 46/60 GSM8K in 12 min; unpublished set with thinking 142/235 (60.4%), 26 answers
     # left empty and one decoy, where qwenu and qwenf both score 221. Faster than qwenf by a
     # tenth, a third less accurate. Re-run the same evening with the author's sampler
