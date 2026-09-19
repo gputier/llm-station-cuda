@@ -788,7 +788,12 @@ switch ($Action) {
   }
 
   'whittle' {
-    # CANDIDATE, not in service. logic65's Whittle-Qwen-3.8-35B-A3B, fetched 2026-09-19. A
+    # REJECTED on 2026-09-19, kept only so the figures below can be re-run. Public set 378/500
+    # MMLU and 46/60 GSM8K in 12 min; unpublished set with thinking 142/235 (60.4%), 26 answers
+    # left empty and one decoy, where qwenu and qwenf both score 221. Faster than qwenf by a
+    # tenth, a third less accurate.
+    #
+    # logic65's Whittle-Qwen-3.8-35B-A3B, fetched 2026-09-19. A
     # one-person distillation of Qwen3.8-27B (1,840 thinking traces, 3.3 h on one GPU) into a
     # 'qwen4exp' MoE: 180 experts, 8 active, ~3B active parameters, plus a 10B n-gram memory
     # table the body depends on. The student cannot out-reason its teacher, the base of 'qwenu':
