@@ -1,5 +1,5 @@
 param(
-  [ValidateSet('bonsai','bonsai2','embed','kat','muse','nex','ornith','qwen','qwenu','spark','tiel','stop','status','logs')]
+  [ValidateSet('bonsai','bonsai2','embed','kat','muse','nex','ornith','qwen','qwenf','qwenu','spark','tiel','stop','status','logs')]
   [string]$Action,
   [string]$Name,  # optional: for 'stop' and 'logs', targets a named instance
   [int]$Tail = 40, # for 'logs': history lines to show before following live
@@ -148,6 +148,8 @@ $builds = @{
   embed  = @{ Exe = $exe;         WorkDir = $workDir;         CudaBin = $cudaBin   }
   muse   = @{ Exe = $exeUp;       WorkDir = $workDirUp;       CudaBin = $cudaBinUp }
   qwenu  = @{ Exe = $exeUp;       WorkDir = $workDirUp;       CudaBin = $cudaBinUp }
+  # Candidate of 2026-09-19, on the same build as the profile it is benched against.
+  qwenf  = @{ Exe = $exeUp;       WorkDir = $workDirUp;       CudaBin = $cudaBinUp }
   qwen   = @{ Exe = $exeNew;      WorkDir = $workDirNew;      CudaBin = $cudaBinUp }
   tiel   = @{ Exe = $exeB10826;   WorkDir = $workDirB10826;   CudaBin = $cudaBinUp }
   # ornith moved off the 2026-08-27 build on 2026-09-08. The move bought no speed, it was taken
@@ -713,6 +715,40 @@ switch ($Action) {
       # -cram 24576: prompt cache in host RAM, see the 'qwen' block for the
       # measurement. Carried over as part of the identical profile, not re-measured
       # on this quant.
+      '-cram','24576',
+      '--temp','1.0','--top-p','0.95','--top-k','20','--min-p','0'
+    )
+  }
+
+  'qwenf' {
+    # CANDIDATE, not in service. DavidAU's Qwen3.8-27B TURBO Fable Cold-Fusion
+    # Heretic NEO-CODER-MAX, fetched 2026-09-19 to be benched against 'qwenu',
+    # the profile it would replace. A merge of a Qwen3.6-27B lineage (Fable
+    # Fusion 711 Heretic) with a retrained Qwen3.8-27B (Cold-Fusion GAIN),
+    # de-censored by ablation. Its card claims half to a tenth of the thinking
+    # tokens; that claim and its ARC figures are what the bench is for.
+    #
+    # The profile is 'qwenu' verbatim on purpose, down to the build, the quant
+    # and the shared chat template: anything else and the bench measures the
+    # setting, not the model. Q5_K_M with MTP (19.73 GiB), NOT Q6_K (22.38 GiB):
+    # 'qwenu' already rejected Q6_K for crossing the ~29 GB where throughput
+    # collapses on this card, and this Q5_K_M is 1.5 GiB heavier than its own.
+    # Check VRAM at load before trusting any speed figure.
+    Start-LLM 'qwenf' @(
+      '-m',"$ModelsDir\qwen3.8-27b-turbo-fcf\Qwen3.8-27B-TurboFCFusion-735-882-Here-Uncen-NEO-CODER-MAX-MTP-Q5_K_M.gguf",
+      '--mmproj',"$ModelsDir\qwen3.8-27b-turbo-fcf\mmproj-F16.gguf",
+      # MTP tensors are Q8_0 in this repository. The author warns that below 50%
+      # acceptance the plain quant is faster: read draft_n and draft_n_accepted.
+      '--spec-type','draft-mtp','--spec-draft-n-max','3',
+      '--n-gpu-layers','99','--load-mode','mlock','--flash-attn','on',
+      '--jinja',
+      # Same template as 'qwenu'. The embedded one is the author's, whose default
+      # reasoning_effort is 'xhigh'; loading it would compare two templates as
+      # much as two models.
+      '--chat-template-file',"$ModelsDir\qwen3.8-27b\chat-template-system-anywhere.jinja",
+      '--host','0.0.0.0','--port','8080','--ctx-size','262144',
+      '--parallel','1','-b','4096','-ub','2048',
+      '--cache-type-k','q4_0','--cache-type-v','q4_0',
       '-cram','24576',
       '--temp','1.0','--top-p','0.95','--top-k','20','--min-p','0'
     )
