@@ -1,5 +1,5 @@
 param(
-  [ValidateSet('bonsai','bonsai2','embed','kat','muse','nex','ornith','qwen','qwenf','qwenu','spark','tiel','whittle','stop','status','logs')]
+  [ValidateSet('bonsai','bonsai2','embed','kat','muse','nex','ornith','qwen','qwenf','qwent','qwenu','spark','tiel','whittle','stop','status','logs')]
   [string]$Action,
   [string]$Name,  # optional: for 'stop' and 'logs', targets a named instance
   [int]$Tail = 40, # for 'logs': history lines to show before following live
@@ -150,6 +150,7 @@ $builds = @{
   qwenu  = @{ Exe = $exeUp;       WorkDir = $workDirUp;       CudaBin = $cudaBinUp }
   # Candidate of 2026-09-19, on the same build as the profile it is benched against.
   qwenf  = @{ Exe = $exeUp;       WorkDir = $workDirUp;       CudaBin = $cudaBinUp }
+  qwent  = @{ Exe = $exeUp;       WorkDir = $workDirUp;       CudaBin = $cudaBinUp }
   qwen   = @{ Exe = $exeNew;      WorkDir = $workDirNew;      CudaBin = $cudaBinUp }
   tiel   = @{ Exe = $exeB10826;   WorkDir = $workDirB10826;   CudaBin = $cudaBinUp }
   # ornith moved off the 2026-08-27 build on 2026-09-08. The move bought no speed, it was taken
@@ -747,6 +748,36 @@ switch ($Action) {
       # Same template as 'qwenu'. The embedded one is the author's, whose default
       # reasoning_effort is 'xhigh'; loading it would compare two templates as
       # much as two models.
+      '--chat-template-file',"$ModelsDir\qwen3.8-27b\chat-template-system-anywhere.jinja",
+      '--host','0.0.0.0','--port','8080','--ctx-size','262144',
+      '--parallel','1','-b','4096','-ub','2048',
+      '--cache-type-k','q4_0','--cache-type-v','q4_0',
+      '-cram','24576',
+      '--temp','1.0','--top-p','0.95','--top-k','20','--min-p','0'
+    )
+  }
+
+  'qwent' {
+    # CANDIDATE, not in service. DavidAU's TWIN-TURBO 709-L, fetched 2026-09-19
+    # to be benched against 'qwenf': the same merge, retrained once more for
+    # shorter thinking (the card claims down to a twentieth) and five instruct
+    # modes, at an ARC-C the author puts 2.6 points lower (0.709 vs 0.735).
+    # "L" is the lighter de-censoring; the ULTRA-HERETIC sibling loses another
+    # point on ARC-C and was left out.
+    #
+    # The profile is 'qwenf' verbatim, so only the weights differ. NEO-MAX MTP
+    # Q5_K_M, 21,182,281,216 bytes, eight more than qwenf's file: same layout
+    # (MAX = output tensor in 16 bit, MTP tensors in Q8_0), same VRAM footprint.
+    # The author's calibration here is the generic NEO, not qwenf's CODER one.
+    # The embedded template adds '{REASON:xxx}' switches typed in the message;
+    # the shared template does not know them, so the bench measures the default
+    # modes only. The author's templates sit next to the weights.
+    Start-LLM 'qwent' @(
+      '-m',"$ModelsDir\qwen3.8-27b-twin-turbo-709l\Qwen3.8-27B-TTURBO-Fable-C-Fusion-709-L-Uncen-NM-DAU-NEO-MAX-MTP-Q5_K_M.gguf",
+      '--mmproj',"$ModelsDir\qwen3.8-27b-twin-turbo-709l\mmproj-F16.gguf",
+      '--spec-type','draft-mtp','--spec-draft-n-max','3',
+      '--n-gpu-layers','99','--load-mode','mlock','--flash-attn','on',
+      '--jinja',
       '--chat-template-file',"$ModelsDir\qwen3.8-27b\chat-template-system-anywhere.jinja",
       '--host','0.0.0.0','--port','8080','--ctx-size','262144',
       '--parallel','1','-b','4096','-ub','2048',
