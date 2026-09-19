@@ -78,6 +78,14 @@ choix se fait sur la vitesse d'ingestion seule.
 pris comme exécutant agentique léger ; à ce niveau, un exécutant qui se trompe ne
 fait pas gagner de temps.
 
+**À l'essai : `qwent`, depuis le 19/09/2026.** Meilleur score jamais mesuré ici
+sur le jeu inédit avec réflexion, 225/235, devant `qwenu` à 221. Au jeu public,
+92,0 % et 56/60, le même soir où `tiel` a redonné exactement ses 86,6 % du
+10/09 : le chiffre se compare donc au tableau ci-dessus. Sa limite est la
+mémoire, 31,6 Go au chargement, au-dessus du seuil où cette carte ralentit, et
+sa vitesse en contexte long n'est pas mesurée. Le détail est dans le
+[journal](tuning-log.md) et sous [models/](../models/qwen3.8-27b-twin-turbo-709l/).
+
 **À rediscuter : `qwen`.** 78,8 %, battu de 4,6 points par `ornith` qui a trois
 fois moins de paramètres et occupe la moitié de la mémoire. C'est le seul modèle
 à mobiliser un moteur compilé pour lui seul, celui qui porte les noyaux NVFP4.

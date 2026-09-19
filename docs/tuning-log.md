@@ -9,6 +9,41 @@ hardware listed in [prerequisites.md](prerequisites.md).
 
 ---
 
+## 2026-09-19 : trois candidats contre `qwenu`, un seul passe devant
+
+Mandat : dire si l'un des trois modèles récupérés ce jour remplace `qwenu`.
+Règle posée avant la campagne : il faut battre `qwenu` sur le jeu inédit, un
+gain sur le jeu public seul ne décide rien. Tous tournent le même jour, sur le
+même binaire, avec les scripts `banc-tous.ps1` (jeu public, réflexion coupée) et
+`banc-inedit.ps1 -Reflexion` (235 épreuves, réflexion active), température 0,
+graine 42.
+
+Jeu inédit : `qwent` 225/235 (95,7 %), 5 vides. `qwenf` et `qwenu` 221/235,
+avec 5 et 10 vides. `whittle` 142/235 (60,4 %), 26 vides et un leurre.
+
+Jeu public : `qwenf` 461/500 MMLU et 56/60 GSM8K en 13,5 min, `qwent` 460/500
+et 56/60 en 15,3 min, `qwenu` 450/500 et 57/60 en 33,7 min, `whittle` 378/500
+et 46/60 en 12 min.
+
+`whittle` a été rejoué avec le réglage de son auteur (température 0,7, top-p
+0,8, top-k 20, repeat-penalty 1,05), puisque sa fiche prévient que le décodage
+glouton fait boucler cette famille : 127/235 et 34 vides, moins bien. Le banc ne
+le bridait pas. Ses poids sont supprimés de la station, le profil reste.
+
+`qwenu` fait 90 % au jeu public contre 77,0 % le 10/09, à script, binaire, poids
+et profil identiques. Les sorties brutes du 10/09 sont perdues, la cause n'est
+pas établie. Contrôle le même soir : `tiel` redonne 433/500 et 53/60, ses
+chiffres exacts du 10/09. Le banc n'a pas dérivé, le classement des autres
+modèles tient.
+
+Verdict : `qwent` passe devant, de 4 épreuves sur 235 en une passe chacun. Il
+charge à 31 597 MiB, au-dessus des ~29 Go où le débit s'effondre sur cette
+carte, et les invites du banc sont courtes : sa vitesse en contexte long n'est
+pas mesurée. Il est à l'essai en usage réel, accessible par le choix 4 du
+lanceur `qwen`. `qwenf`, à égalité, n'est pas retenu.
+
+---
+
 ## 2026-09-18 : l'écart Blackwell, 97 contre 130 tok/s, expliqué et non corrigé
 
 Mandat : rapprocher le décodage mesuré sur `bonsai2` (97,2 tok/s consigné plus
