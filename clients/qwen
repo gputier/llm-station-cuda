@@ -11,19 +11,24 @@
 #      on the 500-question MMLU set on 2026-09-14, 262,144 window. Compaction
 #      starts at 180,000: replayed at 222,000 on 2026-09-15, the model answered
 #      the summary request with a shell command instead of a summary.
+#   4. Qwen3.8-27B TWIN-TURBO 709-L on the 32 GB box, on trial since 2026-09-19:
+#      225/235 on the unpublished set against 221 for the uncensored build, but
+#      31.6 GB of VRAM at load, so long-context speed is unproven. 262,144 window.
 #
-# The aligned and the uncensored builds both carry "qwen3.8" in their path, so
-# the first variant excludes "uncensored": a bare match once took the
-# uncensored model for the aligned one and skipped the reload.
+# Every Qwen3.8-27B build carries "qwen3.8" in its path, so each variant matches
+# on its own model directory. Matching "qwen3.8" minus "uncensored" took the
+# uncensored build for the aligned one until 2026-09-14, then the TWIN-TURBO
+# one, whose file says "Uncen", until 2026-09-19.
 #
-# LLM_HOST names the 32 GB box and LLM_HOST_16GB the second one. LLM_CHOICE=1,
-# 2 or 3 skips the menu, which a run without a terminal requires. Everything
-# else lives in llm-launch.sh.
+# LLM_HOST names the 32 GB box and LLM_HOST_16GB the second one. LLM_CHOICE=1
+# to 4 skips the menu, which a run without a terminal requires. Everything else
+# lives in llm-launch.sh.
 
 source "$(dirname "${BASH_SOURCE[0]}")/llm-launch.sh"
 
-llm_variant "Qwen3.8-27B sur la machine 32 Go, fenêtre 393k" "${LLM_HOST:-your-32gb-box}" qwen qwen3.8 uncensored qwen3.8-27b 393216
-llm_variant "Qwen3.8-27B Uncensored sur la machine 32 Go, si l'aligné refuse, fenêtre 262k" "${LLM_HOST:-your-32gb-box}" qwenu uncensored '' qwen3.8-27b-uncensored 262144
+llm_variant "Qwen3.8-27B sur la machine 32 Go, fenêtre 393k" "${LLM_HOST:-your-32gb-box}" qwen qwen3.8-27b-nvfp4 '' qwen3.8-27b 393216
+llm_variant "Qwen3.8-27B Uncensored sur la machine 32 Go, si l'aligné refuse, fenêtre 262k" "${LLM_HOST:-your-32gb-box}" qwenu qwen3.8-27b-uncensored '' qwen3.8-27b-uncensored 262144
 llm_variant "Qwen3.6-35B-A3B sur la machine 16 Go, fenêtre 262k" "${LLM_HOST_16GB:-your-16gb-box}" qwen36 qwen3.6-35b '' qwen3.6-35b-a3b 262144 180000
+llm_variant "Qwen3.8-27B TWIN-TURBO sur la machine 32 Go, à l'essai, fenêtre 262k" "${LLM_HOST:-your-32gb-box}" qwent qwen3.8-27b-twin-turbo-709l '' qwen3.8-27b-twin-turbo 262144
 
 llm_launch "$@"

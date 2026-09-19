@@ -17,7 +17,7 @@ export LLM_SSH_KEY=~/.ssh/id_ed25519     # optional, see below
 ./bonsai      # 27B in 7 GiB, the best quality per byte, asks which generation
 ./spark       # 4B, last on every measure
 ./muse        # agentic, vision, faithful OCR
-./qwen        # Qwen3.8 aligned or uncensored on the 32 GB box, Qwen3.6 on the 16 GB one
+./qwen        # Qwen3.8 aligned, uncensored or TWIN-TURBO on the 32 GB box, Qwen3.6 on the 16 GB one
 ```
 
 ## One body for all eight
@@ -89,15 +89,20 @@ Each launcher reads `model_path` from `/props` and matches it against the model
 it wants. If the wrong one is loaded it **asks before swapping**, since someone
 else may be using it.
 
-That matching is less trivial than it looks. Both the aligned and the abliterated
-builds carry `qwen3.8` in their path, so a bare substring match treated the
-abliterated model as if it were the aligned one and skipped the reload. The
-aligned build is the one **without** `uncensored`, which `qwen` declares as the
-EXCLUDE field of its first variant:
+That matching is less trivial than it looks. Every Qwen3.8-27B build carries
+`qwen3.8` in its path, so a bare substring match treated the abliterated model
+as if it were the aligned one and skipped the reload. Excluding `uncensored`
+fixed that until 2026-09-19, when the TWIN-TURBO build, whose file says `Uncen`,
+was taken for the aligned one in turn. Each `qwen` variant now matches on its
+own model directory, and needs no EXCLUDE field:
 
 ```bash
-llm_variant "Qwen3.8-27B sur la machine 32 Go, fenêtre 393k" "${LLM_HOST:-your-32gb-box}" qwen qwen3.8 uncensored qwen3.8-27b 393216
+llm_variant "Qwen3.8-27B sur la machine 32 Go, fenêtre 393k" "${LLM_HOST:-your-32gb-box}" qwen qwen3.8-27b-nvfp4 '' qwen3.8-27b 393216
 ```
+
+Checked on 2026-09-19 against the live `/props` of the 32 GB box and the paths
+of the other four Qwen builds: each matches its own variant and no other, and
+the `qwenf` candidate matches none.
 
 `llm-launch.sh` lowercases `model_path` once and compares with bash substring
 tests rather than `grep -q`: under `pipefail`, `grep -q` can close the pipe
