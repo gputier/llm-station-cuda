@@ -1,7 +1,31 @@
 # Qwen3.8-27B TURBO Fable Cold-Fusion Heretic (candidate)
 
 A candidate to replace [qwen3.8-27b-uncensored](../qwen3.8-27b-uncensored/),
-fetched on 2026-09-19 and **not yet benched**. Nothing in service points at it.
+fetched and benched on 2026-09-19. **It does not replace `qwenu`**: the two tie
+on the unpublished set, which was the deciding test. Nothing in service points
+at it.
+
+## Result of 2026-09-19
+
+Both profiles ran the same day, on the same build, one after the other.
+
+On the public set (thinking off), `qwenf` scored 461/500 MMLU and 56/60 GSM8K
+in 13.5 min, and `qwenu` scored 450/500 and 57/60 in 33.7 min. VRAM read at
+load: 31,724 MiB and 30,131 MiB.
+
+On the unpublished set (thinking on), both scored 221/235 (94%), with no
+decoy. `qwenf` left 5 answers empty and took 25.3 min; `qwenu` left 10 empty
+and took 27.8 min. Each got right 10 questions the other missed. On the answers
+they did finish, `qwenu` is the more accurate (221/225 against 221/230).
+
+"TURBO" pays off with thinking off (2.5 times faster), barely with thinking on
+(9%), and never turns into a better score. A tie is not a reason to swap a
+profile already in service.
+
+The `qwenu` figure is 13 points above the 77.0% of the 2026-09-10 campaign,
+with the same bench script, binary, weights and profile. The raw output of that
+day is gone, so the cause is not established. A control run of `tiel` is
+chained after the other candidates to check whether the old ranking reproduces.
 
 ```powershell
 .\llm-ctl.ps1 -Action qwenf
@@ -60,7 +84,7 @@ The author warns that below 50% MTP acceptance the plain quant is faster. Read
 `draft_n` and `draft_n_accepted` in the timings, but decide on throughput: on
 this box a higher acceptance has already come with a lower speed.
 
-## The bench it is waiting for
+## The bench that decided it
 
 Run with the station free, since each step reloads the port:
 
