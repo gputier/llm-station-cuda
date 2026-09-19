@@ -1,18 +1,19 @@
 # Building llama.cpp for CUDA on Windows
 
-Six builds coexist on this machine, on purpose. They are **not
+Seven builds coexist on this machine, on purpose. They are **not
 interchangeable**, and picking the wrong one fails silently rather than loudly.
-Five are official llama.cpp releases; the sixth is a fork, and the last section
-says why it had to be.
+Five are official llama.cpp releases. The sixth is a fork, and the seventh was
+compiled here from a pull request; the last two sections say why each had to be.
 
 | Build | Date | CUDA | Serves | Why it exists |
 |---|---|---|---|---|
 | `llama-cpp-turboquant-win` | frozen 2026-04-07 | 12.8 | `embed` | A custom fork kept for a cache-quant feature of a model since removed. It has no remaining technical justification and could be retired once the embedder is validated on upstream. |
-| `llama-cpp-upstream` | 2026-08-11 | 13.3 | `muse`, `qwenu` | Official build. The only one of the first two that knows the `muse-glimmer` architecture. |
+| `llama-cpp-upstream` | 2026-08-11 | 13.3 | `muse`, `qwenu`, `qwenf`, `qwent` | Official build. The only one of the first two that knows the `muse-glimmer` architecture. |
 | `llama-cpp-20260827` | 2026-08-27 | 13.3 | `qwen` | The only build with NVFP4 CUDA kernels. See below. It also served `ornith` until 2026-09-08; that profile is Q5_K_M and never needed those kernels. |
 | `llama-cpp-b10826` | 2026-09-06 | 13.3 | `tiel`, `ornith`, `kat` | The official release zip and its cudart, unzipped flat, no compilation. Neutral in decode and +5% in prefill on Tiel against the 2026-08-27 build; strictly neutral on Ornith, which moved here on 2026-09-08 to stop owing a profile to the NVFP4 build. See [tuning-log.md](tuning-log.md). `kat` was added here on 2026-09-08 and never ran anywhere else. |
 | `llama-cpp-b10883` | 2026-09-09 | 13.3 | `nex`, `spark`, `bonsai` | Same recipe as b10826, official zip plus cudart unzipped flat. Installed 2026-09-10 for three candidate models and serving only those. See below. |
 | `llama-cpp-prism-b10685` | 2026-09-15 | 13.3 | `bonsai2` | **Not upstream.** PrismML's fork, release `prism-b10685-7dffb15`, `win-cuda-13.3-x64` archive unpacked flat. The only engine that reads Bonsai 2's rotated weights. Installed 2026-09-18. See below. |
+| `llama-cpp-xing-pr29012` | 2026-09-19 | 13.3 | `xing` | **Not a release.** Compiled on this box from llama.cpp pull request #29012, commit `63c16fb`. The only engine that knows Xing4.0's architecture. See the last section. |
 
 ## b10883: taken for one architecture, not for speed
 
@@ -35,19 +36,37 @@ would mean compiling, which is a different exercise.
 
 ## The build command
 
-`build/build-llama.bat` is the script actually used. The essentials:
+`build/build-llama.bat` is the script actually used. It takes three optional
+arguments, the source tree, the CUDA toolkit directory name (`v13.3`) and the
+log path, and reads `FORCE_CUBLAS` from the environment. The essentials:
 
 ```bat
 call "...\VC\Auxiliary\Build\vcvarsall.bat" amd64
-set PATH=%NINJA_DIR%;%PATH%
+set PATH=%NINJA_DIR%;%CUDA_PATH%\bin;%PATH%
 cmake .. -G "Ninja" ^
   -DBUILD_SHARED_LIBS=OFF ^
   -DGGML_CUDA=ON ^
   -DCMAKE_CUDA_ARCHITECTURES=120a ^
   -DCMAKE_BUILD_TYPE=Release ^
-  -DGGML_CUDA_FORCE_CUBLAS=ON
+  -DCUDAToolkit_ROOT="%CUDA_PATH%" ^
+  -DCMAKE_CUDA_COMPILER="%CUDA_PATH%\bin\nvcc.exe" ^
+  -DGGML_CUDA_FORCE_CUBLAS=%FORCE_CUBLAS%
 cmake --build . --config Release -j 16
 ```
+
+Pin the toolkit. Three are installed (12.8, 13.3, 13.4) and the machine
+`CUDA_PATH` follows the newest, while every engine here ships cudart 13.3.
+Without the second argument a build lands on 13.4 and needs a runtime no
+profile provides.
+
+**A double quote in the PATH breaks `vcvarsall.bat`.** On 2026-09-19 the build
+died right after the Visual Studio banner with `\Microsoft était inattendu`
+("was unexpected at this time"). The cause was the machine PATH entry
+`C:\Program Files\Kryolys"`, with one stray quote: it flips cmd's quoting state,
+and the `(x86)` of a later entry then closes a parenthesised block inside
+vcvarsall. The quote was removed from the registry value (a copy of the old
+value is in `D:\LLM-Setup\logs\machine-path-backup-20260919.txt`). If this
+error comes back, look for a quote in the PATH first.
 
 **`CMAKE_CUDA_ARCHITECTURES=120a`, not `120`.** CMake rewrites `120` to `120a`
 on its own, and says so in the configure output:
@@ -123,7 +142,8 @@ that one loads on a stock build and answers gibberish without a warning.
 There was no third option, and no `Q2_g64` file as the first generation shipped:
 the fork or nothing. What made it acceptable is that PrismML publishes release
 archives per platform. `win-cuda-13.3-x64` was unzipped flat like every other
-engine here, and the standing rule that this box runs prebuilt binaries holds.
+engine here, and the rule that this box runs prebuilt binaries held. It no
+longer holds without exception: see the next section.
 
 Two things to know before touching it. The release picked matters: the newer
 `prism-b10687` of 2026-09-17 ships only the cudart and no executables, so
@@ -138,3 +158,40 @@ ships `gguf-dspark-to-dflash` in its `gguf-py`, which repacks a pre-migration
 dspark drafter into a format current binaries load. That converter is what made
 it possible to test the first generation's drafter against the second, and to
 close the question: see [tuning-log.md](tuning-log.md).
+
+## The pull request build: the first engine compiled here
+
+Xing4.0-29B-A4B (China Telecom, 2026-09-16) combines MLA attention, a MoE and
+an op of its own called mHC. No release knows that combination, upstream or
+fork. Its authors produced the official GGUF with llama.cpp pull request
+#29012, branch `xing4_0-port` of `shuxiaoqiong/llama.cpp`, which adds the CPU
+and CUDA backends for it. Their prebuilt Windows package, built for an RTX 3090
+(sm_86) and shipping its own CUDA 13 DLLs, was set aside for a build targeting
+this card's sm_120a.
+
+The rule that nothing is compiled on this box therefore gave way, for this
+engine only. Built on 2026-09-19 from a depth-1 clone of commit
+`63c16fb9797d00f13d70b5a618b4deb08953aef3` into
+`D:\LLM-Setup\llama-cpp-xing-pr29012`:
+
+```bat
+set FORCE_CUBLAS=OFF
+build-llama.bat D:\LLM-Setup\llama-cpp-xing-pr29012 v13.3 D:\LLM-Setup\logs\build-xing-pr29012.txt
+```
+
+560 steps in about five minutes, exit code 0. The result is one static
+`llama-server.exe` of 64 MB in `build-win\bin`, with no DLL split, reporting
+`version: 0.4.1-dev (build 1, commit 63c16fb)`. It loads cudart 13.3 from the
+toolkit directory through `CudaBin`, like every other engine.
+
+`FORCE_CUBLAS` is off here: the flag was carried over from the frozen fork's
+original build and was never measured on anything else.
+
+The GGUF carries an MTP head (`blk.40.nextn.*`, about 540 MB). This build
+ignores it and says so at load, so there is no speculative decoding on this
+profile. Retire the directory once the pull request is merged and a release
+carries the architecture.
+
+The model it was built for was rejected the same evening, see
+[tuning-log.md](tuning-log.md), and its weights deleted. The engine stays so the
+profile can be re-run after a new download.

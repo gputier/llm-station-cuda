@@ -4,6 +4,13 @@ REM
 REM Adjust the four paths below to match your installation. Everything else is
 REM portable. See ../docs/building-llama-cpp.md for what each flag buys.
 REM
+REM Usage: build-llama.bat [SRC_DIR] [CUDA_VERSION] [LOG]
+REM   SRC_DIR       source tree to build, default D:\LLM-Setup\llama.cpp
+REM   CUDA_VERSION  toolkit directory name, e.g. v13.3; default is the machine
+REM                 CUDA_PATH, which follows the newest toolkit installed
+REM   LOG           build log, default D:\build-log.txt
+REM Set FORCE_CUBLAS=OFF in the environment to drop GGML_CUDA_FORCE_CUBLAS.
+REM
 REM Stop any running llama-server first: recent builds split the server into
 REM DLLs, and linking fails with LNK1104 if ggml-cuda.dll is still loaded.
 
@@ -12,9 +19,13 @@ set "CMAKE=C:\Program Files\CMake\bin\cmake.exe"
 set "NINJA_DIR=D:\LLM-Setup\ninja"
 set "SRC_DIR=D:\LLM-Setup\llama.cpp"
 set "LOG=D:\build-log.txt"
+if not "%~1"=="" set "SRC_DIR=%~1"
+if not "%~2"=="" set "CUDA_PATH=C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\%~2"
+if not "%~3"=="" set "LOG=%~3"
+if not defined FORCE_CUBLAS set "FORCE_CUBLAS=ON"
 
 call "%VCVARS%" amd64
-set PATH=%NINJA_DIR%;%PATH%
+set PATH=%NINJA_DIR%;%CUDA_PATH%\bin;%PATH%
 
 cd /d "%SRC_DIR%"
 if exist build-win rmdir /s /q build-win
@@ -33,7 +44,9 @@ REM Drop it for a plain upstream build unless you have measured that it helps.
   -DGGML_CUDA=ON ^
   -DCMAKE_CUDA_ARCHITECTURES=120a ^
   -DCMAKE_BUILD_TYPE=Release ^
-  -DGGML_CUDA_FORCE_CUBLAS=ON > "%LOG%" 2>&1
+  -DCUDAToolkit_ROOT="%CUDA_PATH%" ^
+  -DCMAKE_CUDA_COMPILER="%CUDA_PATH%\bin\nvcc.exe" ^
+  -DGGML_CUDA_FORCE_CUBLAS=%FORCE_CUBLAS% > "%LOG%" 2>&1
 
 REM -j 16 matches the core count of this machine. Lower it if the build starves
 REM the rest of the box.

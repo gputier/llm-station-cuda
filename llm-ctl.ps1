@@ -1,5 +1,5 @@
 param(
-  [ValidateSet('bonsai','bonsai2','embed','kat','muse','nex','ornith','qwen','qwenf','qwent','qwenu','spark','tiel','whittle','stop','status','logs')]
+  [ValidateSet('bonsai','bonsai2','embed','kat','muse','nex','ornith','qwen','qwenf','qwent','qwenu','spark','tiel','whittle','xing','stop','status','logs')]
   [string]$Action,
   [string]$Name,  # optional: for 'stop' and 'logs', targets a named instance
   [int]$Tail = 40, # for 'logs': history lines to show before following live
@@ -104,7 +104,7 @@ $workDirB10826 = "$RootDir\llama-cpp-b10826"
 $exeB10883     = "$RootDir\llama-cpp-b10883\llama-server.exe"
 $workDirB10883 = "$RootDir\llama-cpp-b10883"
 
-# THE ONE BINARY HERE THAT IS NOT AN UPSTREAM RELEASE. PrismML's fork of
+# A FORK, NOT AN UPSTREAM RELEASE. PrismML's fork of
 # llama.cpp, release prism-b10685-7dffb15 (2026-09-15), win-cuda-13.3-x64,
 # unpacked like the others and serving one profile: 'bonsai2'.
 #
@@ -116,11 +116,18 @@ $workDirB10883 = "$RootDir\llama-cpp-b10883"
 # choice was this fork or no Bonsai 2 at all.
 #
 # Taken as a prebuilt release archive, not compiled, which keeps the one thing
-# that mattered in the rule: nothing is built on this box. The cost is that the
+# that mattered in the rule then: nothing was built on this box ('xing' broke it
+# on 2026-09-19, see below). The cost is that the
 # fork tracks upstream at its own pace, b10685 here against b10883 next door.
 # Do not move any other profile onto it.
 $exePrism      = "$RootDir\llama-cpp-prism-b10685\llama-server.exe"
 $workDirPrism  = "$RootDir\llama-cpp-prism-b10685"
+
+# THE ONE BINARY HERE BUILT ON THIS BOX, from llama.cpp pull request #29012, because no release
+# knows Xing4.0's architecture. It serves 'xing' only; drop it once a release carries the
+# architecture. Branch, commit and build details: docs/building-llama-cpp.md.
+$exeXing     = "$RootDir\llama-cpp-xing-pr29012\build-win\bin\llama-server.exe"
+$workDirXing = "$RootDir\llama-cpp-xing-pr29012\build-win\bin"
 $instDir   = "$RootDir\instances"
 New-Item -ItemType Directory -Force -Path $instDir | Out-Null
 
@@ -166,6 +173,8 @@ $builds = @{
   whittle = @{ Exe = $exeB10883;  WorkDir = $workDirB10883;   CudaBin = $cudaBinUp }
   # The only row pointing at the fork. See the $exePrism block above.
   bonsai2 = @{ Exe = $exePrism;   WorkDir = $workDirPrism;    CudaBin = $cudaBinUp }
+  # The only row pointing at a local build. See the $exeXing block above.
+  xing   = @{ Exe = $exeXing;     WorkDir = $workDirXing;     CudaBin = $cudaBinUp }
 }
 
 function Quote($s) {
@@ -829,6 +838,37 @@ switch ($Action) {
     )
   }
 
+  'xing' {
+    # REJECTED on 2026-09-19, weights deleted from the station the same evening; the profile and
+    # the engine stay so the figures below can be re-run after a new download. Public set 364/500
+    # MMLU (72.8%) and 48/60 GSM8K in 10.9 min; unpublished set with thinking 123/235 (52.3%) in
+    # 49.8 min, 97 answers left empty because the thinking ate the whole budget, where qwent
+    # scores 225. Loads at 23,889 MiB and decodes at 147 tok/s on a short prompt.
+    #
+    # China Telecom's Xing4.0-29B-A4B (formerly TeleChat), fetched
+    # 2026-09-19: 29B MoE, 64 routed experts, 4 active plus 1 shared, ~4B active parameters, MLA
+    # attention, 256K native context. Picked as the most promising recent release on the vendor's
+    # own figures, none reproduced here: SWE-bench Verified 75 and Terminal-Bench 2.1 57.5, where
+    # the same table gives Qwen3.6-35B-A3B 76 and 51.5.
+    #
+    # Official GGUF, IQ4_NL in three shards (20,104,013,088 bytes, sizes checked against Hugging
+    # Face). Pointing -m at the first shard loads all three. Served by the local build of the
+    # pull request that added the architecture, see the $exeXing block.
+    #
+    # The vendor's sampler for reasoning and general use: temp 1.0, top-p 0.95, repetition
+    # penalty 1.05 (0.8 for coding and agents). Thinking is on by default and switched off with
+    # chat_template_kwargs enable_thinking=false. Embedded chat template.
+    Start-LLM 'xing' @(
+      '-m',"$ModelsDir\xing4.0-29b-a4b\xing4_0-29b-IQ4_NL-00001-of-00003.gguf",
+      '--n-gpu-layers','99','--load-mode','mlock','--flash-attn','on','--jinja',
+      '--host','0.0.0.0','--port','8080','--ctx-size','262144',
+      '--parallel','1','-b','4096','-ub','2048',
+      '--cache-type-k','q4_0','--cache-type-v','q4_0',
+      '-cram','24576',
+      '--temp','1.0','--top-p','0.95','--min-p','0','--repeat-penalty','1.05'
+    )
+  }
+
   'tiel' {
     # Tiel-Coder-35B-A3B (MIT). Sparse MoE, architecture 'qwen35moe': 41 blocks,
     # 256 experts, 8 active per token, so ~3B of 35B parameters do the work.
@@ -930,6 +970,11 @@ switch ($Action) {
       # question, is SLOWER than these weights at 164.25 tok/s: it was not kept.
       '--spec-type','draft-mtp','--spec-draft-n-max','2',
       '--n-gpu-layers','99','--load-mode','mlock','--flash-attn','on','--jinja',
+      # The embedded template does not raise on a late system message the way the Qwen ones do: it
+      # DROPS it without a word, so Claude Code's mid-session reminders never reached the model.
+      # Found 2026-09-19 by rendering it offline. The derivative emits them as ChatML system turns
+      # and renders every other conversation byte for byte like the original.
+      '--chat-template-file',"$ModelsDir\ornith-1.5-9b\chat-template-system-anywhere.jinja",
       '--host','0.0.0.0','--port','8080','--parallel','1','--ctx-size','262144',
       '-b','4096','-ub','2048',
       '--cache-type-k','q4_0','--cache-type-v','q4_0',

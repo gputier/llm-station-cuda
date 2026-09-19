@@ -30,7 +30,7 @@ did not transpose either.
 
 ## Models served
 
-All fourteen share port 8080 and are mutually exclusive on the GPU: loading one
+All fifteen share port 8080 and are mutually exclusive on the GPU: loading one
 unloads the others.
 
 | Action | Model | Context | Role |
@@ -44,6 +44,7 @@ unloads the others.
 | `qwenf` | Qwen3.8-27B TURBO Fable Cold-Fusion Heretic, MTP Q5_K_M | 262,144 | Candidate, benched 2026-09-19: ties `qwenu` on the unpublished set, not adopted |
 | `qwent` | Qwen3.8-27B TWIN-TURBO Fable Cold-Fusion 709-L, MTP Q5_K_M | 262,144 | Candidate, benched 2026-09-19: best of the three on the unpublished set (225/235), long-context speed not yet measured |
 | `whittle` | Whittle-Qwen-3.8-35B-A3B, MoE distilled from Qwen3.8-27B, Q6_K, n-gram memory in host RAM | 262,144 | Rejected 2026-09-19: 75.6% MMLU, 142/235 unpublished with 26 empty answers, 127/235 with its author's sampler. Weights deleted, the profile needs a new download |
+| `xing` | Xing4.0-29B-A4B, MoE with MLA attention, IQ4_NL | 262,144 | Rejected 2026-09-19: 72.8% MMLU, 123/235 unpublished with 97 empty answers. Weights deleted, the profile needs a new download. Runs on the one engine compiled here |
 | `embed` | nomic-embed-text-v1.5, Q8_0 | 131,072 | 768-dimension embeddings |
 | `nex` | Nex-N2.5-mini, i1-Q4_K_M | 262,144 | Candidate since 2026-09-10. Vision, no speculation |
 | `spark` | Spark-X2.5-4B, Q8_0 | 262,144 | Candidate since 2026-09-10. Agentic, text only |
@@ -54,12 +55,13 @@ unloads the others.
 day. They run on their own engine, `b10883`, which serves nothing else, and each
 carries a known defect written at the top of its page under [models/](models/).
 
-`bonsai2` is the only profile that does not run an official llama.cpp release.
-Its weights sit in a Hadamard-rotated basis that mainline cannot undo, so it
-serves on PrismML's fork, `prism-b10685`, taken as a published binary archive
-and unpacked like the others. Nothing is compiled on this box, and no other
-profile was moved onto it. Its page under [models/](models/) carries the whole
-reasoning, along with the two hypotheses it closed by measurement: no drafter
+Two profiles do not run an official llama.cpp release. `xing` runs the one
+engine compiled on this box, from a llama.cpp pull request, because no release
+knows its architecture: see [docs/building-llama-cpp.md](docs/building-llama-cpp.md).
+`bonsai2` keeps its weights in a Hadamard-rotated basis that mainline cannot
+undo, so it serves on PrismML's fork, `prism-b10685`, taken as a published
+binary archive and unpacked like the others, and no other profile was moved
+onto it. Its page under [models/](models/) carries the whole reasoning, along with the two hypotheses it closed by measurement: no drafter
 transfers to it, and a 4-bit KV cache buys memory this box does not need.
 
 **Every quality figure in this repository comes from the campaign of

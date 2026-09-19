@@ -30,12 +30,6 @@ The local weights were renamed to match on 2026-08-31, size verified identical
 to the byte, and `llm-ctl.ps1` now points at the new name. A fresh download and
 an existing install therefore land on the same filename.
 
-**`llm-ctl.ps1` still passes the old name to `--mmproj`.** That is deliberate
-here, because the weights on this box were downloaded before the rename and the
-path is explicit. **If you are setting this up now, you will download the new
-name and the action will fail on a missing file**: either rename your local copy
-or edit the `--mmproj` line. Nothing else in the profile depends on it.
-
 The three commits of 2026-08-29 on that repository touch the README only, so
 checksums taken before it are still valid.
 

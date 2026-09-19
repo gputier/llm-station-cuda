@@ -87,3 +87,27 @@ median decode:
 on this disk and each has to earn its keep. The 2026-08-27 build now justifies
 itself through `qwen` alone, which genuinely needs its NVFP4 kernels; b10826
 is an official binary, unzipped, not a local compilation.
+
+## The chat template swallowed every late system message
+
+Claude Code puts system turns in the middle of `messages`. The Qwen templates
+refuse them with an error 500, which at least shows. The template embedded in
+these weights, Unsloth's rework, does worse: it merges the first two system
+messages and skips every later one without a word. Every reminder a hook or the
+client injected mid-session never reached the model, and nothing ever said so.
+
+Found on 2026-09-19 by rendering the embedded template offline with a late
+system message in the conversation. The file this repository once described as
+"staged next to the weights, unused" did keep late messages, but it had been
+derived from an older template, without the developer role or the tool-call
+argument fixes, and it sat in the `tiel` directory. It was not reused.
+
+`chat-template-system-anywhere.jinja`, next to the weights, is the embedded
+template with the message loop changed: a system or developer message after the
+first two is emitted as a ChatML system turn. Proved three ways the same day:
+
+- rendered offline against the original on four conversations (one system,
+  two system, none, a tool call), thinking on and off, identical to the byte;
+- `/apply-template` on the loaded server keeps a late system message;
+- a real session through the `ornith` launcher called `Read`, answered from the
+  file, and obeyed a hook's late reminder that it had never seen before.

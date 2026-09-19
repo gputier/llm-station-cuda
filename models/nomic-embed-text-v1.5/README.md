@@ -11,7 +11,7 @@
 | Weights | `nomic-embed-text-v1.5.Q8_0.gguf` |
 | Context | 131,072 |
 | VRAM | ~1 GB |
-| Parallel slots | 4 |
+| Parallel slots | 1 |
 | Build | the frozen `turboquant` fork |
 
 Use it for semantic similarity: deduplication, RAG, clustering.

@@ -151,6 +151,13 @@ Patch each model's own template, one line, and prove it with a real tool call
 through the launcher. A profile that has only ever been driven by curl is not a
 profile that works.
 
+**The quieter variant is worse, and `ornith` had it until 2026-09-19.** Its
+embedded template raises nothing: it drops every system message after the
+first two, so the session runs and the reminders simply never arrive. No error
+will ever point at it. Render each template offline with a late system message
+and check the text is in the output, not only that nothing raised. Detail in
+[../models/ornith-1.5-9b/README.md](../models/ornith-1.5-9b/README.md).
+
 ## Dropping MCP servers is not cosmetic
 
 The launchers pass `--strict-mcp-config --mcp-config '{"mcpServers":{}}'`.

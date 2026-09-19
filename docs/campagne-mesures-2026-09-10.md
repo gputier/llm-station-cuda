@@ -222,7 +222,7 @@ n'est pas mesuré.
 ## Le rappel de `nex` tient jusqu'à la fenêtre annoncée
 
 Aiguille dans la botte de foin, remplissage de code source réel et varié, phrase
-arbitraire plantée à 10, 50 et 90 % de profondeur.
+arbitraire plantée à 10, 50 et 90 % de profondeur, par [`bench/aiguille.ps1`](../bench/aiguille.ps1).
 
 | Longueur du contexte | Résultat |
 |---|---|

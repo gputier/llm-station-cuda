@@ -9,6 +9,49 @@ hardware listed in [prerequisites.md](prerequisites.md).
 
 ---
 
+## 2026-09-19 : audit des quinze profils, Ornith n'entendait pas les rappels
+
+Tous les fichiers cités par `llm-ctl.ps1` existent sur la station, sauf les poids de `whittle`
+et `xing`, supprimés exprès. Les templates embarqués de sept modèles ont été extraits des GGUF
+et rendus hors ligne avec un message système en milieu de conversation, comme Claude Code en
+envoie. `kat`, `tiel`, `nex`, `spark` et `muse` le gardent. Le template embarqué de `qwent` lève
+l'erreur connue, sans effet puisque le profil sert le dérivé de `qwen3.8-27b`.
+
+`ornith` était le seul vraiment faux : son template le supprime sans rien dire. Corrigé par un
+dérivé câblé dans le profil, prouvé hors ligne, par `/apply-template` et par une vraie session
+Claude Code avec appel d'outil. Le détail est sur
+[la page du modèle](../models/ornith-1.5-9b/README.md).
+
+---
+
+## 2026-09-19 : Xing4.0-29B-A4B, compilé pour rien
+
+Mandat : passer au banc le modèle récent le plus prometteur sur les chiffres de
+son éditeur, Xing4.0-29B-A4B de China Telecom, sorti le 16/09. C'est un MoE de
+29 milliards de paramètres, dont environ 4 actifs, avec une attention MLA.
+Aucune version publiée de llama.cpp ne connaît son architecture : le moteur a été
+compilé sur la machine depuis la demande d'ajout #29012 (voir
+[building-llama-cpp.md](building-llama-cpp.md)). GGUF officiel IQ4_NL, 20,1 Go.
+
+Il charge à 23 889 MiB et décode à 147 tok/s sur une invite courte. Protocole
+identique à la campagne du même jour, plus bas.
+
+Jeu public : 364/500 MMLU (72,8 %) et 48/60 GSM8K en 10,9 min, aucune réponse
+vide. C'est sous `whittle` (378) et loin de `qwent` (460).
+
+Jeu inédit, réflexion active : 123/235 (52,3 %) en 49,8 min, dont 97 réponses
+vides. Sa réflexion consomme tout le budget avant de répondre, surtout en F1,
+F4 et F6. Aucun leurre.
+
+Il n'a pas été rejoué avec le réglage de son éditeur (température 1,0) :
+avec 96 questions de retard sur `qwent` au jeu public, où la réflexion est coupée et où il ne
+laisse aucune case vide, un meilleur échantillonnage ne comblerait pas l'écart.
+
+Verdict : rejeté. Ses poids sont supprimés de la station, le profil et le moteur
+restent.
+
+---
+
 ## 2026-09-19 : trois candidats contre `qwenu`, un seul passe devant
 
 Mandat : dire si l'un des trois modèles récupérés ce jour remplace `qwenu`.
@@ -966,8 +1009,8 @@ demands an acknowledgment line and contradicts "answer OK only": the model obeye
 
 Read from the GGUF: Tiel embeds the Sharp chat template `qwen3.8-froggeric-v22.4.0` with a
 force-appended terseness system prompt (`terse` kwarg, default true), thinking on and reasoning
-effort `medium` by default. Ornith's own template raises on a late system message like Qwen's;
-a one-line derivative is staged next to the weights for a later A/B, unused.
+effort `medium` by default. Ornith's own template was believed to raise on a late system message
+like Qwen's; on 2026-09-19 it turned out to drop it silently instead, see the section of that date.
 
 ---
 

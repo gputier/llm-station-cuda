@@ -153,15 +153,16 @@ from a different slice of the sources to a warm server:
 A new context costs nothing; only the first request after a start does, and
 only under speculation. Discard run 1 of any speculative bench on this model.
 
-## Temperature 0.6, not 1.0
+## Temperature 0.3, below the card
 
 Ornith's model card recommends 0.6 for general use and reserves 1.0 for
 reproducing its benchmarks. Claude Code sends no temperature (verified by
 capturing a request: only `thinking`, `output_config.effort` and `max_tokens`
-are sent, none of which llama-server maps to a reasoning budget), so 0.6 is
-the value every session runs at. Set 2026-09-06 as a trial on real usage; a
-12-prompt strict-instruction bench passed 36/36 at temperature 1.0, so it
-could not discriminate between the two values.
+are sent, none of which llama-server maps to a reasoning budget), so the
+profile's value is the one every session runs at. It went from 1.0 to 0.6 on
+2026-09-06, then to 0.3 on 2026-09-10, both times by hand on the box as a trial
+on real usage. No bench backs either step: a 12-prompt strict-instruction bench
+passed 36/36 at temperature 1.0, so it could not discriminate between values.
 
 Tiel embeds the Sharp chat template `qwen3.8-froggeric-v22.4.0` with a
 force-appended terseness system prompt (`terse` kwarg, default true), thinking

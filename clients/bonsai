@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# bonsai - Claude Code on a Bonsai model, served by the .99.
+# bonsai - Claude Code on a Bonsai model, served by the 32 GB box.
 #
 # CANDIDATES, both of them. Running either STOPS whatever else holds the card,
 # one model at a time. Come back with `tiel` or `kat`.
@@ -32,17 +32,13 @@
 
 source "$(dirname "${BASH_SOURCE[0]}")/llm-launch.sh"
 
-# No MCP server: 70 tool schemas weigh 108 KB of prompt, which a candidate bench
-# has no use for.
-LLM_MCP=none
-
 # The match strings do not need an exclusion between them: 'ternary-bonsai-27b'
 # is not a substring of 'ternary-bonsai-2-27b', the '-2-' breaks it in both
 # directions. Checked rather than assumed, because the two names are one
 # character apart.
-llm_variant "Bonsai 1, Ternary-Bonsai-27B sur la .99, fenêtre 262k" \
-  192.168.4.99 bonsai ternary-bonsai-27b '' ternary-bonsai-27b 262144
+llm_variant "Bonsai 1, Ternary-Bonsai-27B sur la machine 32 Go, fenêtre 262k" \
+  "${LLM_HOST:-your-32gb-box}" bonsai ternary-bonsai-27b '' ternary-bonsai-27b 262144
 llm_variant "Bonsai 2, ingestion soixante fois plus rapide, fenêtre 262k" \
-  192.168.4.99 bonsai2 ternary-bonsai-2-27b '' ternary-bonsai-2-27b 262144
+  "${LLM_HOST:-your-32gb-box}" bonsai2 ternary-bonsai-2-27b '' ternary-bonsai-2-27b 262144
 
 llm_launch "$@"
