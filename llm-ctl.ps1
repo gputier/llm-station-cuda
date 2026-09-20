@@ -104,26 +104,20 @@ $workDirB10826 = "$RootDir\llama-cpp-b10826"
 $exeB10883     = "$RootDir\llama-cpp-b10883\llama-server.exe"
 $workDirB10883 = "$RootDir\llama-cpp-b10883"
 
-# A FORK, NOT AN UPSTREAM RELEASE. PrismML's fork of
-# llama.cpp, release prism-b10685-7dffb15 (2026-09-15), win-cuda-13.3-x64,
-# unpacked like the others and serving one profile: 'bonsai2'.
+# A FORK BUILT ON THIS BOX, and the second binary compiled here. It is PrismML's
+# fork of llama.cpp, which alone undoes Bonsai 2's Hadamard rotation, carrying
+# the upstream DFlash2 support that the fork's own releases still lack. It serves
+# 'bonsai2' only, and no release can replace it: upstream rejects PQ2_0 outright,
+# and the published fork archives refuse the drafter at load.
 #
-# It exists because the rule it breaks had no third option. Bonsai 2 ships only
-# PQ2_0 and PTQ1_0, both of which upstream rejects as unknown types, and there
-# is no Q2_g64 in that repository the way there was for Bonsai 1. Worse than a
-# clean refusal: the model card states that upstream loads a Q2_0 file without a
-# warning and produces garbage, having no Hadamard activation runtime. So the
-# choice was this fork or no Bonsai 2 at all.
-#
-# Taken as a prebuilt release archive, not compiled, which keeps the one thing
-# that mattered in the rule then: nothing was built on this box ('xing' broke it
-# on 2026-09-19, see below). The cost is that the
-# fork tracks upstream at its own pace, b10685 here against b10883 next door.
-# Do not move any other profile onto it.
-$exePrism      = "$RootDir\llama-cpp-prism-b10685\llama-server.exe"
-$workDirPrism  = "$RootDir\llama-cpp-prism-b10685"
+# DO NOT add pull request 210 on top of it. This tree already applies the inverse
+# transform the patch adds, so the patch applies it twice and acceptance collapses.
+# Build recipe, the measurement behind that warning, and the archive kept on disk
+# as the reference for what the published fork can read: docs/building-llama-cpp.md.
+$exeDflash2     = "$RootDir\llama-cpp-prism-dflash2\llama\build-win\bin\llama-server.exe"
+$workDirDflash2 = "$RootDir\llama-cpp-prism-dflash2\llama\build-win\bin"
 
-# THE ONE BINARY HERE BUILT ON THIS BOX, from llama.cpp pull request #29012, because no release
+# The other binary built on this box, from llama.cpp pull request #29012, because no release
 # knows Xing4.0's architecture. It serves 'xing' only; drop it once a release carries the
 # architecture. Branch, commit and build details: docs/building-llama-cpp.md.
 $exeXing     = "$RootDir\llama-cpp-xing-pr29012\build-win\bin\llama-server.exe"
@@ -171,9 +165,8 @@ $builds = @{
   bonsai = @{ Exe = $exeB10883;   WorkDir = $workDirB10883;   CudaBin = $cudaBinUp }
   # Candidate of 2026-09-19: 'qwen4exp' is known to b10826 and b10883, checked in llama.dll.
   whittle = @{ Exe = $exeB10883;  WorkDir = $workDirB10883;   CudaBin = $cudaBinUp }
-  # The only row pointing at the fork. See the $exePrism block above.
-  bonsai2 = @{ Exe = $exePrism;   WorkDir = $workDirPrism;    CudaBin = $cudaBinUp }
-  # The only row pointing at a local build. See the $exeXing block above.
+  # The two rows pointing at a local build. See the $exeDflash2 and $exeXing blocks above.
+  bonsai2 = @{ Exe = $exeDflash2; WorkDir = $workDirDflash2;  CudaBin = $cudaBinUp }
   xing   = @{ Exe = $exeXing;     WorkDir = $workDirXing;     CudaBin = $cudaBinUp }
 }
 
@@ -1190,12 +1183,26 @@ switch ($Action) {
       # 1.26 GB more on disk and in VRAM.
       '-m',"$ModelsDir\ternary-bonsai-2-27b\Ternary-Bonsai-2-27B-PQ2_0.gguf",
       '--mmproj',"$ModelsDir\ternary-bonsai-2-27b\Ternary-Bonsai-2-27B-mmproj-BF16.gguf",
-      # No drafter at all, unlike 'bonsai'. Bonsai 2's repository ships none, and Bonsai 1's does
-      # not transfer: measured 2026-09-18, its published bf16 drafter converted with
-      # gguf-dspark-to-dflash against THIS model as tokenizer donor loads and runs, and drafts
-      # nothing useful. Six tokens accepted out of 2,028, 0.3%, decode halved to 44.9 tok/s from
-      # 98.3 and 10,780 MiB spilled into shared memory. The demo repository says drafters are
-      # target-specific; this is what that costs when you do not believe it.
+      # SPECULATION, on since 2026-09-20 and worth 37% of decode: 141.4 tok/s against 102.9,
+      # 55.5% acceptance, 25,463 MiB of VRAM against 20,297. Ingestion pays for it,
+      # 2,879 tok/s against 3,259, so a workload that only ingests should not take this.
+      # It also ends a run on 4,132 MiB of shared-memory spill against 1,508 without, which
+      # costs nothing here and would on a card carrying anything else.
+      # The z-lab Q4_K_M drafter was measured beside it and loses by a hair while saving
+      # 872 MiB: prefer it on a card short of memory. Full figures, the 2026-09-18 failure it
+      # overturns, and why pull request 210 must NOT be added to this build, in
+      # docs/tuning-log.md and models/ternary-bonsai-2-27b/README.md.
+      #
+      # --spec-draft-n-max 4 is DELIBERATE and measured, although the muse profile proves the
+      # opposite on this same spec-type: leaving the depth to DFlash2 gives 132.0 tok/s at
+      # 64.3% acceptance, forcing 4 gives 141.2 at 55.5%. Nine points of acceptance bought 7%
+      # of decode. Do not copy muse's conclusion here without re-running the bench.
+      #
+      # Requires the DFlash2 build, see $exeDflash2 above. The fork's published archives
+      # cannot load this file.
+      '--spec-type','draft-dflash',
+      '--spec-draft-model',"$ModelsDir\ternary-bonsai-2-27b\Bonsai-2-27B-DFlash2-Q8_0.gguf",
+      '--spec-draft-ngl','99','--spec-draft-n-max','4',
       #
       # BLACKWELL INVESTIGATION, 2026-09-18. Measured decode of 97.2-103.4 tok/s here against the
       # model card's 129.9 tok/s looked like a 25% loss to chase. It is not a configuration defect:

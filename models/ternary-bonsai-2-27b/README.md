@@ -7,8 +7,14 @@ Twenty-seven billion parameters in 6.71 GiB. Installed and measured 2026-09-18.
 
 **Ingestion is sixty times what the first generation managed**, 3,347 tok/s
 against 56, measured on the same prompt by the same bench on the same day.
-Generation is a wash, 97.2 against 102.6. For a client that re-reads a long
-conversation at every turn, that one figure decides between the two.
+Generation was a wash that day, 97.2 against 102.6.
+
+Speculation, on since 2026-09-20, moves both numbers: generation to 141.4 tok/s
+and ingestion down to 2,879, which leaves the first generation about fifty times
+behind rather than sixty. The two ingestion figures come from bench runs two days
+apart, so read that ratio as an order of magnitude and not to the unit. For a
+client that re-reads a long conversation at every turn, ingestion still decides
+between the two profiles.
 
 ```powershell
 .\llm-ctl.ps1 -Action bonsai2
@@ -18,16 +24,16 @@ conversation at every turn, that one figure decides between the two.
 | ---------------- | ---------------------------------------------------------------------------------------------------------------- |
 | Weights          | `Ternary-Bonsai-2-27B-PQ2_0.gguf`, 6.71 GiB                                                                      |
 | Vision projector | `Ternary-Bonsai-2-27B-mmproj-BF16.gguf`, 0.87 GiB                                                                |
-| Speculation      | **None available.** The repository publishes no drafter, and the first generation's does not transfer, see below |
+| Speculation      | **DFlash2 drafter, on since 2026-09-20.** 55.5% acceptance, +37% decode, see below                               |
 | Context          | 262,144                                                                                                          |
 | KV cache         | `q8_0`                                                                                                           |
-| VRAM             | 20,282 MiB, projector included                                                                                   |
-| Decode           | **97.2 tok/s** (median of 3)                                                                                     |
-| Prefill          | **3,347 tok/s** (median of 3)                                                                                    |
-| Build            | `prism-b10685-7dffb15` (2026-09-15), PrismML's fork                                                              |
+| VRAM             | 25,463 MiB, projector and drafter included                                                                       |
+| Decode           | **141.4 tok/s** (median of 3, with the drafter; 102.9 without)                                                   |
+| Prefill          | **2,879 tok/s** (median of 3, with the drafter; 3,259 without)                                                   |
+| Build            | built here 2026-09-20 from PrismML's fork carrying upstream DFlash2, see below                                   |
 | Quality          | Not measured here yet. Its authors publish 84.78 across 14 thinking-mode benchmarks, 98.2 % of the FP16 baseline |
 
-## The one binary on this box that upstream did not build
+## Two engines, and the one this runs on was built here
 
 Bonsai 2 stores its weights in a Hadamard-rotated basis and the runtime applies
 the matching transform to activations. That transform is not in mainline
@@ -40,11 +46,21 @@ There was no third option. The first generation shipped a `Q2_g64` file meant
 for upstream builds and this one does not, so the fork is the price of running
 the model at all.
 
-What the standing rule protected is preserved: the fork publishes release
-archives, so this was unpacked like every other engine here and nothing is
-compiled on this machine. The cost is that the fork tracks upstream at its own
-pace, `b10685` where the neighbouring profiles run `b10883`. No other profile
-was moved onto it.
+The fork publishes release archives, so it was first unpacked like every other
+engine here, `prism-b10685-7dffb15`. That is no longer what this profile runs.
+
+The drafter above is a DFlash2 file, and both published fork archives refuse it
+at load: `wrong number of tensors; expected 81, got 58`, because they do not know
+23 of its tensor names. The upstream commit that adds DFlash2, `4a6ad487a` of
+2026-08-27, does not port onto the fork as a patch: 36 of its 38 hunks were
+rejected, the two trees having diverged too far on these files. The drafter's
+author had already done that merge and publishes the exact tree alongside the
+weights, so that is what is built here, into
+`D:\LLM-Setup\llama-cpp-prism-dflash2`. See
+[docs/building-llama-cpp.md](../../docs/building-llama-cpp.md).
+
+Retire that directory once the fork merges upstream DFlash2 and ships an archive
+with it. No other profile was moved onto either engine.
 
 ## PQ2_0 and not PTQ1_0, on this card and no other
 
@@ -58,32 +74,58 @@ Dense packing wins on the Ada parts and the L4, where memory bandwidth is the
 binding constraint. It is not the constraint here, so the larger file is the
 right one and costs 1.26 GB.
 
-## The drafter question, settled by measurement
+## The drafter question, reopened and settled the other way
 
-The upstream demo repository states that drafters are target-specific. That was
-tested rather than believed, on 2026-09-18.
+On 2026-09-18 this profile ran without speculation and the README said no
+drafter existed. Both halves of that turned out to be wrong, and the correction
+is worth 37% of decode.
 
-Bonsai 1 publishes a dspark drafter; Bonsai 2 publishes none. The published
-`dspark-Q4_1` file is a pre-migration packing that no current binary loads, which
-is the real cause of llama.cpp issue 26337 and of this profile's twin failing on
-2026-09-10. The fork ships the converter that fixes it, `gguf-dspark-to-dflash`,
-and it takes the target model as tokenizer donor, so the first generation's
-drafter can be converted against this one.
+A DFlash2 head trained against this exact target was published on 2026-09-17,
+2.06 GB, `Bonsai-2-27B-DFlash2-Q8_0.gguf`. It carries no embedding table of its
+own and borrows the target's, which is what keeps it small. Measured here on
+2026-09-20, same bench prompt, three runs, median:
 
-It converts, it quantises to 592 MiB, the server loads it and speculation
-engages. Then:
+|                           | Without     | With the DFlash2 drafter |
+| ------------------------- | ----------- | ------------------------ |
+| Decode                    | 102.9 tok/s | **141.4 tok/s**          |
+| Prefill                   | 3,259 tok/s | 2,879 tok/s              |
+| Acceptance                | -           | **426 of 768, 55.5 %**   |
+| VRAM                      | 20,297 MiB  | 25,463 MiB               |
+| Spill at the end of a run | 1,508 MiB   | 4,132 MiB                |
 
-|            | Without     | With the converted drafter |
-| ---------- | ----------- | -------------------------- |
-| Decode     | 98.3 tok/s  | **44.9 tok/s**             |
-| Prefill    | 3,349 tok/s | 2,901 tok/s                |
-| Acceptance | -           | **6 of 2,028, 0.3 %**      |
-| VRAM       | 16,184 MiB  | 24,741 MiB                 |
-| Spill      | 1,508 MiB   | 10,780 MiB                 |
+Prefill pays about 12% for it. On this box's mix that still wins, but a workload
+that only ever ingests should not take this.
 
-Both runs used a `q4_0` cache, which is why the first column differs from the
-profile. The drafter guesses nothing and is paid for every time. The claim was
-correct.
+The z-lab `Qwen3.8-27B-DFlash2-Q4_K_M.gguf` was measured beside it and loses by a
+hair, 139.9 tok/s and 53.8% acceptance, while saving 872 MiB. Take it on a card
+short of memory, not here.
+
+On the protocol of the validation posted to PrismML pull request 210, same three
+prompts at temperature 0 with seed 42 and a 32,768 window, this box returns 231.2
+tok/s and 86.0% acceptance on arithmetic, 256.7 and 90.9% on code, 125.5 and
+31.1% on prose, against 134.5, 134.4 and 132.9 with no drafter at all. Output is
+byte-identical to the undrafted run on arithmetic and on code; prose differs,
+which the published validation reports as well and attributes to batching, not to
+speculation.
+
+**Do not add pull request 210 to the build this runs on.** That patch is real and
+fixes drafters borrowing a Hadamard-folded target's embeddings, but the tree built
+here already applies the inverse transform right after the token lookup, in
+`src/llama-graph.cpp`. Applying it a second time is measurable: acceptance falls
+to 6-10% and decode to 72-81 tok/s, on both drafters. The figures the pull request
+reports as its gain are what this build produces without it.
+
+### What the 2026-09-18 measurement actually proved
+
+That day Bonsai 1's published bf16 drafter was converted with
+`gguf-dspark-to-dflash` against this model as tokenizer donor. It loaded, and
+drafted nothing: 6 tokens accepted out of 2,028, decode halved to 44.9 tok/s from
+98.3, 10,780 MiB spilled. The conclusion drawn was that drafters never transfer
+between generations.
+
+The measurement stands. The conclusion does not: the engine of that day did not
+know the DFlash2 format and could not have used a correct drafter either. What
+was proved is that _that_ converted file was useless, not that the idea was.
 
 ## `q8_0` and not the demo's `BONSAI_KV4`
 

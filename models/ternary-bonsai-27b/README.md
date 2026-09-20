@@ -113,10 +113,14 @@ call. Nothing else in the file was touched.
 ## What the second generation does to this one
 
 `bonsai2` was installed on 2026-09-18 and ingests **sixty times faster**, 3,347
-tok/s against 56 on the same prompt and the same bench the same day. Decode is a
-wash, 97.2 against 102.6. This profile stays because its quality figures are the
-measured ones and the second generation has not been through the bench, but for
-anything that re-reads a long conversation the choice is not close.
+tok/s against 56 on the same prompt and the same bench the same day. Decode was a
+wash at the time, 97.2 against 102.6; since 2026-09-20 it runs a DFlash2 drafter
+and generates at 141.4, so it now wins on both counts. That drafter costs it 12%
+of its ingestion, which brings the gap down to about fifty times and changes
+nothing to the conclusion below. This profile stays because
+its quality figures are the measured ones and the second generation has not been
+through the bench, but for anything that re-reads a long conversation the choice
+is not close.
 
 ## Two other reported failures, for context
 

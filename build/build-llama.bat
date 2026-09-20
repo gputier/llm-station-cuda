@@ -10,6 +10,9 @@ REM   CUDA_VERSION  toolkit directory name, e.g. v13.3; default is the machine
 REM                 CUDA_PATH, which follows the newest toolkit installed
 REM   LOG           build log, default D:\build-log.txt
 REM Set FORCE_CUBLAS=OFF in the environment to drop GGML_CUDA_FORCE_CUBLAS.
+REM Set EXTRA_CMAKE in the environment to append flags to the configure step,
+REM for instance -DLLAMA_BUILD_TESTS=OFF on a tree whose tests use POSIX calls
+REM MSVC does not have. It is appended last, so it wins over the flags above.
 REM
 REM Stop any running llama-server first: recent builds split the server into
 REM DLLs, and linking fails with LNK1104 if ggml-cuda.dll is still loaded.
@@ -46,7 +49,7 @@ REM Drop it for a plain upstream build unless you have measured that it helps.
   -DCMAKE_BUILD_TYPE=Release ^
   -DCUDAToolkit_ROOT="%CUDA_PATH%" ^
   -DCMAKE_CUDA_COMPILER="%CUDA_PATH%\bin\nvcc.exe" ^
-  -DGGML_CUDA_FORCE_CUBLAS=%FORCE_CUBLAS% > "%LOG%" 2>&1
+  -DGGML_CUDA_FORCE_CUBLAS=%FORCE_CUBLAS% %EXTRA_CMAKE% > "%LOG%" 2>&1
 
 REM -j 16 matches the core count of this machine. Lower it if the build starves
 REM the rest of the box.

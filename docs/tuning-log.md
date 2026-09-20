@@ -9,6 +9,73 @@ hardware listed in [prerequisites.md](prerequisites.md).
 
 ---
 
+## 2026-09-20 : la spéculation de Bonsai 2, rouverte et gagnée
+
+Le 18/09 ce profil a été laissé sans brouillon, sur la foi de deux affirmations : Bonsai 2 n'en
+publie aucun, et celui de Bonsai 1 ne transfère pas. La première était périmée le lendemain, la
+seconde était mal mesurée. Correction : 37 % de génération en plus.
+
+Un brouillon DFlash2 entraîné contre cette cible existe depuis le 17/09,
+`Bonsai-2-27B-DFlash2-Q8_0.gguf`, 2,06 Go. Il n'embarque pas sa propre table de mots et emprunte
+celle de la cible, ce qui explique sa taille. Mesuré sur le banc maison, invite complète, médiane
+de trois passes :
+
+|                             | Sans brouillon | ProCreations Q8_0 | z-lab Q4_K_M    |
+| --------------------------- | -------------- | ----------------- | --------------- |
+| Génération                  | 102,9 tok/s    | **141,4 tok/s**   | 139,9 tok/s     |
+| Ingestion                   | 3 259 tok/s    | 2 879 tok/s       | 2 861 tok/s     |
+| Acceptation                 | -              | 426/768, 55,5 %   | 420/780, 53,8 % |
+| VRAM                        | 20 297 Mio     | 25 463 Mio        | 24 591 Mio      |
+| Débordement en fin de passe | 1 508 Mio      | 4 132 Mio         | non relevé      |
+
+Le ProCreations est retenu : 1,5 tok/s de mieux pour 872 Mio de plus, ce qui est dans le bruit des
+deux côtés, mais la mémoire est disponible et il accepte mieux en prose. Sur une carte serrée, le
+z-lab est le bon choix. L'ingestion perd 12 % dans les deux cas, et c'est le seul vrai prix.
+
+**Le brouillon fait déborder en mémoire partagée, et le débit n'en souffre pas.** Relevé le 20/09 à
+20 h : 1 648 Mio au chargement, 4 132 Mio en fin de génération, contre 1 508 Mio constants sans
+brouillon. La génération médiane reste à 141,2 tok/s dans cette même passe, donc ce débordement ne
+se paie pas au débit ici. Ce n'est pas un détail pour autant : il se creuse pendant la génération,
+et un profil plus lourd chargé sur la même carte le ferait grossir. La ligne « débordement 0 »
+publiée d'abord était fausse, elle ne lisait que l'état au chargement.
+
+### La profondeur du brouillon, forcée à 4 et non laissée par défaut
+
+Le profil `muse` porte la mesure inverse sur le même mécanisme `draft-dflash` : y forcer la
+profondeur effondrait l'acceptation pour un débit équivalent. Vérifié sur `bonsai2` le 20/09,
+même banc, trois passes chacun.
+
+|             | Profondeur par défaut | Forcée à 4      |
+| ----------- | --------------------- | --------------- |
+| Génération  | 132,0 tok/s           | **141,2 tok/s** |
+| Ingestion   | 2 888 tok/s           | 2 863 tok/s     |
+| Acceptation | 411/639, 64,3 %       | 426/768, 55,5 % |
+| VRAM        | 25 313 Mio            | 25 463 Mio      |
+
+Le piège de `muse` ne se reproduit pas : forcer à 4 coûte bien 9 points d'acceptation, et rend
+quand même 7 % de génération en plus. Le réglage est gardé. C'est la troisième fois que
+l'acceptation désigne le perdant sur ce banc, ce que dit déjà l'en-tête de `vitesse.ps1` : le taux
+d'acceptation renseigne, il ne tranche pas.
+
+**Le moteur a dû être compilé.** Les deux archives publiées du fork refusent le brouillon,
+`expected 81, got 58` : le support DFlash2 est arrivé en amont le 27/08 et n'a pas encore atteint
+le fork. Le report du commit amont par patch échoue, 36 morceaux rejetés sur 38. L'auteur du
+brouillon publie l'arbre déjà fusionné à côté de ses poids, et c'est celui-là qui est construit,
+dans `D:\LLM-Setup\llama-cpp-prism-dflash2`.
+
+**La demande d'ajout 210 du fork ne doit PAS y être appliquée**, alors qu'elle traite exactement le
+défaut qui nous concerne. Cet arbre applique déjà la transformation inverse après la lecture de la
+table de mots, dans `src/llama-graph.cpp`. Compilé avec le correctif en plus, la transformation
+passe deux fois : acceptation de 86-91 % tombée à 6-10 %, génération de 231-257 tok/s tombée à
+72-81, sur les deux brouillons. Sans le correctif, cet arbre rend les chiffres que la demande
+d'ajout présente comme son gain, 190 sur 208 en code et 39 sur 172 en prose, au jeton près.
+
+Contrôle de non-régression : sur deux des trois questions du protocole publié, la sortie est
+identique octet pour octet à celle obtenue sans brouillon. La prose diffère, ce que la validation
+publiée rapporte aussi et attribue au lot de calcul, pas à la spéculation.
+
+---
+
 ## 2026-09-19 : audit des quinze profils, Ornith n'entendait pas les rappels
 
 Tous les fichiers cités par `llm-ctl.ps1` existent sur la station, sauf les poids de `whittle`

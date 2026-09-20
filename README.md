@@ -49,20 +49,22 @@ unloads the others.
 | `nex`     | Nex-N2.5-mini, i1-Q4_K_M                                                                  | 262,144 | Candidate since 2026-09-10. Vision, no speculation                                                                                                                  |
 | `spark`   | Spark-X2.5-4B, Q8_0                                                                       | 262,144 | Candidate since 2026-09-10. Agentic, text only                                                                                                                      |
 | `bonsai`  | Ternary-Bonsai-27B, Q2_g64                                                                | 262,144 | Candidate since 2026-09-10. Ternary weights, vision                                                                                                                 |
-| `bonsai2` | Ternary-Bonsai-2-27B, PQ2_0                                                               | 262,144 | Candidate since 2026-09-18. Ternary weights, vision, and sixty times the ingestion of `bonsai`                                                                      |
+| `bonsai2` | Ternary-Bonsai-2-27B, PQ2_0                                                               | 262,144 | Candidate since 2026-09-18. Ternary weights, vision, speculation since 2026-09-20, and fifty times the ingestion of `bonsai`                                        |
 
 `nex`, `spark` and `bonsai` were installed on 2026-09-10 and measured the same
 day. They run on their own engine, `b10883`, which serves nothing else, and each
 carries a known defect written at the top of its page under [models/](models/).
 
-Two profiles do not run an official llama.cpp release. `xing` runs the one
-engine compiled on this box, from a llama.cpp pull request, because no release
-knows its architecture: see [docs/building-llama-cpp.md](docs/building-llama-cpp.md).
-`bonsai2` keeps its weights in a Hadamard-rotated basis that mainline cannot
-undo, so it serves on PrismML's fork, `prism-b10685`, taken as a published
-binary archive and unpacked like the others, and no other profile was moved
-onto it. Its page under [models/](models/) carries the whole reasoning, along with the two hypotheses it closed by measurement: no drafter
-transfers to it, and a 4-bit KV cache buys memory this box does not need.
+Two profiles run an engine compiled on this box rather than an official
+llama.cpp release, both documented in
+[docs/building-llama-cpp.md](docs/building-llama-cpp.md). `xing` needs one
+because no release knows its architecture. `bonsai2` keeps its weights in a
+Hadamard-rotated basis that mainline cannot undo, so it needs PrismML's fork,
+and since 2026-09-20 it needs a build of that fork carrying upstream's DFlash2
+support, without which its drafter will not load at all. No other profile was
+moved onto either. Its page under [models/](models/) carries the whole
+reasoning, including the drafter claim it had to reverse and the 4-bit KV cache
+that buys memory this box does not need.
 
 **Every quality figure in this repository comes from the campaign of
 2026-09-10**, where all nine chat models went through the same 500-question MMLU

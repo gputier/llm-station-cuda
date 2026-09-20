@@ -12,7 +12,8 @@ compiled here from a pull request; the last two sections say why each had to be.
 | `llama-cpp-20260827`       | 2026-08-27        | 13.3 | `qwen`                            | The only build with NVFP4 CUDA kernels. See below. It also served `ornith` until 2026-09-08; that profile is Q5_K_M and never needed those kernels.                                                                                                                                                                                                           |
 | `llama-cpp-b10826`         | 2026-09-06        | 13.3 | `tiel`, `ornith`, `kat`           | The official release zip and its cudart, unzipped flat, no compilation. Neutral in decode and +5% in prefill on Tiel against the 2026-08-27 build; strictly neutral on Ornith, which moved here on 2026-09-08 to stop owing a profile to the NVFP4 build. See [tuning-log.md](tuning-log.md). `kat` was added here on 2026-09-08 and never ran anywhere else. |
 | `llama-cpp-b10883`         | 2026-09-09        | 13.3 | `nex`, `spark`, `bonsai`          | Same recipe as b10826, official zip plus cudart unzipped flat. Installed 2026-09-10 for three candidate models and serving only those. See below.                                                                                                                                                                                                             |
-| `llama-cpp-prism-b10685`   | 2026-09-15        | 13.3 | `bonsai2`                         | **Not upstream.** PrismML's fork, release `prism-b10685-7dffb15`, `win-cuda-13.3-x64` archive unpacked flat. The only engine that reads Bonsai 2's rotated weights. Installed 2026-09-18. See below.                                                                                                                                                          |
+| `llama-cpp-prism-b10685`   | 2026-09-15        | 13.3 | nothing                           | **Not upstream.** PrismML's fork, release `prism-b10685-7dffb15`, `win-cuda-13.3-x64` archive unpacked flat. Served `bonsai2` until 2026-09-20, kept only as the reference for what the published fork can and cannot read.                                                                                                                                   |
+| `llama-cpp-prism-dflash2`  | 2026-09-20        | 13.3 | `bonsai2`                         | **Not a release.** PrismML's fork carrying upstream DFlash2, published as source by the drafter's author and compiled here. The only engine that reads both Bonsai 2's rotated weights and its drafter. See the last section.                                                                                                                                 |
 | `llama-cpp-xing-pr29012`   | 2026-09-19        | 13.3 | `xing`                            | **Not a release.** Compiled on this box from llama.cpp pull request #29012, commit `63c16fb`. The only engine that knows Xing4.0's architecture. See the last section.                                                                                                                                                                                        |
 
 ## b10883: taken for one architecture, not for speed
@@ -195,3 +196,44 @@ carries the architecture.
 The model it was built for was rejected the same evening, see
 [tuning-log.md](tuning-log.md), and its weights deleted. The engine stays so the
 profile can be re-run after a new download.
+
+## The DFlash2 build: compiled because the drafter would not load
+
+`bonsai2` gained a drafter on 2026-09-20, worth 37% of decode. Neither published
+fork archive can load it. Both refuse it with `wrong number of tensors; expected
+81, got 58`: the file has 81 tensors and the engine recognises 58 of the names,
+DFlash2 having landed upstream in `4a6ad487a` on 2026-08-27 and not yet reached
+the fork, whose `prism` branch has not moved since 2026-09-18.
+
+Porting that commit onto the fork by patch does not work. It touches 16 files,
+and `git apply --reject` rejected 36 of its 38 hunks, 12 of them in
+`src/models/dflash.cpp` alone. The two trees have diverged too far there.
+
+The way out was that the drafter's author ships the merged tree next to the
+weights, as `runtime/prism-dflash2-source.tar.gz` in the Hugging Face repository
+`ProCreations/Ternary-Bonsai-2-27B-DFlash2`. Unpacked into
+`D:\LLM-Setup\llama-cpp-prism-dflash2` and built with the usual script:
+
+```bat
+set FORCE_CUBLAS=OFF
+set EXTRA_CMAKE=-DLLAMA_BUILD_TESTS=OFF
+build-llama.bat D:\LLM-Setup\llama-cpp-prism-dflash2\llama v13.3 D:\LLM-Setup\logs\build-dflash2-avant.txt
+```
+
+`EXTRA_CMAKE` was added to `build-llama.bat` for this: that tree's test suite
+calls `setenv`, which MSVC does not have, and one failing test object fails the
+whole build although `llama-server` itself compiles. The result is a static
+`llama-server.exe` of 71 MB in `build-win\bin`.
+
+**Do not add pull request 210 to it.** The patch fixes a drafter borrowing a
+Hadamard-folded target's embeddings without the matching inverse transform, which
+is a real defect, but this tree already applies that transform in
+`src/llama-graph.cpp` immediately after the token lookup. Built with the patch on
+top and measured the same day, acceptance falls from 86-91% to 6-10% and decode
+from 231-257 tok/s to 72-81, on both drafters: the transform runs twice. Unpatched,
+this build reproduces the acceptance figures that the pull request's own
+validation reports as its gain, 190 of 208 on the code prompt and 39 of 172 on
+prose, to the token.
+
+Retire this directory once the fork merges upstream DFlash2 and publishes an
+archive carrying it.

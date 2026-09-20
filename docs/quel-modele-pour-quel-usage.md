@@ -23,18 +23,19 @@ Le classement ci-dessous en tient compte : là où la mesure manque, c'est écri
 
 ## Le tableau, par usage
 
-| Usage                     | Modèle                                               | Fondé sur                       |
-| ------------------------- | ---------------------------------------------------- | ------------------------------- |
-| Connaissance générale     | `nex` et `tiel`, 86,6 %                              | **mesuré**                      |
-| Raisonnement arithmétique | `kat`, 60/60                                         | **mesuré**                      |
-| Vitesse pure              | `tiel`, 230,4 tok/s                                  | **mesuré**                      |
-| Qualité par octet         | `bonsai`, 83,6 % en 7,06 Go                          | **mesuré**                      |
-| Petite empreinte          | `ornith`, 83,4 % en 15,5 Go                          | **mesuré**                      |
-| Contexte long prouvé      | `nex`, 6/6 à 243 969 jetons                          | **mesuré**                      |
-| Agentique                 | `muse`                                               | déduit, voir plus bas           |
-| Écriture de code          | `tiel` ou `kat`                                      | déduit, voir plus bas           |
-| Vision                    | `nex`, `tiel`, `muse`, `bonsai`, `bonsai2`, `ornith` | non testé, projecteurs présents |
-| Lecture d'un long fil     | `bonsai2`, 3 347 jetons par seconde en ingestion     | **mesuré**, qualité non mesurée |
+| Usage                             | Modèle                                                   | Fondé sur                       |
+| --------------------------------- | -------------------------------------------------------- | ------------------------------- |
+| Connaissance générale             | `nex` et `tiel`, 86,6 %                                  | **mesuré**                      |
+| Raisonnement arithmétique         | `kat`, 60/60                                             | **mesuré**                      |
+| Vitesse pure                      | `tiel`, 230,4 tok/s                                      | **mesuré**                      |
+| Qualité par octet                 | `bonsai`, 83,6 % en 7,06 Go                              | **mesuré**                      |
+| Petite empreinte                  | `ornith`, 83,4 % en 15,5 Go                              | **mesuré**                      |
+| Contexte long prouvé              | `nex`, 6/6 à 243 969 jetons                              | **mesuré**                      |
+| Agentique                         | `muse`                                                   | déduit, voir plus bas           |
+| Écriture de code                  | `tiel` ou `kat`                                          | déduit, voir plus bas           |
+| Vision                            | `nex`, `tiel`, `muse`, `bonsai`, `bonsai2`, `ornith`     | non testé, projecteurs présents |
+| Lecture d'un long fil             | `bonsai2`, 2 879 jetons par seconde en ingestion         | **mesuré**, qualité non mesurée |
+| Génération rapide sur un long fil | `bonsai2`, 141,4 jetons par seconde depuis le 20/09/2026 | **mesuré**, qualité non mesurée |
 
 ## Les recommandations, une par usage
 
@@ -67,9 +68,12 @@ parc laissant assez de place pour un second sur la carte. Il paie en vitesse,
 
 **Relire un long fil à chaque tour : `bonsai2`, installé le 18/09/2026.** Il
 avale l'invite à 3 347 jetons par seconde là où `bonsai` plafonne à 56, sur le
-même banc et la même invite le même jour, pour une génération équivalente. Un
-client agentique relit toute la conversation à chaque tour, donc c'est ce
-chiffre-là qui décide entre les deux générations. Réserve, et elle est sérieuse :
+même banc et la même invite le même jour. Un client agentique relit toute la
+conversation à chaque tour, donc c'est ce chiffre-là qui décide entre les deux
+générations. Depuis le 20/09/2026 le profil sert aussi un brouillon de
+spéculation : la génération passe à 141,4 jetons par seconde contre 102,9, et
+l'ingestion redescend à 2 879, soit 12 % de moins. Le détail est dans
+[tuning-log.md](tuning-log.md). Réserve, et elle est sérieuse :
 sa qualité n'est pas mesurée ici, il n'a pas passé la campagne du 10/09, et les
 83,6 % du tableau restent ceux de `bonsai`. Tant que le banc n'a pas tourné, le
 choix se fait sur la vitesse d'ingestion seule.
