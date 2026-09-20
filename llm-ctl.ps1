@@ -427,6 +427,11 @@ switch ($Action) {
       #   n-max 15 ......... 101.27 tok/s, acceptance 10.2% (3482 drafted / 364 kept)
       #   default .......... 107.33 tok/s, acceptance 39.9% (818 drafted / 326 kept)
       # Nearly the same gain for 4.3x less wasted draft compute.
+      #
+      # THIS CONCLUSION IS MUSE'S, NOT THE SPEC-TYPE'S. Re-run on bonsai2 on
+      # 2026-09-20, same draft-dflash mechanism, it came out the other way:
+      # default 132.0 tok/s at 64.3% acceptance, forced to 4 141.2 at 55.5%.
+      # Bench the profile you are tuning, do not carry this block over to it.
       '--spec-type','draft-dflash',
       '--spec-draft-model',"$ModelsDir\muse-glimmer-30b\dflash-kquant.gguf",
       '--spec-draft-ngl','99',
