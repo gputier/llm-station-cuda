@@ -35,6 +35,12 @@ if ($Chars -gt 0) { $prompt = $prompt.Substring(0, [Math]::Min($Chars, $prompt.L
 # out once dedicated VRAM is exhausted. nvidia-smi cannot see it. A configuration
 # can load, answer and still sit there: on 2026-09-13, on the 16 GB box, a
 # 1,450 MiB spill alone cut prefill to 485 tok/s. Read it before trusting a figure.
+#
+# READ THE END FIGURE, NOT THE START ONE, and publish the end figure. The spill
+# is taken twice on purpose because it GROWS during generation: on bonsai2 with
+# its drafter, 2026-09-20, 1,648 MiB at load and 4,132 MiB at the end, against
+# 1,508 MiB flat with no drafter. A run reported as spilling nothing, on the
+# strength of the load figure alone, had to be corrected across five files.
 function Get-SpillMb {
   $inst = Get-ChildItem 'D:\LLM-Setup\instances' -Filter '*.json' -ErrorAction SilentlyContinue | Select-Object -First 1
   if (-not $inst) { return -1 }
