@@ -1,9 +1,12 @@
 # Building llama.cpp for CUDA on Windows
 
-Seven builds coexist on this machine, on purpose. They are **not
+Eight builds coexist on this machine, on purpose. They are **not
 interchangeable**, and picking the wrong one fails silently rather than loudly.
-Five are official llama.cpp releases. The sixth is a fork, and the seventh was
-compiled here from a pull request; the last two sections say why each had to be.
+Four are official llama.cpp releases. Of the four others, two come from forks,
+one frozen since 2026-04-07 and one taken as a published archive, and two were
+compiled here from source; the last sections say why each had to be. Counted on
+the machine 2026-09-20, eight directories under `D:\LLM-Setup`, the table below
+naming all eight.
 
 | Build                      | Date              | CUDA | Serves                            | Why it exists                                                                                                                                                                                                                                                                                                                                                 |
 | -------------------------- | ----------------- | ---- | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
