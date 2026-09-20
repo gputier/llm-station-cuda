@@ -133,12 +133,12 @@ structurellement plus coûteux.
 Chaque essai a redémarré `bonsai2` via `llm-ctl.ps1 -Extra`, trois passes,
 graine fixe, sur la même invite complète que la mesure de référence.
 
-| Réglage | Décodage | Ingestion | VRAM dédiée | Débordement |
-|---|---|---|---|---|
-| Référence (profil inchangé) | 103,2 tok/s | 3 320 tok/s | 20 854 MiB | 1 508 MiB |
-| `--no-cont-batching` | 102,6 tok/s | 3 293 tok/s | 20 854 MiB | 1 508 MiB |
-| `-ub 4096` | 102,8 tok/s | 3 191 tok/s | 22 270 MiB | 2 612 MiB |
-| `--no-mmproj-offload` | 102,6 tok/s | 3 260 tok/s | 19 716 MiB | 1 508 MiB |
+| Réglage                     | Décodage    | Ingestion   | VRAM dédiée | Débordement |
+| --------------------------- | ----------- | ----------- | ----------- | ----------- |
+| Référence (profil inchangé) | 103,2 tok/s | 3 320 tok/s | 20 854 MiB  | 1 508 MiB   |
+| `--no-cont-batching`        | 102,6 tok/s | 3 293 tok/s | 20 854 MiB  | 1 508 MiB   |
+| `-ub 4096`                  | 102,8 tok/s | 3 191 tok/s | 22 270 MiB  | 2 612 MiB   |
+| `--no-mmproj-offload`       | 102,6 tok/s | 3 260 tok/s | 19 716 MiB  | 1 508 MiB   |
 
 Les trois écarts de décodage tiennent dans le bruit de mesure. `-ub 4096` coûte
 1 416 MiB de VRAM et 1 104 MiB de débordement supplémentaires pour rien.
@@ -174,10 +174,10 @@ assumed, and both were rejected.
 
 ### `BONSAI_KV4`, a 4-bit KV cache, is free memory this box does not need
 
-| Cache | Decode | Prefill | Card, dedicated |
-|---|---|---|---|
-| **`q8_0`** | **97.2 tok/s** | **3,347 tok/s** | 20,282 MiB |
-| `q4_0` | 98.3 tok/s | 3,349 tok/s | 16,184 MiB |
+| Cache      | Decode         | Prefill         | Card, dedicated |
+| ---------- | -------------- | --------------- | --------------- |
+| **`q8_0`** | **97.2 tok/s** | **3,347 tok/s** | 20,282 MiB      |
+| `q4_0`     | 98.3 tok/s     | 3,349 tok/s     | 16,184 MiB      |
 
 Both deltas sit inside the noise; the only real effect is 4,098 MiB freed. The
 32 GB box has 12 GB spare either way and 262,144 is already the model's own
@@ -196,13 +196,13 @@ llama.cpp issue 26337 and of the failure logged on 2026-09-10. The fork's
 so the first generation's drafter can be pointed at the second. It converts, it
 quantises to 592 MiB, the server loads it, speculation engages.
 
-| | Without | With the converted drafter |
-|---|---|---|
-| Decode | 98.3 tok/s | **44.9 tok/s** |
-| Prefill | 3,349 tok/s | 2,901 tok/s |
-| Acceptance | | **6 of 2,028 tokens, 0.3 %** |
-| Card, dedicated | 16,184 MiB | 24,741 MiB |
-| Spilled | 1,508 MiB | 10,780 MiB |
+|                 | Without     | With the converted drafter   |
+| --------------- | ----------- | ---------------------------- |
+| Decode          | 98.3 tok/s  | **44.9 tok/s**               |
+| Prefill         | 3,349 tok/s | 2,901 tok/s                  |
+| Acceptance      |             | **6 of 2,028 tokens, 0.3 %** |
+| Card, dedicated | 16,184 MiB  | 24,741 MiB                   |
+| Spilled         | 1,508 MiB   | 10,780 MiB                   |
 
 Both runs on a `q4_0` cache, which is why the left column is the one above and
 not the profile. **Decode halves.** A drafter is trained against one target's
@@ -252,14 +252,14 @@ The copy of the script on the box was also behind the repository: it had neither
 
 Same prompt, 400 tokens, three runs, median, the profile otherwise as committed.
 
-| Configuration | Decode | Prefill | MTP accepted | Card, dedicated |
-|---|---|---|---|---|
-| `--n-cpu-moe 38`, mmap | not benched | not benched | | 31,719 MiB and 7,838 MiB spilled |
-| `--n-cpu-moe 42`, mmap, depth 2 | 28.9 tok/s | 452 tok/s | 74.4% | 30,739 MiB |
-| same, `-b 8192 -ub 4096` | 23.6 | 251 | 71.7% | 31,747 MiB and 13,656 MiB spilled |
-| `--n-cpu-moe 42`, `--load-mode none`, depth 2 | 30.6 | 788 | 78.1% | 31,066 MiB |
-| same, depth 3 | 27.7 | 790 | 61.1% | 31,180 MiB |
-| **the committed profile, reloaded** | **29.1** | **783** | 69.7% | 31,066 MiB |
+| Configuration                                 | Decode      | Prefill     | MTP accepted | Card, dedicated                   |
+| --------------------------------------------- | ----------- | ----------- | ------------ | --------------------------------- |
+| `--n-cpu-moe 38`, mmap                        | not benched | not benched |              | 31,719 MiB and 7,838 MiB spilled  |
+| `--n-cpu-moe 42`, mmap, depth 2               | 28.9 tok/s  | 452 tok/s   | 74.4%        | 30,739 MiB                        |
+| same, `-b 8192 -ub 4096`                      | 23.6        | 251         | 71.7%        | 31,747 MiB and 13,656 MiB spilled |
+| `--n-cpu-moe 42`, `--load-mode none`, depth 2 | 30.6        | 788         | 78.1%        | 31,066 MiB                        |
+| same, depth 3                                 | 27.7        | 790         | 61.1%        | 31,180 MiB                        |
+| **the committed profile, reloaded**           | **29.1**    | **783**     | 69.7%        | 31,066 MiB                        |
 
 `--load-mode none` is the one lever that paid: +74% prefill, the card unchanged.
 The process then holds about 67 GB of host RAM, which Windows reports as shared
@@ -274,8 +274,7 @@ vector subscript` unless `--tensor-split 1` is given, ggml-org/llama.cpp issues
 27454 and 27717: once the target fills the card the draft's layer split is
 computed from zero free memory.
 
-For scale: `tiel` reads the same prompt at about 8,700 tok/s and decodes near
-200. This model is an order of magnitude slower on both, and the prefill is the
+For scale: `tiel` reads the same prompt at about 8,700 tok/s and decodes near 200. This model is an order of magnitude slower on both, and the prefill is the
 figure that will be felt: a fresh 45,000-token Claude Code prompt waits close to
 a minute.
 
@@ -318,19 +317,19 @@ and left in service. Nothing was restarted. The bench of the day before said
 
 ### The log, 924 requests
 
-| | Value |
-|---|---|
-| Decode, median / p10 / p90 | **45.1** / 37.0 / 57.1 tok/s |
-| Decode by total context: under 10k, 10k-30k, 30k-60k, 60k-100k, over 100k | 43.2, 47.1, 52.0, 50.7, 43.3 tok/s |
-| Prompt tokens read / time | 23.2 M in 8.0 h |
-| Tokens generated / time | 2.34 M in 14.7 h |
-| **Share of machine time spent in prefill** | **35%** |
-| Prefill on turns adding under 200 tokens, median / p10 | 153 / 59 tok/s |
-| Prefill on blocks of 20k to 100k new tokens, median | 1,219 tok/s |
-| Prompt-cache evictions | **350**, 670 GiB churned, median entry 1.76 GiB, largest 6.25 GiB |
-| Requests that re-read more than 20k tokens | 206 between 20k and 100k, 72 above 100k |
-| MTP acceptance, median | 0.74, mean draft length 2.48, active on every request |
-| Largest context reached | 179,200 tokens |
+|                                                                           | Value                                                             |
+| ------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| Decode, median / p10 / p90                                                | **45.1** / 37.0 / 57.1 tok/s                                      |
+| Decode by total context: under 10k, 10k-30k, 30k-60k, 60k-100k, over 100k | 43.2, 47.1, 52.0, 50.7, 43.3 tok/s                                |
+| Prompt tokens read / time                                                 | 23.2 M in 8.0 h                                                   |
+| Tokens generated / time                                                   | 2.34 M in 14.7 h                                                  |
+| **Share of machine time spent in prefill**                                | **35%**                                                           |
+| Prefill on turns adding under 200 tokens, median / p10                    | 153 / 59 tok/s                                                    |
+| Prefill on blocks of 20k to 100k new tokens, median                       | 1,219 tok/s                                                       |
+| Prompt-cache evictions                                                    | **350**, 670 GiB churned, median entry 1.76 GiB, largest 6.25 GiB |
+| Requests that re-read more than 20k tokens                                | 206 between 20k and 100k, 72 above 100k                           |
+| MTP acceptance, median                                                    | 0.74, mean draft length 2.48, active on every request             |
+| Largest context reached                                                   | 179,200 tokens                                                    |
 
 Three readings. **Short contexts decode slower than long ones**, which is the
 signature of a fixed cost per request, not of attention. **The draft head earns
@@ -344,12 +343,12 @@ never evicts anything.
 This box has 32 GB, the 5090 box 128. The profile was copied with
 `--load-mode mlock` and `-cram 12288`:
 
-| | Value |
-|---|---|
-| llama-server private bytes | 29,955 MiB |
-| llama-server resident set | **11,792 MiB**, peak 18,496 |
-| Free RAM | 6.8 GiB of 31.7 |
-| Page file | 996 MiB in use, **peak 9,965 MiB** |
+|                            | Value                              |
+| -------------------------- | ---------------------------------- |
+| llama-server private bytes | 29,955 MiB                         |
+| llama-server resident set  | **11,792 MiB**, peak 18,496        |
+| Free RAM                   | 6.8 GiB of 31.7                    |
+| Page file                  | 996 MiB in use, **peak 9,965 MiB** |
 
 The locked weights (10 GiB) and the prompt cache (12 GiB) do not both fit, and
 the one Windows paged out is the cache. A return to an evicted conversation
@@ -397,12 +396,12 @@ seed 42, decode as the median of three runs and prefill from the first, the
 later ones reading the prompt cache. The reference line is the run of
 2026-09-13 on the same prompt, `vitesse-qwen27-final-court`.
 
-| | Decode | Prefill | VRAM | Spill, end | Acceptance |
-|---|---|---|---|---|---|
-| qwen27, 2026-09-13, with mlock | 72.8 tok/s | 1,464 tok/s | 15,815 MiB | 1,048 MiB | 82.1% |
-| qwen27, no mlock | 72.1 | 1,394 | 15,851 | 650 | 79.8% |
-| **tiel** (Tiel-Coder-35B-A3B) | **139.3** | **2,893** | 15,413 | 620 | 71.3% |
-| qwen36 (Qwen3.6-35B-A3B) | 137.1 | 2,684 | 15,861 | 620 | 82.1% |
+|                                | Decode     | Prefill     | VRAM       | Spill, end | Acceptance |
+| ------------------------------ | ---------- | ----------- | ---------- | ---------- | ---------- |
+| qwen27, 2026-09-13, with mlock | 72.8 tok/s | 1,464 tok/s | 15,815 MiB | 1,048 MiB  | 82.1%      |
+| qwen27, no mlock               | 72.1       | 1,394       | 15,851     | 650        | 79.8%      |
+| **tiel** (Tiel-Coder-35B-A3B)  | **139.3**  | **2,893**   | 15,413     | 620        | 71.3%      |
+| qwen36 (Qwen3.6-35B-A3B)       | 137.1      | 2,684       | 15,861     | 620        | 82.1%      |
 
 Three readings, and the first one corrects this file. The 63.2 tok/s quoted in
 the 2026-09-13 entry above was an intermediate figure; the final run of that
@@ -438,10 +437,10 @@ them equal. Quality has to break the tie.
 `bench/banc.ps1`, the 500 MMLU questions and 60 GSM8K problems every campaign in
 this file uses, temperature 0, seed 42, thinking disabled.
 
-| | MMLU | GSM8K | Empty | Bench time |
-|---|---|---|---|---|
-| qwen36 | 90.2% | 56/60 | 0 | 27.2 min |
-| tiel | 85.8% | 55/60 | 0 | 10.9 min |
+|        | MMLU  | GSM8K | Empty | Bench time |
+| ------ | ----- | ----- | ----- | ---------- |
+| qwen36 | 90.2% | 56/60 | 0     | 27.2 min   |
+| tiel   | 85.8% | 55/60 | 0     | 10.9 min   |
 
 The 27B control was stopped at 303 of its 560 requests: its model left the box
 the same hour, so the figure would have served no decision.
@@ -485,10 +484,10 @@ allocations to system memory once the card was full.
 Measured after a fresh restart, same bench, long prompt 112,724 tokens:
 
 | `--n-cpu-moe` | Card after 112k | Decode short | Decode 112k | Prefill 112k |
-|---|---|---|---|---|
-| 0 | 15,866 MiB | 145.3 tok/s | 107.6 | 2,523 tok/s |
-| 2 | 15,424 | 135.9 | 101.9 | 2,154 |
-| 3 | 15,146 | 127.1 | 97.3 | 1,977 |
+| ------------- | --------------- | ------------ | ----------- | ------------ |
+| 0             | 15,866 MiB      | 145.3 tok/s  | 107.6       | 2,523 tok/s  |
+| 2             | 15,424          | 135.9        | 101.9       | 2,154        |
+| 3             | 15,146          | 127.1        | 97.3        | 1,977        |
 
 The plan was to keep the smallest setting that emptied the shared GPU memory.
 That criterion does not hold: the shared counter read 610 to 620 MiB in all
@@ -512,11 +511,11 @@ Prompts of 196,613 and 237,502 tokens cut from the llama.cpp sources with
 `/tokenize`, same bench otherwise. The card figure is the whole card, of 16,376
 MiB.
 
-| qwen36 | Card after load | Decode short | Decode 196.6k | Prefill 196.6k | Card after 196.6k | Decode 237.5k | Card after 237.5k |
-|---|---|---|---|---|---|---|---|
-| no offload | 15,694 MiB | 145.3 tok/s | 79.2 | 2,007 tok/s | 15,890 | 72.5 | 15,918 |
-| `--n-cpu-moe 2` | 15,232 | 135.9 | 68.9 | 1,788 | 15,428 | 62.4 | 15,456 |
-| `--fit on --fit-target 1024` | 14,488 | 127.3 | 70.1 | 1,499 | 14,686 | not run | not run |
+| qwen36                       | Card after load | Decode short | Decode 196.6k | Prefill 196.6k | Card after 196.6k | Decode 237.5k | Card after 237.5k |
+| ---------------------------- | --------------- | ------------ | ------------- | -------------- | ----------------- | ------------- | ----------------- |
+| no offload                   | 15,694 MiB      | 145.3 tok/s  | 79.2          | 2,007 tok/s    | 15,890            | 72.5          | 15,918            |
+| `--n-cpu-moe 2`              | 15,232          | 135.9        | 68.9          | 1,788          | 15,428            | 62.4          | 15,456            |
+| `--fit on --fit-target 1024` | 14,488          | 127.3        | 70.1          | 1,499          | 14,686            | not run       | not run           |
 
 No configuration dropped. Without offload the card still kept 458 MiB at
 237.5k tokens and decoded at 72.5 tok/s, where real use had fallen to 21 at
@@ -546,9 +545,9 @@ The `--fit` run logged that CPU tensor overrides are slower with mmap on.
 Measured the same evening, profile otherwise unchanged, same prompts:
 
 | qwen36, `--n-cpu-moe 2` | Decode short | Prefill short | Decode 196.6k | Prefill 196.6k | Card after 196.6k | Host RAM free after 196.6k |
-|---|---|---|---|---|---|---|
-| mmap, as before | 135.9 tok/s | 2,518 tok/s | 68.9 | 1,788 tok/s | 15,428 MiB | 5,645 MiB |
-| `--load-mode none` | 132.8 | 2,709 | 71.9 | 1,910 | 15,446 | 16,838 |
+| ----------------------- | ------------ | ------------- | ------------- | -------------- | ----------------- | -------------------------- |
+| mmap, as before         | 135.9 tok/s  | 2,518 tok/s   | 68.9          | 1,788 tok/s    | 15,428 MiB        | 5,645 MiB                  |
+| `--load-mode none`      | 132.8        | 2,709         | 71.9          | 1,910          | 15,446            | 16,838                     |
 
 Deep decode and prefill gain 4 and 7%, short decode loses 2%, the card does not
 move, and 11 GB of host RAM come back. On a 32 GB box that last figure matters
@@ -571,13 +570,13 @@ unless stated.
 Only 16 of the 64 layers cache K/V, 32,768 elements per token, so the cache is
 about 4.6 GiB in q4_0 at full window. Weights have to leave room for it:
 
-| Weights | Cache | Engine | Prefill | Decode | Note |
-|---|---|---|---|---|---|
-| UD-IQ4_XS, 13.27 GiB | q8_0 in host RAM (`-nkvo`) | b10908 | - | 14.5 tok/s, 4.85 at 45k | dead end |
-| UD-IQ3_XXS, 10.18 GiB | q4_0 | b10908 | 485 tok/s | 48 tok/s | spills 1,450 MiB |
-| UD-IQ3_XXS | KVarN 4 | BeeLlama v0.4.6 | 1,581 tok/s | 46 tok/s | spills 754 MiB |
-| UD-IQ3_XXS | KVarN 3 | BeeLlama v0.4.6 | 1,572 tok/s | 46 tok/s | 14,378 MiB |
-| UD-IQ4_XS | KVarN 2 | BeeLlama v0.4.6 | 61 tok/s | 15 tok/s | overflows |
+| Weights               | Cache                      | Engine          | Prefill     | Decode                  | Note             |
+| --------------------- | -------------------------- | --------------- | ----------- | ----------------------- | ---------------- |
+| UD-IQ4_XS, 13.27 GiB  | q8_0 in host RAM (`-nkvo`) | b10908          | -           | 14.5 tok/s, 4.85 at 45k | dead end         |
+| UD-IQ3_XXS, 10.18 GiB | q4_0                       | b10908          | 485 tok/s   | 48 tok/s                | spills 1,450 MiB |
+| UD-IQ3_XXS            | KVarN 4                    | BeeLlama v0.4.6 | 1,581 tok/s | 46 tok/s                | spills 754 MiB   |
+| UD-IQ3_XXS            | KVarN 3                    | BeeLlama v0.4.6 | 1,572 tok/s | 46 tok/s                | 14,378 MiB       |
+| UD-IQ4_XS             | KVarN 2                    | BeeLlama v0.4.6 | 61 tok/s    | 15 tok/s                | overflows        |
 
 **The spill column is the one nvidia-smi does not show.** When dedicated VRAM
 runs dry, Windows hands the process shared system memory instead of failing, the
@@ -592,13 +591,13 @@ more compact cache is not an option there. BeeLlama ships prebuilt Windows CUDA
 
 ### Speculation needs its own cache compressed too
 
-| Setting | Prefill | Decode | Accepted |
-|---|---|---|---|
-| KVarN 3, no MTP | 1,572 tok/s | 46.3 tok/s | - |
-| **KVarN 3, MTP n-max 2, draft cache KVarN 3** | 1,410 tok/s | **63.2 tok/s** | 86/124 |
-| KVarN 3, MTP n-max 3 | 1,459 tok/s | 61.9 tok/s | 96/155 |
-| KVarN 4, MTP n-max 2 | 133 tok/s | 26.7 tok/s | overflows |
-| q4_0 official, MTP n-max 2, draft cache f16 | 37 tok/s | - | spills 3,820 MiB |
+| Setting                                       | Prefill     | Decode         | Accepted         |
+| --------------------------------------------- | ----------- | -------------- | ---------------- |
+| KVarN 3, no MTP                               | 1,572 tok/s | 46.3 tok/s     | -                |
+| **KVarN 3, MTP n-max 2, draft cache KVarN 3** | 1,410 tok/s | **63.2 tok/s** | 86/124           |
+| KVarN 3, MTP n-max 3                          | 1,459 tok/s | 61.9 tok/s     | 96/155           |
+| KVarN 4, MTP n-max 2                          | 133 tok/s   | 26.7 tok/s     | overflows        |
+| q4_0 official, MTP n-max 2, draft cache f16   | 37 tok/s    | -              | spills 3,820 MiB |
 
 The MTP head allocates a draft cache over the same window. Left at its f16
 default it pushed 3.8 GB into shared memory. On a 45k-token prompt the retained
@@ -670,9 +669,9 @@ when the card is half the size.
 The profile served 131,072 because it had been copied from a working profile.
 The GGUF header says otherwise: `qwen35.context_length = 262144`.
 
-| Window | oxcoder | neohorse | Memory |
-|---|---|---|---|
-| 131,072 | 80.9 tok/s | 77.5 tok/s | 9,822 MiB |
+| Window      | oxcoder        | neohorse       | Memory     |
+| ----------- | -------------- | -------------- | ---------- |
+| 131,072     | 80.9 tok/s     | 77.5 tok/s     | 9,822 MiB  |
 | **262,144** | **80.9 tok/s** | **77.3 tok/s** | 13,018 MiB |
 
 **Doubling is free here.** That is the opposite of the 5090 box, where a window
@@ -694,10 +693,10 @@ The suspicion was that compressing the attention cache degraded long reasoning,
 since it approximates exactly what the model has just produced. Measured on 48
 reasoning items, same protocol on both sides:
 
-| Cache | Score | Speed | Memory |
-|---|---|---|---|
-| `q8_0` | 34/48 | 80.9 tok/s | 9,822 MiB |
-| `f16` | **34/48** | 78.0 tok/s | 11,357 MiB |
+| Cache  | Score     | Speed      | Memory     |
+| ------ | --------- | ---------- | ---------- |
+| `q8_0` | 34/48     | 80.9 tok/s | 9,822 MiB  |
+| `f16`  | **34/48** | 78.0 tok/s | 11,357 MiB |
 
 Identical score. Full precision costs 1,535 MiB and 2.9 tok/s and buys nothing.
 The hypothesis is closed by measurement rather than by principle.
@@ -707,14 +706,14 @@ The hypothesis is closed by measurement rather than by principle.
 All four measured on oxcoder, at 262,144 window, against a reference of
 **80.9 tok/s and 237.0 s over 24 real reasoning items**.
 
-| Setting | Speed | 24 real items | Memory | Acceptance |
-|---|---|---|---|---|
-| none (reference) | 80.9 tok/s | 237.0 s | 12,992 MiB | - |
-| `draft-mtp` | refused | - | - | server will not start |
-| `ngram-cache` | 80.6 tok/s | 240.3 s | 12,923 MiB | **0.00** |
-| draft model, n-max 3 | **18.1 tok/s** | 478.6 s | 15,905 MiB | 0.70 |
-| draft model, n-max 6 | 15.4 tok/s | 437.8 s | 15,905 MiB | 0.55 |
-| draft model, n-max 3, draft cache q4_0 | 47.3 tok/s | 328.7 s | 15,907 MiB | - |
+| Setting                                | Speed          | 24 real items | Memory     | Acceptance            |
+| -------------------------------------- | -------------- | ------------- | ---------- | --------------------- |
+| none (reference)                       | 80.9 tok/s     | 237.0 s       | 12,992 MiB | -                     |
+| `draft-mtp`                            | refused        | -             | -          | server will not start |
+| `ngram-cache`                          | 80.6 tok/s     | 240.3 s       | 12,923 MiB | **0.00**              |
+| draft model, n-max 3                   | **18.1 tok/s** | 478.6 s       | 15,905 MiB | 0.70                  |
+| draft model, n-max 6                   | 15.4 tok/s     | 437.8 s       | 15,905 MiB | 0.55                  |
+| draft model, n-max 3, draft cache q4_0 | 47.3 tok/s     | 328.7 s       | 15,907 MiB | -                     |
 
 The draft model is `Qwen3.5-0.8B-Q4_0`, 537 MB, verified compatible by reading
 the GGUF headers of both: same architecture `qwen35`, same 248,320 vocabulary.
@@ -763,10 +762,10 @@ tokens.
 It made things worse, and the log says by how much. Same model, same 372,000-token context, same
 single slot:
 
-| Window | Prefill | Decode |
-|---|---|---|
-| 393,216 | cached | **97.31 tok/s** |
-| 458,752 | 371,799 tokens in 111 s | **1.92 tok/s** |
+| Window  | Prefill                 | Decode          |
+| ------- | ----------------------- | --------------- |
+| 393,216 | cached                  | **97.31 tok/s** |
+| 458,752 | 371,799 tokens in 111 s | **1.92 tok/s**  |
 
 Four minutes for 259 tokens, after which the client gave up. The empty response was a client
 timeout, not a server refusal.
@@ -795,20 +794,20 @@ Protocol: b10826, the production `tiel` argument list with only the model path c
 projector on any of them including the control, `bench.ps1`, 150,000 characters of real llama.cpp
 sources (about 38,000 tokens), 512 tokens, seed 42, three runs, median.
 
-| Model | Decode | Prefill | VRAM | MTP accepted |
-|---|---|---|---|---|
-| **tiel** (control) | 199.71 tok/s | 8,758 tok/s | 30,936 MiB | 56.2% |
-| onyx compact | **207.19** | 8,275 | **25,621** | 60.1% |
-| kat-coder | 197.71 | 8,072 | 29,702 | 52.8% |
-| ice (MTPv2 23G) | 190.97 | 8,411 | 30,530 | 52.2% |
+| Model              | Decode       | Prefill     | VRAM       | MTP accepted |
+| ------------------ | ------------ | ----------- | ---------- | ------------ |
+| **tiel** (control) | 199.71 tok/s | 8,758 tok/s | 30,936 MiB | 56.2%        |
+| onyx compact       | **207.19**   | 8,275       | **25,621** | 60.1%        |
+| kat-coder          | 197.71       | 8,072       | 29,702     | 52.8%        |
+| ice (MTPv2 23G)    | 190.97       | 8,411       | 30,530     | 52.2%        |
 
 And the two 9B, same protocol at the production `ornith` window of 262,144:
 
-| Model | Decode | Prefill | VRAM | MTP accepted |
-|---|---|---|---|---|
-| ornith Q5_K_M, as in production | 167.18 tok/s | **10,721** | **11,648 MiB** | none |
-| ornith Q5_K_M, speculation on | **179.64** | 7,715 | 14,179 | 58.4% |
-| ashq1 (the downloaded file) | 164.25 | 7,743 | 14,357 | 49.0% |
+| Model                           | Decode       | Prefill    | VRAM           | MTP accepted |
+| ------------------------------- | ------------ | ---------- | -------------- | ------------ |
+| ornith Q5_K_M, as in production | 167.18 tok/s | **10,721** | **11,648 MiB** | none         |
+| ornith Q5_K_M, speculation on   | **179.64**   | 7,715      | 14,179         | 58.4%        |
+| ashq1 (the downloaded file)     | 164.25       | 7,743      | 14,357         | 49.0%        |
 
 ### The 9B already had the MTP head, and nobody had switched it on
 
@@ -841,10 +840,10 @@ Two explanations fit, a cold server or a context the draft head has never seen, 
 opposite conclusions, so a second prompt of the same size was built from a different slice of the
 sources and sent to a warm server:
 
-| tiel | prompt A, cold | prompt A, cached | prompt B, new context | prompt B, cached |
-|---|---|---|---|---|
-| speculation on | 55.82 tok/s | 200.20 | 190.10 | 191.83 |
-| speculation off | 196.96 | 195.98 | 187.63 | 193.15 |
+| tiel            | prompt A, cold | prompt A, cached | prompt B, new context | prompt B, cached |
+| --------------- | -------------- | ---------------- | --------------------- | ---------------- |
+| speculation on  | 55.82 tok/s    | 200.20           | 190.10                | 191.83           |
+| speculation off | 196.96         | 195.98           | 187.63                | 193.15           |
 
 A new context costs nothing. Only the first request after a start does, and only under speculation.
 **Discard run 1 of any speculative bench**, and read the header of this file accordingly: "median
@@ -860,11 +859,11 @@ sent the MTP head to the bin. It would have been wrong, and the reason is the pr
 asks for a ten-line summary in French, which is the least predictable text a draft head can be
 handed. Four short tasks at temperature 0, same model, same day:
 
-| Task | tiel, speculation on | tiel, speculation off |
-|---|---|---|
-| write a PowerShell function | **284.3 tok/s** | 218.2 |
-| read a Python snippet | **226.4** | 190.3 |
-| reason in French | 204.8 | **240.1** |
+| Task                        | tiel, speculation on | tiel, speculation off |
+| --------------------------- | -------------------- | --------------------- |
+| write a PowerShell function | **284.3 tok/s**      | 218.2                 |
+| read a Python snippet       | **226.4**            | 190.3                 |
+| reason in French            | 204.8                | **240.1**             |
 
 Thirty percent on generated code, nineteen on reading it, fifteen lost on French prose. The head
 earns its VRAM on exactly the work this box exists for, and `bench.ps1` is blind to it. Every MTP
@@ -903,10 +902,10 @@ weights are Q5_K_M and never touched an NVFP4 kernel. Control against `llama-cpp
 production argument list unchanged, only the binary varying: `bench.ps1`, 37,981-token prompt of
 real llama.cpp sources, 512 tokens, seed 42, temperature 1.0, thinking off, 3 runs, median decode.
 
-| Build | Decode | Prefill | VRAM | Window |
-|---|---|---|---|---|
+| Build      | Decode       | Prefill      | VRAM       | Window  |
+| ---------- | ------------ | ------------ | ---------- | ------- |
 | 2026-08-27 | 166.32 tok/s | 10,682 tok/s | 12,696 MiB | 262,144 |
-| b10826 | 167.44 tok/s | 10,796 tok/s | 12,697 MiB | 262,144 |
+| b10826     | 167.44 tok/s | 10,796 tok/s | 12,697 MiB | 262,144 |
 
 0.7% and 1.1%: noise on three runs. `draft_n` is absent on both, as expected, no MTP file exists
 for this model. The vision projector loads on both. A reasoning control (two trains, relative
@@ -959,10 +958,10 @@ Posted flat into `llama-cpp-b10826` from the release zip plus its cudart, no com
 same way as b10740 on 2026-09-01. Control on the `tiel` profile, 65,615-token synthetic code
 prompt, 400 tokens forced, seed 42, temperature 0.6, prompt cache off, 3 runs, median:
 
-| Build | Prefill | Decode | VRAM | MTP counters |
-|---|---|---|---|---|
-| 2026-08-27 (b10643) | 8,724 tok/s | 211.3 tok/s | 31,707 MiB | 339 / 229 |
-| **b10826** | **9,155 tok/s** | 210.8 tok/s | 31,550 MiB | 341 / 228 |
+| Build               | Prefill         | Decode      | VRAM       | MTP counters |
+| ------------------- | --------------- | ----------- | ---------- | ------------ |
+| 2026-08-27 (b10643) | 8,724 tok/s     | 211.3 tok/s | 31,707 MiB | 339 / 229    |
+| **b10826**          | **9,155 tok/s** | 210.8 tok/s | 31,550 MiB | 341 / 228    |
 
 Confirmed in real use by the owner: a 41,264-token opening turn read at 9,950 tok/s against
 9,496 the day before. Two startup notices to know: `preserve_reasoning` is on by default since
@@ -975,11 +974,11 @@ b10763 (may lengthen prompts, `--no-reasoning-preserve` turns it off), and the s
 while `/props` still announces the total (measured 2026-09-02 on the Vulkan box). Pure generation,
 tiny prompts, 400 tokens forced per stream, one process with one thread per stream:
 
-| Streams | Per stream | Total |
-|---|---|---|
-| 1 | 260 tok/s | 260 |
-| 2 | 202 + 188 tok/s | 390 |
-| 4 | 97 to 104 tok/s each | 400 |
+| Streams | Per stream           | Total |
+| ------- | -------------------- | ----- |
+| 1       | 260 tok/s            | 260   |
+| 2       | 202 + 188 tok/s      | 390   |
+| 4       | 97 to 104 tok/s each | 400   |
 
 With 40,000-token prompts arriving together the picture changes: two streams finish in 11.8 s,
 exactly the time of two sequential requests, and each stream drops to 15 to 50 tok/s while the
@@ -1030,11 +1029,11 @@ declares, `--ctx-size 393216` then sizes both the slot and the buffers on it.
 Same 50,480-token prompt of real prose, 800 tokens forced, fixed seed, cold
 prefill on a fresh process each time, override in place:
 
-| Window | VRAM | Decode | Prefill |
-|---|---|---|---|
-| 262,144 | 27,110 MB | 123.6 tok/s | 4,007 tok/s |
+| Window      | VRAM          | Decode          | Prefill         |
+| ----------- | ------------- | --------------- | --------------- |
+| 262,144     | 27,110 MB     | 123.6 tok/s     | 4,007 tok/s     |
 | **393,216** | **31,291 MB** | **122.5 tok/s** | **4,035 tok/s** |
-| 524,288 | 31,858 MB | 94.2 tok/s | 2,308 tok/s |
+| 524,288     | 31,858 MB     | 94.2 tok/s      | 2,308 tok/s     |
 
 Half again as much window costs **4.2 GB of VRAM and nothing else**, both
 throughput figures inside the noise. Doubling it costs a quarter of the decode
@@ -1084,13 +1083,13 @@ Re-swept at **both** empty and full (150k) context, on two distinct workloads,
 3 seeds, median decode tok/s:
 
 | n-max | reasoning / empty | reasoning / 150k | code / empty | code / 150k |
-|---|---|---|---|---|
-| 2 | . | 71.01 | . | 65.06 |
-| 3 | 152.50 | 76.90 | **139.24** | 66.19 |
-| **4** | **169.83** | **83.03** | 129.88 | **71.21** |
-| 5 | 165.28 | 79.81 | 125.47 | 73.82 |
-| 6 | 159.20 | 79.38 | 118.33 | 61.05 |
-| 8 | 125.22 | 69.10 | 100.58 | 60.92 |
+| ----- | ----------------- | ---------------- | ------------ | ----------- |
+| 2     | .                 | 71.01            | .            | 65.06       |
+| 3     | 152.50            | 76.90            | **139.24**   | 66.19       |
+| **4** | **169.83**        | **83.03**        | 129.88       | **71.21**   |
+| 5     | 165.28            | 79.81            | 125.47       | 73.82       |
+| 6     | 159.20            | 79.38            | 118.33       | 61.05       |
+| 8     | 125.22            | 69.10            | 100.58       | 60.92       |
 
 `n-max 4` wins three cases out of four, by 7.6 to 11.4%, and loses only on code
 at empty context. That is the least representative case here: under an agentic
@@ -1114,9 +1113,9 @@ non-linear table and therefore better fidelity on paper. It was applied to both
 Qwen profiles and caught mid-benchmark:
 
 | KV cache type | Prefill at 150k |
-|---|---|
-| `q4_0` | ~4,000 tok/s |
-| `iq4_nl` | **25.9 tok/s** |
+| ------------- | --------------- |
+| `q4_0`        | ~4,000 tok/s    |
+| `iq4_nl`      | **25.9 tok/s**  |
 
 The Flash Attention CUDA kernels do not cover this type and the engine falls
 back to a slow path. Reverted the same session.
@@ -1131,21 +1130,21 @@ reasoning`. Tested across all four combinations, same 3-turn conversation, same
 seed:
 
 | Client resends reasoning | Server flag | Prompt at turn 3 |
-|---|---|---|
-| yes | off | 2,846 |
-| yes | on | 2,846 |
-| no | on | 219 |
-| no | off | 219 |
+| ------------------------ | ----------- | ---------------- |
+| yes                      | off         | 2,846            |
+| yes                      | on          | 2,846            |
+| no                       | on          | 219              |
+| no                       | off         | 219              |
 
 The flag changes nothing in either direction. What carries the reasoning across
 turns is the client resending `reasoning_content`, not the server. Not retained.
 
 ### Reference figures that were missing: context length dominates everything
 
-| Workload | Empty context | 150k context |
-|---|---|---|
-| reasoning | 169.83 tok/s | 83.03 tok/s |
-| code | 129.88 tok/s | 71.21 tok/s |
+| Workload  | Empty context | 150k context |
+| --------- | ------------- | ------------ |
+| reasoning | 169.83 tok/s  | 83.03 tok/s  |
+| code      | 129.88 tok/s  | 71.21 tok/s  |
 
 Prompt length roughly halves throughput, far beyond what any flag returns. The
 counterpart is that the prompt cache earns its keep: switching workload on the
@@ -1163,11 +1162,11 @@ execute natively. Measured against the previous UD-Q5_K_XL, same prompt, same
 protocol, **speculation disabled on both sides** to isolate the structural gain
 from acceptance noise:
 
-| | Q5_K_XL | NVFP4 LOW | |
-|---|---|---|---|
-| Decode | 58.84 tok/s | 70.64 tok/s | +20.1% |
-| Prefill | 3,015 tok/s | 4,584 tok/s | +52.0% |
-| VRAM | 28.5 GB | 24.4 GB | 4.1 GB freed |
+|         | Q5_K_XL     | NVFP4 LOW   |              |
+| ------- | ----------- | ----------- | ------------ |
+| Decode  | 58.84 tok/s | 70.64 tok/s | +20.1%       |
+| Prefill | 3,015 tok/s | 4,584 tok/s | +52.0%       |
+| VRAM    | 28.5 GB     | 24.4 GB     | 4.1 GB freed |
 
 With speculation on, median over 5 seeds: 98.46 to 122.79 tok/s (+24.7%). On a
 real workload of 60 reasoning problems: 233.1 s to 188.6 s.
@@ -1198,10 +1197,10 @@ without ever having it.
 This is one notch beyond the capping trap already known, which concerns the
 window and not the memory. Measured with only `--ctx-size` changing:
 
-| Requested | Real window | VRAM | Decode | Prefill |
-|---|---|---|---|---|
-| 262144 | 262144 | 27.2 GB | **123.03** | **4,241** |
-| 524288 | 262144 | 31.9 GB | 99.76 | 2,462 |
+| Requested | Real window | VRAM    | Decode     | Prefill   |
+| --------- | ----------- | ------- | ---------- | --------- |
+| 262144    | 262144      | 27.2 GB | **123.03** | **4,241** |
+| 524288    | 262144      | 31.9 GB | 99.76      | 2,462     |
 
 Twenty-three percent of decode and 72% of prefill lost for nothing. The defect
 predated the NVFP4 migration, so it was already costing on the previous quant.
@@ -1256,12 +1255,12 @@ a seed, every run generates different text and the 2-3-4 neighbourhood sits
 entirely inside that noise. With a seed, three runs of the same configuration
 return rigorously identical speculation counters, which makes the A/B readable.
 
-| n-max | Throughput | Acceptance |
-|---|---|---|
-| 2 | 114.90 tok/s | 64% (449/697) |
+| n-max | Throughput       | Acceptance        |
+| ----- | ---------------- | ----------------- |
+| 2     | 114.90 tok/s     | 64% (449/697)     |
 | **3** | **117.75 tok/s** | **54% (495/907)** |
-| 4 | 113.53 tok/s | 45% (516/1128) |
-| 6 | 97.76 tok/s | 33% (534/1575) |
+| 4     | 113.53 tok/s     | 45% (516/1128)    |
+| 6     | 97.76 tok/s      | 33% (534/1575)    |
 
 Measured on a single 10,608-token prompt. Superseded for the `qwen` profile by
 the 2026-08-31 sweep above, which found the ranking inverts at full context.
@@ -1276,11 +1275,11 @@ And `-ub 512` was not imposed by it either. At `-ub 2048` the encoder stays
 loaded with no penalty; the multimodal buffer only overflows at 4096, where the
 card saturates at 31.5 GB and **both** metrics regress.
 
-| `-ub` | Prefill | Decode | VRAM |
-|---|---|---|---|
-| 512 | 3,106 tok/s | 117.08 tok/s | 29.5 GB |
+| `-ub`    | Prefill         | Decode           | VRAM        |
+| -------- | --------------- | ---------------- | ----------- |
+| 512      | 3,106 tok/s     | 117.08 tok/s     | 29.5 GB     |
 | **2048** | **3,252 tok/s** | **117.75 tok/s** | **30.7 GB** |
-| 4096 | 2,582 tok/s | 111.81 tok/s | 31.5 GB |
+| 4096     | 2,582 tok/s     | 111.81 tok/s     | 31.5 GB     |
 
 ### `--min-p 0`: the publisher's calibration, silently overridden
 

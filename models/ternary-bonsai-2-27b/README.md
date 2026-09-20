@@ -14,18 +14,18 @@ conversation at every turn, that one figure decides between the two.
 .\llm-ctl.ps1 -Action bonsai2
 ```
 
-| | |
-|---|---|
-| Weights | `Ternary-Bonsai-2-27B-PQ2_0.gguf`, 6.71 GiB |
-| Vision projector | `Ternary-Bonsai-2-27B-mmproj-BF16.gguf`, 0.87 GiB |
-| Speculation | **None available.** The repository publishes no drafter, and the first generation's does not transfer, see below |
-| Context | 262,144 |
-| KV cache | `q8_0` |
-| VRAM | 20,282 MiB, projector included |
-| Decode | **97.2 tok/s** (median of 3) |
-| Prefill | **3,347 tok/s** (median of 3) |
-| Build | `prism-b10685-7dffb15` (2026-09-15), PrismML's fork |
-| Quality | Not measured here yet. Its authors publish 84.78 across 14 thinking-mode benchmarks, 98.2 % of the FP16 baseline |
+|                  |                                                                                                                  |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------- |
+| Weights          | `Ternary-Bonsai-2-27B-PQ2_0.gguf`, 6.71 GiB                                                                      |
+| Vision projector | `Ternary-Bonsai-2-27B-mmproj-BF16.gguf`, 0.87 GiB                                                                |
+| Speculation      | **None available.** The repository publishes no drafter, and the first generation's does not transfer, see below |
+| Context          | 262,144                                                                                                          |
+| KV cache         | `q8_0`                                                                                                           |
+| VRAM             | 20,282 MiB, projector included                                                                                   |
+| Decode           | **97.2 tok/s** (median of 3)                                                                                     |
+| Prefill          | **3,347 tok/s** (median of 3)                                                                                    |
+| Build            | `prism-b10685-7dffb15` (2026-09-15), PrismML's fork                                                              |
+| Quality          | Not measured here yet. Its authors publish 84.78 across 14 thinking-mode benchmarks, 98.2 % of the FP16 baseline |
 
 ## The one binary on this box that upstream did not build
 
@@ -73,13 +73,13 @@ drafter can be converted against this one.
 It converts, it quantises to 592 MiB, the server loads it and speculation
 engages. Then:
 
-| | Without | With the converted drafter |
-|---|---|---|
-| Decode | 98.3 tok/s | **44.9 tok/s** |
-| Prefill | 3,349 tok/s | 2,901 tok/s |
-| Acceptance | - | **6 of 2,028, 0.3 %** |
-| VRAM | 16,184 MiB | 24,741 MiB |
-| Spill | 1,508 MiB | 10,780 MiB |
+|            | Without     | With the converted drafter |
+| ---------- | ----------- | -------------------------- |
+| Decode     | 98.3 tok/s  | **44.9 tok/s**             |
+| Prefill    | 3,349 tok/s | 2,901 tok/s                |
+| Acceptance | -           | **6 of 2,028, 0.3 %**      |
+| VRAM       | 16,184 MiB  | 24,741 MiB                 |
+| Spill      | 1,508 MiB   | 10,780 MiB                 |
 
 Both runs used a `q4_0` cache, which is why the first column differs from the
 profile. The drafter guesses nothing and is paid for every time. The claim was

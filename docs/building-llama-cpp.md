@@ -5,15 +5,15 @@ interchangeable**, and picking the wrong one fails silently rather than loudly.
 Five are official llama.cpp releases. The sixth is a fork, and the seventh was
 compiled here from a pull request; the last two sections say why each had to be.
 
-| Build | Date | CUDA | Serves | Why it exists |
-|---|---|---|---|---|
-| `llama-cpp-turboquant-win` | frozen 2026-04-07 | 12.8 | `embed` | A custom fork kept for a cache-quant feature of a model since removed. It has no remaining technical justification and could be retired once the embedder is validated on upstream. |
-| `llama-cpp-upstream` | 2026-08-11 | 13.3 | `muse`, `qwenu`, `qwenf`, `qwent` | Official build. The only one of the first two that knows the `muse-glimmer` architecture. |
-| `llama-cpp-20260827` | 2026-08-27 | 13.3 | `qwen` | The only build with NVFP4 CUDA kernels. See below. It also served `ornith` until 2026-09-08; that profile is Q5_K_M and never needed those kernels. |
-| `llama-cpp-b10826` | 2026-09-06 | 13.3 | `tiel`, `ornith`, `kat` | The official release zip and its cudart, unzipped flat, no compilation. Neutral in decode and +5% in prefill on Tiel against the 2026-08-27 build; strictly neutral on Ornith, which moved here on 2026-09-08 to stop owing a profile to the NVFP4 build. See [tuning-log.md](tuning-log.md). `kat` was added here on 2026-09-08 and never ran anywhere else. |
-| `llama-cpp-b10883` | 2026-09-09 | 13.3 | `nex`, `spark`, `bonsai` | Same recipe as b10826, official zip plus cudart unzipped flat. Installed 2026-09-10 for three candidate models and serving only those. See below. |
-| `llama-cpp-prism-b10685` | 2026-09-15 | 13.3 | `bonsai2` | **Not upstream.** PrismML's fork, release `prism-b10685-7dffb15`, `win-cuda-13.3-x64` archive unpacked flat. The only engine that reads Bonsai 2's rotated weights. Installed 2026-09-18. See below. |
-| `llama-cpp-xing-pr29012` | 2026-09-19 | 13.3 | `xing` | **Not a release.** Compiled on this box from llama.cpp pull request #29012, commit `63c16fb`. The only engine that knows Xing4.0's architecture. See the last section. |
+| Build                      | Date              | CUDA | Serves                            | Why it exists                                                                                                                                                                                                                                                                                                                                                 |
+| -------------------------- | ----------------- | ---- | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `llama-cpp-turboquant-win` | frozen 2026-04-07 | 12.8 | `embed`                           | A custom fork kept for a cache-quant feature of a model since removed. It has no remaining technical justification and could be retired once the embedder is validated on upstream.                                                                                                                                                                           |
+| `llama-cpp-upstream`       | 2026-08-11        | 13.3 | `muse`, `qwenu`, `qwenf`, `qwent` | Official build. The only one of the first two that knows the `muse-glimmer` architecture.                                                                                                                                                                                                                                                                     |
+| `llama-cpp-20260827`       | 2026-08-27        | 13.3 | `qwen`                            | The only build with NVFP4 CUDA kernels. See below. It also served `ornith` until 2026-09-08; that profile is Q5_K_M and never needed those kernels.                                                                                                                                                                                                           |
+| `llama-cpp-b10826`         | 2026-09-06        | 13.3 | `tiel`, `ornith`, `kat`           | The official release zip and its cudart, unzipped flat, no compilation. Neutral in decode and +5% in prefill on Tiel against the 2026-08-27 build; strictly neutral on Ornith, which moved here on 2026-09-08 to stop owing a profile to the NVFP4 build. See [tuning-log.md](tuning-log.md). `kat` was added here on 2026-09-08 and never ran anywhere else. |
+| `llama-cpp-b10883`         | 2026-09-09        | 13.3 | `nex`, `spark`, `bonsai`          | Same recipe as b10826, official zip plus cudart unzipped flat. Installed 2026-09-10 for three candidate models and serving only those. See below.                                                                                                                                                                                                             |
+| `llama-cpp-prism-b10685`   | 2026-09-15        | 13.3 | `bonsai2`                         | **Not upstream.** PrismML's fork, release `prism-b10685-7dffb15`, `win-cuda-13.3-x64` archive unpacked flat. The only engine that reads Bonsai 2's rotated weights. Installed 2026-09-18. See below.                                                                                                                                                          |
+| `llama-cpp-xing-pr29012`   | 2026-09-19        | 13.3 | `xing`                            | **Not a release.** Compiled on this box from llama.cpp pull request #29012, commit `63c16fb`. The only engine that knows Xing4.0's architecture. See the last section.                                                                                                                                                                                        |
 
 ## b10883: taken for one architecture, not for speed
 
@@ -31,7 +31,7 @@ at the price of two full compilations for a gain of exactly nothing.
 The official x64 release only ships against CUDA 12.4 and 13.3. There is a 13.4
 asset, but arm64 only. Running this box on a 13.4 toolkit does not require a
 matching build, since each build carries its own cudart flat in its directory
-and a driver of the same major version serves it; testing 13.4 *kernels* on x64
+and a driver of the same major version serves it; testing 13.4 _kernels_ on x64
 would mean compiling, which is a different exercise.
 
 ## The build command

@@ -12,18 +12,18 @@ footprint leaves room for a second model on the card.
 .\llm-ctl.ps1 -Action bonsai
 ```
 
-| | |
-|---|---|
-| Weights | `Ternary-Bonsai-27B-Q2_g64.gguf`, 7.06 GiB |
-| Vision projector | `Ternary-Bonsai-27B-mmproj-BF16.gguf`, 0.87 GiB |
-| Speculation | **None.** Its own drafter prevents the model from loading at all, see below |
-| Context | 262,144 |
-| KV cache | `q8_0` |
-| VRAM | Weights and projector, the drafter having been dropped |
-| MMLU | **418/500, 83.6 %**, zero empty answers |
-| GSM8K | **59/60**, second only to kat's perfect score |
-| Decode | **102.6 tok/s**. Half of tiel, which is expected: 27B dense works every parameter per token where the MoE models activate three billion of thirty-five |
-| Build | `b10883` (2026-09-09) |
+|                  |                                                                                                                                                        |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Weights          | `Ternary-Bonsai-27B-Q2_g64.gguf`, 7.06 GiB                                                                                                             |
+| Vision projector | `Ternary-Bonsai-27B-mmproj-BF16.gguf`, 0.87 GiB                                                                                                        |
+| Speculation      | **None.** Its own drafter prevents the model from loading at all, see below                                                                            |
+| Context          | 262,144                                                                                                                                                |
+| KV cache         | `q8_0`                                                                                                                                                 |
+| VRAM             | Weights and projector, the drafter having been dropped                                                                                                 |
+| MMLU             | **418/500, 83.6 %**, zero empty answers                                                                                                                |
+| GSM8K            | **59/60**, second only to kat's perfect score                                                                                                          |
+| Decode           | **102.6 tok/s**. Half of tiel, which is expected: 27B dense works every parameter per token where the MoE models activate three billion of thirty-five |
+| Build            | `b10883` (2026-09-09)                                                                                                                                  |
 
 ## Q2_g64 and not PQ2_0
 

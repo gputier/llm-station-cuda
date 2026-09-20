@@ -15,17 +15,17 @@ without ever printing an error.
 
 ## Hardware and software this was proven on
 
-| | |
-|---|---|
-| GPU | NVIDIA GeForce RTX 5090, 32,607 MiB, driver 616.92 |
-| CPU / RAM | Ryzen 9 9950X3D, 128 GB |
-| OS | Windows 11 Pro, build 26200 |
-| Backend | `llama.cpp` CUDA, native Windows build (not vLLM, not WSL) |
-| Client | macOS, Claude Code over SSH |
+|           |                                                            |
+| --------- | ---------------------------------------------------------- |
+| GPU       | NVIDIA GeForce RTX 5090, 32,607 MiB, driver 616.92         |
+| CPU / RAM | Ryzen 9 9950X3D, 128 GB                                    |
+| OS        | Windows 11 Pro, build 26200                                |
+| Backend   | `llama.cpp` CUDA, native Windows build (not vLLM, not WSL) |
+| Client    | macOS, Claude Code over SSH                                |
 
 Nothing here needs that exact hardware, but every number below was measured on
 it. Throughput figures do not transpose to another card, and a couple of the
-findings show that settings published for the *same* card and the *same* model
+findings show that settings published for the _same_ card and the _same_ model
 did not transpose either.
 
 ## Models served
@@ -33,23 +33,23 @@ did not transpose either.
 All fifteen share port 8080 and are mutually exclusive on the GPU: loading one
 unloads the others.
 
-| Action | Model | Context | Role |
-|---|---|---|---|
-| `tiel` | Tiel-Coder-35B-A3B, MTP UD-Q4_K_XL | 393,216 | In service. Coding and reasoning, vision |
-| `kat` | KAT-Coder-V2.5-Dev-35B-A3B, MTP Q4_K_M | 393,216 | On trial since 2026-09-08. Text only, no projector |
-| `ornith` | Ornith-1.5-9B, Q5_K_M | 262,144 | Fast second opinion and short tasks, a third of the VRAM |
-| `muse` | Muse Glimmer 30B, UD-Q4_K_XL | 262,144 | Agentic multi-turn, vision, faithful OCR |
-| `qwen` | Qwen3.8-27B, NVFP4 LOW | 393,216 | Reasoning and coding, superseded by `tiel` |
-| `qwenu` | Qwen3.8-27B Uncensored, Q5_K_M | 262,144 | Used only when the aligned model refuses a legitimate task |
-| `qwenf` | Qwen3.8-27B TURBO Fable Cold-Fusion Heretic, MTP Q5_K_M | 262,144 | Candidate, benched 2026-09-19: ties `qwenu` on the unpublished set, not adopted |
-| `qwent` | Qwen3.8-27B TWIN-TURBO Fable Cold-Fusion 709-L, MTP Q5_K_M | 262,144 | Candidate, benched 2026-09-19: best of the three on the unpublished set (225/235), long-context speed not yet measured |
-| `whittle` | Whittle-Qwen-3.8-35B-A3B, MoE distilled from Qwen3.8-27B, Q6_K, n-gram memory in host RAM | 262,144 | Rejected 2026-09-19: 75.6% MMLU, 142/235 unpublished with 26 empty answers, 127/235 with its author's sampler. Weights deleted, the profile needs a new download |
-| `xing` | Xing4.0-29B-A4B, MoE with MLA attention, IQ4_NL | 262,144 | Rejected 2026-09-19: 72.8% MMLU, 123/235 unpublished with 97 empty answers. Weights deleted, the profile needs a new download. Runs on the one engine compiled here |
-| `embed` | nomic-embed-text-v1.5, Q8_0 | 131,072 | 768-dimension embeddings |
-| `nex` | Nex-N2.5-mini, i1-Q4_K_M | 262,144 | Candidate since 2026-09-10. Vision, no speculation |
-| `spark` | Spark-X2.5-4B, Q8_0 | 262,144 | Candidate since 2026-09-10. Agentic, text only |
-| `bonsai` | Ternary-Bonsai-27B, Q2_g64 | 262,144 | Candidate since 2026-09-10. Ternary weights, vision |
-| `bonsai2` | Ternary-Bonsai-2-27B, PQ2_0 | 262,144 | Candidate since 2026-09-18. Ternary weights, vision, and sixty times the ingestion of `bonsai` |
+| Action    | Model                                                                                     | Context | Role                                                                                                                                                                |
+| --------- | ----------------------------------------------------------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tiel`    | Tiel-Coder-35B-A3B, MTP UD-Q4_K_XL                                                        | 393,216 | In service. Coding and reasoning, vision                                                                                                                            |
+| `kat`     | KAT-Coder-V2.5-Dev-35B-A3B, MTP Q4_K_M                                                    | 393,216 | On trial since 2026-09-08. Text only, no projector                                                                                                                  |
+| `ornith`  | Ornith-1.5-9B, Q5_K_M                                                                     | 262,144 | Fast second opinion and short tasks, a third of the VRAM                                                                                                            |
+| `muse`    | Muse Glimmer 30B, UD-Q4_K_XL                                                              | 262,144 | Agentic multi-turn, vision, faithful OCR                                                                                                                            |
+| `qwen`    | Qwen3.8-27B, NVFP4 LOW                                                                    | 393,216 | Reasoning and coding, superseded by `tiel`                                                                                                                          |
+| `qwenu`   | Qwen3.8-27B Uncensored, Q5_K_M                                                            | 262,144 | Used only when the aligned model refuses a legitimate task                                                                                                          |
+| `qwenf`   | Qwen3.8-27B TURBO Fable Cold-Fusion Heretic, MTP Q5_K_M                                   | 262,144 | Candidate, benched 2026-09-19: ties `qwenu` on the unpublished set, not adopted                                                                                     |
+| `qwent`   | Qwen3.8-27B TWIN-TURBO Fable Cold-Fusion 709-L, MTP Q5_K_M                                | 262,144 | Candidate, benched 2026-09-19: best of the three on the unpublished set (225/235), long-context speed not yet measured                                              |
+| `whittle` | Whittle-Qwen-3.8-35B-A3B, MoE distilled from Qwen3.8-27B, Q6_K, n-gram memory in host RAM | 262,144 | Rejected 2026-09-19: 75.6% MMLU, 142/235 unpublished with 26 empty answers, 127/235 with its author's sampler. Weights deleted, the profile needs a new download    |
+| `xing`    | Xing4.0-29B-A4B, MoE with MLA attention, IQ4_NL                                           | 262,144 | Rejected 2026-09-19: 72.8% MMLU, 123/235 unpublished with 97 empty answers. Weights deleted, the profile needs a new download. Runs on the one engine compiled here |
+| `embed`   | nomic-embed-text-v1.5, Q8_0                                                               | 131,072 | 768-dimension embeddings                                                                                                                                            |
+| `nex`     | Nex-N2.5-mini, i1-Q4_K_M                                                                  | 262,144 | Candidate since 2026-09-10. Vision, no speculation                                                                                                                  |
+| `spark`   | Spark-X2.5-4B, Q8_0                                                                       | 262,144 | Candidate since 2026-09-10. Agentic, text only                                                                                                                      |
+| `bonsai`  | Ternary-Bonsai-27B, Q2_g64                                                                | 262,144 | Candidate since 2026-09-10. Ternary weights, vision                                                                                                                 |
+| `bonsai2` | Ternary-Bonsai-2-27B, PQ2_0                                                               | 262,144 | Candidate since 2026-09-18. Ternary weights, vision, and sixty times the ingestion of `bonsai`                                                                      |
 
 `nex`, `spark` and `bonsai` were installed on 2026-09-10 and measured the same
 day. They run on their own engine, `b10883`, which serves nothing else, and each
@@ -133,17 +133,17 @@ portable.
 
 ## Documentation
 
-| File | What it covers |
-|---|---|
-| [docs/prerequisites.md](docs/prerequisites.md) | Everything that must be installed before a first build |
-| [docs/building-llama-cpp.md](docs/building-llama-cpp.md) | The CUDA builds, why there are six, five of them official releases and the sixth a fork, and the two build traps |
-| [docs/claude-code-integration.md](docs/claude-code-integration.md) | How a local server replaces the Anthropic API, and what that costs |
-| [docs/api-usage.md](docs/api-usage.md) | Calling the server directly: sampling per model, vision, embeddings |
-| [docs/tuning-log.md](docs/tuning-log.md) | Every measurement campaign, including the ones that found nothing |
-| [docs/campagne-mesures-2026-09-10.md](docs/campagne-mesures-2026-09-10.md) | Nine models through one bench in one day. **Supersedes every quality figure published before it.** |
-| [docs/quel-modele-pour-quel-usage.md](docs/quel-modele-pour-quel-usage.md) | Which model to reach for, per use, and what is measured against what is inferred |
-| [models/](models/) | One page per model: profile, measurements, model-specific traps |
-| [clients/](clients/) | The launcher scripts and how they decide to reload |
+| File                                                                       | What it covers                                                                                                   |
+| -------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| [docs/prerequisites.md](docs/prerequisites.md)                             | Everything that must be installed before a first build                                                           |
+| [docs/building-llama-cpp.md](docs/building-llama-cpp.md)                   | The CUDA builds, why there are six, five of them official releases and the sixth a fork, and the two build traps |
+| [docs/claude-code-integration.md](docs/claude-code-integration.md)         | How a local server replaces the Anthropic API, and what that costs                                               |
+| [docs/api-usage.md](docs/api-usage.md)                                     | Calling the server directly: sampling per model, vision, embeddings                                              |
+| [docs/tuning-log.md](docs/tuning-log.md)                                   | Every measurement campaign, including the ones that found nothing                                                |
+| [docs/campagne-mesures-2026-09-10.md](docs/campagne-mesures-2026-09-10.md) | Nine models through one bench in one day. **Supersedes every quality figure published before it.**               |
+| [docs/quel-modele-pour-quel-usage.md](docs/quel-modele-pour-quel-usage.md) | Which model to reach for, per use, and what is measured against what is inferred                                 |
+| [models/](models/)                                                         | One page per model: profile, measurements, model-specific traps                                                  |
+| [clients/](clients/)                                                       | The launcher scripts and how they decide to reload                                                               |
 
 ## Seven findings that cost the most to establish
 
@@ -181,12 +181,12 @@ format changed to NVFP4 and that same build became the only one able to serve it
 
 **6. "The model is running in RAM" is almost always the wrong diagnosis, and the
 test that settles it is throughput on a SHORT prompt.** A box reported as slow
-showed 25,707 MB of dedicated VRAM and 2,940 MB of *shared* memory, host RAM
+showed 25,707 MB of dedicated VRAM and 2,940 MB of _shared_ memory, host RAM
 presented as graphics memory, while 5.7 GB of VRAM sat free. That reads exactly
 like a spill. It was not one: throughput was nominal, a 118.35 tok/s median over
 five seeds against a 123.4 baseline, and the split reproduced to within one
 percent across a clean restart. Weights genuinely served from host RAM collapse
-*every* request; here only the long ones were slow, and they were slow for an
+_every_ request; here only the long ones were slow, and they were slow for an
 ordinary reason, attention cost. Two things generalise. Under WDDM `nvidia-smi`
 reports `[N/A]` per process and cannot see this at all, so the Windows
 `GPU Process Memory` counters are the only instrument. And a fixed sleep between

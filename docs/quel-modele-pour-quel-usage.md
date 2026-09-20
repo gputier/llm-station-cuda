@@ -23,18 +23,18 @@ Le classement ci-dessous en tient compte : là où la mesure manque, c'est écri
 
 ## Le tableau, par usage
 
-| Usage | Modèle | Fondé sur |
-|---|---|---|
-| Connaissance générale | `nex` et `tiel`, 86,6 % | **mesuré** |
-| Raisonnement arithmétique | `kat`, 60/60 | **mesuré** |
-| Vitesse pure | `tiel`, 230,4 tok/s | **mesuré** |
-| Qualité par octet | `bonsai`, 83,6 % en 7,06 Go | **mesuré** |
-| Petite empreinte | `ornith`, 83,4 % en 15,5 Go | **mesuré** |
-| Contexte long prouvé | `nex`, 6/6 à 243 969 jetons | **mesuré** |
-| Agentique | `muse` | déduit, voir plus bas |
-| Écriture de code | `tiel` ou `kat` | déduit, voir plus bas |
-| Vision | `nex`, `tiel`, `muse`, `bonsai`, `bonsai2`, `ornith` | non testé, projecteurs présents |
-| Lecture d'un long fil | `bonsai2`, 3 347 jetons par seconde en ingestion | **mesuré**, qualité non mesurée |
+| Usage                     | Modèle                                               | Fondé sur                       |
+| ------------------------- | ---------------------------------------------------- | ------------------------------- |
+| Connaissance générale     | `nex` et `tiel`, 86,6 %                              | **mesuré**                      |
+| Raisonnement arithmétique | `kat`, 60/60                                         | **mesuré**                      |
+| Vitesse pure              | `tiel`, 230,4 tok/s                                  | **mesuré**                      |
+| Qualité par octet         | `bonsai`, 83,6 % en 7,06 Go                          | **mesuré**                      |
+| Petite empreinte          | `ornith`, 83,4 % en 15,5 Go                          | **mesuré**                      |
+| Contexte long prouvé      | `nex`, 6/6 à 243 969 jetons                          | **mesuré**                      |
+| Agentique                 | `muse`                                               | déduit, voir plus bas           |
+| Écriture de code          | `tiel` ou `kat`                                      | déduit, voir plus bas           |
+| Vision                    | `nex`, `tiel`, `muse`, `bonsai`, `bonsai2`, `ornith` | non testé, projecteurs présents |
+| Lecture d'un long fil     | `bonsai2`, 3 347 jetons par seconde en ingestion     | **mesuré**, qualité non mesurée |
 
 ## Les recommandations, une par usage
 
