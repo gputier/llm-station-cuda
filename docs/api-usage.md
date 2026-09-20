@@ -15,12 +15,12 @@ curl -sS -m 3 http://your-server:8080/props \
   | sed -n 's/.*"model_path":"\([^"]*\)".*/\1/p'
 ```
 
-| Path contains | Model | Notes |
-|---|---|---|
-| `muse-glimmer` | Muse Glimmer 30B | |
-| `qwen3.8` without `uncensored` | Qwen3.8-27B, aligned | |
-| `qwen3.8` with `uncensored` | Qwen3.8-27B abliterated | |
-| `nomic-embed` | the embedder | `/v1/chat/completions` returns **501** |
+| Path contains                  | Model                   | Notes                                  |
+| ------------------------------ | ----------------------- | -------------------------------------- |
+| `muse-glimmer`                 | Muse Glimmer 30B        |                                        |
+| `qwen3.8` without `uncensored` | Qwen3.8-27B, aligned    |                                        |
+| `qwen3.8` with `uncensored`    | Qwen3.8-27B abliterated |                                        |
+| `nomic-embed`                  | the embedder            | `/v1/chat/completions` returns **501** |
 
 `/health` does not answer this question. It returns `ok` before the model is
 servable, and `ok` whatever model is loaded.
@@ -30,12 +30,12 @@ servable, and `ok` whatever model is loaded.
 **Serving one model with the other's settings degrades it silently. No error is
 raised anywhere.**
 
-| Parameter | Muse Glimmer | Qwen3.8-27B |
-|---|---|---|
-| `temperature` | 1.0 | 1.0 |
-| `top_p` | 0.95 | 0.95 |
-| `top_k` | **64** | **20** |
-| `min_p` | default | **0** |
+| Parameter        | Muse Glimmer                                        | Qwen3.8-27B                                      |
+| ---------------- | --------------------------------------------------- | ------------------------------------------------ |
+| `temperature`    | 1.0                                                 | 1.0                                              |
+| `top_p`          | 0.95                                                | 0.95                                             |
+| `top_k`          | **64**                                              | **20**                                           |
+| `min_p`          | default                                             | **0**                                            |
 | Reasoning switch | `chat_template_kwargs={"reasoning_strength":"low"}` | `chat_template_kwargs={"enable_thinking":false}` |
 
 **The reasoning switch is not optional on either model.** Without it the model
@@ -64,14 +64,21 @@ Both generation models read images. The embedder does not.
 
 ```json
 {
-  "messages": [{
-    "role": "user",
-    "content": [
-      {"type": "image_url", "image_url": {"url": "data:image/png;base64,<BASE64>"}},
-      {"type": "text", "text": "<PROMPT>"}
-    ]
-  }],
-  "temperature": 1.0, "top_p": 0.95, "max_tokens": 2048
+  "messages": [
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "image_url",
+          "image_url": { "url": "data:image/png;base64,<BASE64>" }
+        },
+        { "type": "text", "text": "<PROMPT>" }
+      ]
+    }
+  ],
+  "temperature": 1.0,
+  "top_p": 0.95,
+  "max_tokens": 2048
 }
 ```
 
