@@ -316,7 +316,7 @@ function Start-LLM($name, $modelArgs, $cudaDevices = $null, $exePath = $null, $w
     $modelArgs = $garde
     Write-Output 'NOSPEC drapeaux de speculation du profil retires'
   }
-  # -Extra flags land here rather than in each of the eleven branches.
+  # -Extra flags land here rather than in each of the fifteen profile branches.
   if ($Extra) {
     $sup = @($Extra -split '\s+' | Where-Object { $_ })
     $modelArgs = @($modelArgs) + $sup

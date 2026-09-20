@@ -135,17 +135,18 @@ portable.
 
 ## Documentation
 
-| File                                                                       | What it covers                                                                                                   |
-| -------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| [docs/prerequisites.md](docs/prerequisites.md)                             | Everything that must be installed before a first build                                                           |
-| [docs/building-llama-cpp.md](docs/building-llama-cpp.md)                   | The CUDA builds, why there are six, five of them official releases and the sixth a fork, and the two build traps |
-| [docs/claude-code-integration.md](docs/claude-code-integration.md)         | How a local server replaces the Anthropic API, and what that costs                                               |
-| [docs/api-usage.md](docs/api-usage.md)                                     | Calling the server directly: sampling per model, vision, embeddings                                              |
-| [docs/tuning-log.md](docs/tuning-log.md)                                   | Every measurement campaign, including the ones that found nothing                                                |
-| [docs/campagne-mesures-2026-09-10.md](docs/campagne-mesures-2026-09-10.md) | Nine models through one bench in one day. **Supersedes every quality figure published before it.**               |
-| [docs/quel-modele-pour-quel-usage.md](docs/quel-modele-pour-quel-usage.md) | Which model to reach for, per use, and what is measured against what is inferred                                 |
-| [models/](models/)                                                         | One page per model: profile, measurements, model-specific traps                                                  |
-| [clients/](clients/)                                                       | The launcher scripts and how they decide to reload                                                               |
+| File                                                                       | What it covers                                                                                        |
+| -------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| [docs/INDEX.md](docs/INDEX.md)                                             | The twelve documents of this folder, each with the question it answers                                |
+| [docs/prerequisites.md](docs/prerequisites.md)                             | Everything that must be installed before a first build                                                |
+| [docs/building-llama-cpp.md](docs/building-llama-cpp.md)                   | The eight CUDA builds, why four are official releases and the four others forks or local compilations |
+| [docs/claude-code-integration.md](docs/claude-code-integration.md)         | How a local server replaces the Anthropic API, and what that costs                                    |
+| [docs/api-usage.md](docs/api-usage.md)                                     | Calling the server directly: sampling per model, vision, embeddings                                   |
+| [docs/tuning-log.md](docs/tuning-log.md)                                   | Every measurement campaign, including the ones that found nothing                                     |
+| [docs/campagne-mesures-2026-09-10.md](docs/campagne-mesures-2026-09-10.md) | Nine models through one bench in one day. **Supersedes every quality figure published before it.**    |
+| [docs/quel-modele-pour-quel-usage.md](docs/quel-modele-pour-quel-usage.md) | Which model to reach for, per use, and what is measured against what is inferred                      |
+| [models/](models/)                                                         | One page per model: profile, measurements, model-specific traps                                       |
+| [clients/](clients/)                                                       | The launcher scripts and how they decide to reload                                                    |
 
 ## Seven findings that cost the most to establish
 
