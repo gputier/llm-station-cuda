@@ -148,6 +148,12 @@ function Show-Logs($name, $tail) {
 }
 
 function Start-LLM($name, $modelArgs, $exePath = $null, $workDirPath = $null, $envVars = @{}) {
+  # Every profile is served under its own name. Without this flag /v1/models
+  # reports the model id as the full Windows path of the GGUF, backslashes
+  # included: callers store that string, and it breaks the day the file moves.
+  # Measured on the Vulkan box 2026-09-07, fixed there the same day.
+  # It sits before -Extra, so a trial can still override it with its own --alias.
+  $modelArgs = @('--alias', $name) + @($modelArgs)
   # -NoSpec first, so a trial can REPLACE a profile's speculation instead of
   # stacking on top of it.
   if ($NoSpec) {

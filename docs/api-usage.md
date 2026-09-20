@@ -25,6 +25,14 @@ curl -sS -m 3 http://your-server:8080/props \
 `/health` does not answer this question. It returns `ok` before the model is
 servable, and `ok` whatever model is loaded.
 
+Since 2026-09-20 every profile is launched with `--alias <profile>`, so
+`/v1/models` answers with the profile name. Before that flag it answered with
+the full Windows path of the GGUF, backslashes included, which callers stored
+and which broke the day a file moved. A server started before that date still
+reports the path, and picks up its alias the next time the profile is launched.
+The alias names the profile, not the weights, so `/props` remains the authority
+on which file is loaded.
+
 ## Sampling parameters depend on the loaded model
 
 **Serving one model with the other's settings degrades it silently. No error is
