@@ -9,6 +9,44 @@ hardware listed in [prerequisites.md](prerequisites.md).
 
 ---
 
+## 2026-09-21 : deux profils rejetés quittent le script, et un moteur de 5,15 Go avec
+
+`whittle` et `xing` avaient été rejetés le 19/09 et leurs poids supprimés le soir même, mais les
+deux profils restaient dans `llm-ctl.ps1` au motif qu'un nouveau téléchargement les relancerait.
+Le résultat concret : le lanceur annonçait quinze noms dont treize démarraient, et les deux
+autres échouaient au chargement sans que rien ne le dise à l'avance. Retirés.
+
+Le moteur compilé pour `xing`, `llama-cpp-xing-pr29012`, a été supprimé de la station dans le
+même geste : 5,15 Go mesurés, pas les 13,3 que la colonne CUDA du tableau des moteurs a pu
+laisser croire. La place libre sur D est passée de 417,88 à 423,07 Go. La recette de compilation
+reste dans [building-llama-cpp.md](building-llama-cpp.md), parce que c'est elle qui dit ce que
+coûte un moteur pour une architecture qu'aucune version publiée ne connaît.
+
+Ce que les deux modèles ont mesuré reste dans les entrées du 19/09, plus bas. C'est la seule
+raison d'avoir mesuré.
+
+### Le journal du serveur était effacé à chaque démarrage
+
+Trouvé en cherchant pourquoi une session cliente avait perdu sa connexion le matin du 21/09.
+`Start-LLM` appelait `Clear-Content` sur `llm-err-<profil>.log` avant chaque lancement, et la
+redirection `2>` le tronquait de toute façon. Un serveur qui meurt laisse sa trace dans ce
+fichier, et le redémarrage qui suit la détruit : aucune autopsie n'était possible, et celle du
+21/09 n'a pas pu être faite.
+
+Corrigé : le fichier précédent est renommé avec l'horodatage de sa dernière écriture, à la
+milliseconde, et cinq archives par profil sont gardées. Éprouvé sur la station par sept
+rotations successives, cinq fichiers restants, sans toucher au serveur en service.
+
+La panne elle-même, côté client : `FailedToOpenSocket`, un code d'erreur du moteur Bun sur lequel
+Claude Code est compilé, vérifié dans la table des noms d'erreur du binaire. Il dit que la
+connexion TCP n'a jamais pu s'ouvrir. Reproduit à l'identique en pointant un client sur un port
+fermé de la station : « Can't reach the API server, check your internet or DNS
+(FailedToOpenSocket) ». Le message parle d'internet et de DNS, mais un client local ne joint
+jamais Anthropic : il ne parle que de la station. Un `FailedToOpenSocket` sur un profil local se
+lit donc comme « plus rien n'écoute sur 8080 », et jamais autrement.
+
+---
+
 ## 2026-09-20 : la spéculation de Bonsai 2, rouverte et gagnée
 
 Le 18/09 ce profil a été laissé sans brouillon, sur la foi de deux affirmations : Bonsai 2 n'en

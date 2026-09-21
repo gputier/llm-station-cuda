@@ -30,39 +30,43 @@ did not transpose either.
 
 ## Models served
 
-All fifteen share port 8080 and are mutually exclusive on the GPU: loading one
+All thirteen share port 8080 and are mutually exclusive on the GPU: loading one
 unloads the others.
 
-| Action    | Model                                                                                     | Context | Role                                                                                                                                                                |
-| --------- | ----------------------------------------------------------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `tiel`    | Tiel-Coder-35B-A3B, MTP UD-Q4_K_XL                                                        | 393,216 | In service. Coding and reasoning, vision                                                                                                                            |
-| `kat`     | KAT-Coder-V2.5-Dev-35B-A3B, MTP Q4_K_M                                                    | 393,216 | On trial since 2026-09-08. Text only, no projector                                                                                                                  |
-| `ornith`  | Ornith-1.5-9B, Q5_K_M                                                                     | 262,144 | Fast second opinion and short tasks, a third of the VRAM                                                                                                            |
-| `muse`    | Muse Glimmer 30B, UD-Q4_K_XL                                                              | 262,144 | Agentic multi-turn, vision, faithful OCR                                                                                                                            |
-| `qwen`    | Qwen3.8-27B, NVFP4 LOW                                                                    | 393,216 | Reasoning and coding, superseded by `tiel`                                                                                                                          |
-| `qwenu`   | Qwen3.8-27B Uncensored, Q5_K_M                                                            | 262,144 | Used only when the aligned model refuses a legitimate task                                                                                                          |
-| `qwenf`   | Qwen3.8-27B TURBO Fable Cold-Fusion Heretic, MTP Q5_K_M                                   | 262,144 | Candidate, benched 2026-09-19: ties `qwenu` on the unpublished set, not adopted                                                                                     |
-| `qwent`   | Qwen3.8-27B TWIN-TURBO Fable Cold-Fusion 709-L, MTP Q5_K_M                                | 262,144 | Candidate, benched 2026-09-19: best of the three on the unpublished set (225/235), long-context speed not yet measured                                              |
-| `whittle` | Whittle-Qwen-3.8-35B-A3B, MoE distilled from Qwen3.8-27B, Q6_K, n-gram memory in host RAM | 262,144 | Rejected 2026-09-19: 75.6% MMLU, 142/235 unpublished with 26 empty answers, 127/235 with its author's sampler. Weights deleted, the profile needs a new download    |
-| `xing`    | Xing4.0-29B-A4B, MoE with MLA attention, IQ4_NL                                           | 262,144 | Rejected 2026-09-19: 72.8% MMLU, 123/235 unpublished with 97 empty answers. Weights deleted, the profile needs a new download. Runs on the one engine compiled here |
-| `embed`   | nomic-embed-text-v1.5, Q8_0                                                               | 131,072 | 768-dimension embeddings                                                                                                                                            |
-| `nex`     | Nex-N2.5-mini, i1-Q4_K_M                                                                  | 262,144 | Candidate since 2026-09-10. Vision, no speculation                                                                                                                  |
-| `spark`   | Spark-X2.5-4B, Q8_0                                                                       | 262,144 | Candidate since 2026-09-10. Agentic, text only                                                                                                                      |
-| `bonsai`  | Ternary-Bonsai-27B, Q2_g64                                                                | 262,144 | Candidate since 2026-09-10. Ternary weights, vision                                                                                                                 |
-| `bonsai2` | Ternary-Bonsai-2-27B, PQ2_0                                                               | 262,144 | Candidate since 2026-09-18. Ternary weights, vision, speculation since 2026-09-20, and fifty times the ingestion of `bonsai`                                        |
+Two more were served here and are gone: `whittle` and `xing`, both rejected on
+2026-09-19. Their weights were deleted the same evening, and on 2026-09-21 their
+profiles left the control script rather than sit there offering a load that
+cannot happen. What they measured is kept in
+[docs/tuning-log.md](docs/tuning-log.md), which is the point of having measured
+them.
+
+| Action    | Model                                                      | Context | Role                                                                                                                         |
+| --------- | ---------------------------------------------------------- | ------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `tiel`    | Tiel-Coder-35B-A3B, MTP UD-Q4_K_XL                         | 393,216 | In service. Coding and reasoning, vision                                                                                     |
+| `kat`     | KAT-Coder-V2.5-Dev-35B-A3B, MTP Q4_K_M                     | 393,216 | On trial since 2026-09-08. Text only, no projector                                                                           |
+| `ornith`  | Ornith-1.5-9B, Q5_K_M                                      | 262,144 | Fast second opinion and short tasks, a third of the VRAM                                                                     |
+| `muse`    | Muse Glimmer 30B, UD-Q4_K_XL                               | 262,144 | Agentic multi-turn, vision, faithful OCR                                                                                     |
+| `qwen`    | Qwen3.8-27B, NVFP4 LOW                                     | 393,216 | Reasoning and coding, superseded by `tiel`                                                                                   |
+| `qwenu`   | Qwen3.8-27B Uncensored, Q5_K_M                             | 262,144 | Used only when the aligned model refuses a legitimate task                                                                   |
+| `qwenf`   | Qwen3.8-27B TURBO Fable Cold-Fusion Heretic, MTP Q5_K_M    | 262,144 | Candidate, benched 2026-09-19: ties `qwenu` on the unpublished set, not adopted                                              |
+| `qwent`   | Qwen3.8-27B TWIN-TURBO Fable Cold-Fusion 709-L, MTP Q5_K_M | 262,144 | Candidate, benched 2026-09-19: best of the three on the unpublished set (225/235), long-context speed not yet measured       |
+| `embed`   | nomic-embed-text-v1.5, Q8_0                                | 131,072 | 768-dimension embeddings                                                                                                     |
+| `nex`     | Nex-N2.5-mini, i1-Q4_K_M                                   | 262,144 | Candidate since 2026-09-10. Vision, no speculation                                                                           |
+| `spark`   | Spark-X2.5-4B, Q8_0                                        | 262,144 | Candidate since 2026-09-10. Agentic, text only                                                                               |
+| `bonsai`  | Ternary-Bonsai-27B, Q2_g64                                 | 262,144 | Candidate since 2026-09-10. Ternary weights, vision                                                                          |
+| `bonsai2` | Ternary-Bonsai-2-27B, PQ2_0                                | 262,144 | Candidate since 2026-09-18. Ternary weights, vision, speculation since 2026-09-20, and fifty times the ingestion of `bonsai` |
 
 `nex`, `spark` and `bonsai` were installed on 2026-09-10 and measured the same
 day. They run on their own engine, `b10883`, which serves nothing else, and each
 carries a known defect written at the top of its page under [models/](models/).
 
-Two profiles run an engine compiled on this box rather than an official
-llama.cpp release, both documented in
-[docs/building-llama-cpp.md](docs/building-llama-cpp.md). `xing` needs one
-because no release knows its architecture. `bonsai2` keeps its weights in a
+One profile runs an engine compiled on this box rather than an official
+llama.cpp release, documented in
+[docs/building-llama-cpp.md](docs/building-llama-cpp.md). `bonsai2` keeps its weights in a
 Hadamard-rotated basis that mainline cannot undo, so it needs PrismML's fork,
 and since 2026-09-20 it needs a build of that fork carrying upstream's DFlash2
 support, without which its drafter will not load at all. No other profile was
-moved onto either. Its page under [models/](models/) carries the whole
+moved onto it. Its page under [models/](models/) carries the whole
 reasoning, including the drafter claim it had to reverse and the 4-bit KV cache
 that buys memory this box does not need.
 

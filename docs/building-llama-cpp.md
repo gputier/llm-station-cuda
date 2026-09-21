@@ -17,7 +17,6 @@ naming all eight.
 | `llama-cpp-b10883`         | 2026-09-09        | 13.3 | `nex`, `spark`, `bonsai`          | Same recipe as b10826, official zip plus cudart unzipped flat. Installed 2026-09-10 for three candidate models and serving only those. See below.                                                                                                                                                                                                             |
 | `llama-cpp-prism-b10685`   | 2026-09-15        | 13.3 | nothing                           | **Not upstream.** PrismML's fork, release `prism-b10685-7dffb15`, `win-cuda-13.3-x64` archive unpacked flat. Served `bonsai2` until 2026-09-20, kept only as the reference for what the published fork can and cannot read.                                                                                                                                   |
 | `llama-cpp-prism-dflash2`  | 2026-09-20        | 13.3 | `bonsai2`                         | **Not a release.** PrismML's fork carrying upstream DFlash2, published as source by the drafter's author and compiled here. The only engine that reads both Bonsai 2's rotated weights and its drafter. See the last section.                                                                                                                                 |
-| `llama-cpp-xing-pr29012`   | 2026-09-19        | 13.3 | `xing`                            | **Not a release.** Compiled on this box from llama.cpp pull request #29012, commit `63c16fb`. The only engine that knows Xing4.0's architecture. See the last section.                                                                                                                                                                                        |
 
 ## b10883: taken for one architecture, not for speed
 
@@ -163,7 +162,7 @@ dspark drafter into a format current binaries load. That converter is what made
 it possible to test the first generation's drafter against the second, and to
 close the question: see [tuning-log.md](tuning-log.md).
 
-## The pull request build: the first engine compiled here
+## The pull request build: the first engine compiled here, and since deleted
 
 Xing4.0-29B-A4B (China Telecom, 2026-09-16) combines MLA attention, a MoE and
 an op of its own called mHC. No release knows that combination, upstream or
@@ -197,8 +196,13 @@ profile. Retire the directory once the pull request is merged and a release
 carries the architecture.
 
 The model it was built for was rejected the same evening, see
-[tuning-log.md](tuning-log.md), and its weights deleted. The engine stays so the
-profile can be re-run after a new download.
+[tuning-log.md](tuning-log.md), and its weights deleted. **The directory was
+deleted on 2026-09-21** and the `xing` profile left the control script with it:
+5.15 GB held for a model no longer on the box, behind a profile that could only
+fail at load. This section stays because the recipe above is the whole cost of
+serving an architecture no release knows, and that cost is what a future
+candidate has to be weighed against. Rebuilding it is the command above plus a
+new download.
 
 ## The DFlash2 build: compiled because the drafter would not load
 

@@ -1,5 +1,5 @@
 param(
-  [ValidateSet('bonsai','bonsai2','embed','kat','muse','nex','ornith','qwen','qwenf','qwent','qwenu','spark','tiel','whittle','xing','stop','status','logs')]
+  [ValidateSet('bonsai','bonsai2','embed','kat','muse','nex','ornith','qwen','qwenf','qwent','qwenu','spark','tiel','stop','status','logs')]
   [string]$Action,
   [string]$Name,  # optional: for 'stop' and 'logs', targets a named instance
   [int]$Tail = 40, # for 'logs': history lines to show before following live
@@ -117,11 +117,6 @@ $workDirB10883 = "$RootDir\llama-cpp-b10883"
 $exeDflash2     = "$RootDir\llama-cpp-prism-dflash2\llama\build-win\bin\llama-server.exe"
 $workDirDflash2 = "$RootDir\llama-cpp-prism-dflash2\llama\build-win\bin"
 
-# The other binary built on this box, from llama.cpp pull request #29012, because no release
-# knows Xing4.0's architecture. It serves 'xing' only; drop it once a release carries the
-# architecture. Branch, commit and build details: docs/building-llama-cpp.md.
-$exeXing     = "$RootDir\llama-cpp-xing-pr29012\build-win\bin\llama-server.exe"
-$workDirXing = "$RootDir\llama-cpp-xing-pr29012\build-win\bin"
 $instDir   = "$RootDir\instances"
 New-Item -ItemType Directory -Force -Path $instDir | Out-Null
 
@@ -163,11 +158,8 @@ $builds = @{
   nex    = @{ Exe = $exeB10883;   WorkDir = $workDirB10883;   CudaBin = $cudaBinUp }
   spark  = @{ Exe = $exeB10883;   WorkDir = $workDirB10883;   CudaBin = $cudaBinUp }
   bonsai = @{ Exe = $exeB10883;   WorkDir = $workDirB10883;   CudaBin = $cudaBinUp }
-  # Candidate of 2026-09-19: 'qwen4exp' is known to b10826 and b10883, checked in llama.dll.
-  whittle = @{ Exe = $exeB10883;  WorkDir = $workDirB10883;   CudaBin = $cudaBinUp }
-  # The two rows pointing at a local build. See the $exeDflash2 and $exeXing blocks above.
+  # The one row pointing at a build compiled here. See the $exeDflash2 block above.
   bonsai2 = @{ Exe = $exeDflash2; WorkDir = $workDirDflash2;  CudaBin = $cudaBinUp }
-  xing   = @{ Exe = $exeXing;     WorkDir = $workDirXing;     CudaBin = $cudaBinUp }
 }
 
 function Quote($s) {
@@ -254,11 +246,22 @@ function Wait-VramReleased($timeoutSec = 30) {
   Write-Output "WARN device memory not confirmed released after $timeoutSec s"
 }
 
+# A crash kills the server without it writing anything, so an archived log that
+# stops mid-sentence reads the same whether it crashed or was stopped on purpose.
+# This line is what tells the two apart when the archive is read later. It is
+# appended AFTER the kill on purpose: while the process lives, cmd.exe holds the
+# file open for its stderr redirection and an append fails.
+function Mark-Stopped($name) {
+  $when = Get-Date -UFormat '%Y-%m-%d %H:%M:%S'
+  Add-Content "$logDir\llm-err-$name.log" "STOPPED_BY_LLM_CTL $when" -ErrorAction SilentlyContinue
+}
+
 function Stop-One($name) {
   $f = Join-Path $instDir "$name.json"
   if (Test-Path $f) {
     $o = Get-Content $f -Raw | ConvertFrom-Json
     Kill-Pid $o.Pid
+    Mark-Stopped $name
     Remove-Item $f -Force
     Write-Output "STOPPED $name"
   } else {
@@ -267,8 +270,16 @@ function Stop-One($name) {
 }
 
 function Stop-All {
+  # The names are read BEFORE the kill: the tracking files go away below, and
+  # nothing after that could say which logs to mark.
+  $names = @(Read-Instances | Select-Object -ExpandProperty Name)
   $procs = Get-Process -Name llama-server -ErrorAction SilentlyContinue
-  if ($procs) { $procs | Stop-Process -Force; Wait-VramReleased; Write-Output "STOPPED all" }
+  if ($procs) {
+    $procs | Stop-Process -Force
+    Wait-VramReleased
+    $names | ForEach-Object { Mark-Stopped $_ }
+    Write-Output "STOPPED all"
+  }
   else { Write-Output "NOT_RUNNING" }
   Get-ChildItem $instDir -Filter '*.json' -ErrorAction SilentlyContinue | Remove-Item -Force
 }
@@ -281,6 +292,10 @@ function Stop-All {
 # at the root. This action exists so nobody has to remember any of that: it picks
 # the log of the running instance and follows it.
 # Ctrl+C to exit; the server is unaffected.
+#
+# It follows the LIVE log, and NAMES the archived ones before it starts. A crash
+# older than the last restart is written in an archive, and nobody should have to
+# know the naming convention to find it. See Start-LLM.
 function Show-Logs($name, $tail) {
   if (-not $name) {
     $running = @(Read-Instances | Where-Object { Get-Process -Id $_.Pid -ErrorAction SilentlyContinue })
@@ -293,6 +308,9 @@ function Show-Logs($name, $tail) {
   }
   $errLog = "$logDir\llm-err-$name.log"
   if (-not (Test-Path $errLog)) { Write-Output "NO_LOG $errLog not found"; return }
+  foreach ($a in @(Get-ChildItem $logDir -Filter "llm-err-$name.*.log" -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending)) {
+    Write-Output "ARCHIVE $($a.FullName) ($($a.Length) bytes)"
+  }
   Write-Output "TAILING name=$name file=$errLog (Ctrl+C to exit)"
   Get-Content $errLog -Tail $tail -Wait
 }
@@ -316,7 +334,7 @@ function Start-LLM($name, $modelArgs, $cudaDevices = $null, $exePath = $null, $w
     $modelArgs = $garde
     Write-Output 'NOSPEC drapeaux de speculation du profil retires'
   }
-  # -Extra flags land here rather than in each of the fifteen profile branches.
+  # -Extra flags land here rather than in each of the thirteen profile branches.
   if ($Extra) {
     $sup = @($Extra -split '\s+' | Where-Object { $_ })
     $modelArgs = @($modelArgs) + $sup
@@ -350,7 +368,27 @@ function Start-LLM($name, $modelArgs, $cudaDevices = $null, $exePath = $null, $w
   # progress lines and served requests included. They were pure noise.
   # To get them back, put "$RootDir\llm-out-$name.log" here instead of NUL.
   $errLog = "$logDir\llm-err-$name.log"
-  Clear-Content $errLog -ErrorAction SilentlyContinue
+  # The previous run's log is MOVED ASIDE, not cleared. On 2026-09-21 a client
+  # lost its connection mid-session, the restart that followed left no trace of
+  # why the server had exited, and no post-mortem was possible.
+  #
+  # THE MOVE IS MANDATORY, not merely tidier. The `2>` redirection further down
+  # truncates $errLog the moment cmd.exe opens it, so the previous run's text is
+  # gone whether or not this script clears it first: the Clear-Content that used
+  # to sit here was only redundant. Nothing may write to $errLog between this
+  # block and the launch, or it is truncated unarchived.
+  #
+  # Five archives per profile, the oldest dropped: the file is a few kilobytes
+  # per run, and more than five has never answered a question here. The stamp
+  # carries milliseconds: a start that fails and is retried at once lands in the
+  # same second, and two archives stamped to the second would overwrite each other.
+  $previous = Get-Item $errLog -ErrorAction SilentlyContinue
+  if ($previous -and $previous.Length -gt 0) {
+    $stamp = $previous.LastWriteTime.ToString('yyyyMMdd-HHmmss-fff')
+    Move-Item $errLog "$logDir\llm-err-$name.$stamp.log" -Force -ErrorAction SilentlyContinue
+    Get-ChildItem $logDir -Filter "llm-err-$name.*.log" -ErrorAction SilentlyContinue |
+      Sort-Object LastWriteTime -Descending | Select-Object -Skip 5 | Remove-Item -Force -ErrorAction SilentlyContinue
+  }
 
   $quoted = ($modelArgs | ForEach-Object { Quote $_ }) -join ' '
   # No `set` inside the cmd line, and this is not a style choice. cmd /c strips
@@ -799,77 +837,6 @@ switch ($Action) {
       '--cache-type-k','q4_0','--cache-type-v','q4_0',
       '-cram','24576',
       '--temp','1.0','--top-p','0.95','--top-k','20','--min-p','0'
-    )
-  }
-
-  'whittle' {
-    # REJECTED on 2026-09-19, weights deleted from the station the same evening; the profile
-    # stays so the figures below can be re-run after a new download. Public set 378/500
-    # MMLU and 46/60 GSM8K in 12 min; unpublished set with thinking 142/235 (60.4%), 26 answers
-    # left empty and one decoy, where qwenu and qwenf both score 221. Faster than qwenf by a
-    # tenth, a third less accurate. Re-run the same evening with the author's sampler
-    # (temp 0.7, top-p 0.8, top-k 20): 127/235 with 34 empty, worse, so greedy decoding
-    # was not what held it back.
-    #
-    # logic65's Whittle-Qwen-3.8-35B-A3B, fetched 2026-09-19. A
-    # one-person distillation of Qwen3.8-27B (1,840 thinking traces, 3.3 h on one GPU) into a
-    # 'qwen4exp' MoE: 180 experts, 8 active, ~3B active parameters, plus a 10B n-gram memory
-    # table the body depends on. The student cannot out-reason its teacher, the base of 'qwenu':
-    # what it can bring is 'tiel'-class speed. That is the question the bench answers. Its own
-    # card calls it a research preview, 2,861 steps on maths and code-review traces only, and
-    # reports 46/60 on MATH levels 2-4 and 44/50 on GSM8K, served Q8_0, thinking on.
-    #
-    # Context: the file declares 262144 and this profile keeps it for parity with the others,
-    # but the author tested reading only up to 75k (5/6 there). Nothing past 75k is known.
-    #
-    # Q6_K (27.27 GiB, SHA-256 checked against Hugging Face). The memory table stays in host RAM
-    # as the author prescribes: it is read one row per token per head, so the GPU holds the
-    # body only and stays under the ~29 GB where throughput collapses on this card.
-    Start-LLM 'whittle' @(
-      '-m',"$ModelsDir\whittle-qwen3.8-35b-a3b\Whittle-Qwen-3.8-35B-A3B-Q6_K.gguf",
-      '-ot','per_layer_token_embd=CPU',
-      '--n-gpu-layers','99','--load-mode','mlock','--flash-attn','on','--jinja',
-      # Embedded template (7,764 chars): it knows enable_thinking, not reasoning_effort, and it
-      # raises 'System message must be at the beginning', so it breaks Claude Code but not the
-      # bench. No MTP head in this model.
-      '--host','0.0.0.0','--port','8080','--ctx-size','262144',
-      '--parallel','1','-b','4096','-ub','2048',
-      '--cache-type-k','q4_0','--cache-type-v','q4_0',
-      '-cram','24576',
-      # The card's sampler. It warns that greedy decoding loops on this family, and both benches
-      # run at temperature 0: count the loops before reading a score.
-      '--temp','0.7','--top-p','0.8','--top-k','20','--min-p','0','--repeat-penalty','1.05'
-    )
-  }
-
-  'xing' {
-    # REJECTED on 2026-09-19, weights deleted from the station the same evening; the profile and
-    # the engine stay so the figures below can be re-run after a new download. Public set 364/500
-    # MMLU (72.8%) and 48/60 GSM8K in 10.9 min; unpublished set with thinking 123/235 (52.3%) in
-    # 49.8 min, 97 answers left empty because the thinking ate the whole budget, where qwent
-    # scores 225. Loads at 23,889 MiB and decodes at 147 tok/s on a short prompt.
-    #
-    # China Telecom's Xing4.0-29B-A4B (formerly TeleChat), fetched
-    # 2026-09-19: 29B MoE, 64 routed experts, 4 active plus 1 shared, ~4B active parameters, MLA
-    # attention, 256K native context. Picked as the most promising recent release on the vendor's
-    # own figures, none reproduced here: SWE-bench Verified 75 and Terminal-Bench 2.1 57.5, where
-    # the same table gives Qwen3.6-35B-A3B 76 and 51.5.
-    #
-    # Official GGUF, IQ4_NL in three shards (20,104,013,088 bytes, sizes checked against Hugging
-    # Face). Pointing -m at the first shard loads all three. Served by the local build of the
-    # pull request that added the architecture, see the $exeXing block.
-    #
-    # The vendor's sampler for reasoning and general use: temp 1.0, top-p 0.95, repetition
-    # penalty 1.05 (0.8 for coding and agents). Thinking is on by default and switched off with
-    # chat_template_kwargs enable_thinking=false. Embedded chat template.
-    Start-LLM 'xing' @(
-      '-m',"$ModelsDir\xing4.0-29b-a4b\xing4_0-29b-IQ4_NL-00001-of-00003.gguf",
-      '--n-gpu-layers','99','--load-mode','mlock','--flash-attn','on','--jinja',
-      '--host','0.0.0.0','--port','8080','--ctx-size','262144',
-      '--parallel','1','-b','4096','-ub','2048',
-      '--cache-type-k','q4_0','--cache-type-v','q4_0',
-      '-cram','24576',
-      '--temp','1.0','--top-p','0.95','--min-p','0','--repeat-penalty','1.05'
     )
   }
 
