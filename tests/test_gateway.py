@@ -1,3 +1,4 @@
+import asyncio
 import json
 from aiohttp import web
 from benchrun.gateway import make_app
@@ -101,3 +102,39 @@ async def test_gateway_returns_502_and_journals_when_upstream_unreachable(aiohtt
     assert rec["run_id"] == "r1" and rec["status"] is None
     assert rec["total_s"] is not None
     assert "error" in rec
+
+
+async def test_gateway_relay_get_returns_502_when_upstream_unreachable(aiohttp_client, tmp_path):
+    journal = tmp_path / "journal.jsonl"
+    gw = await aiohttp_client(make_app("http://127.0.0.1:1", str(journal)))
+    r = await gw.get("/health")
+    assert r.status == 502
+    assert "error" in await r.json()
+
+
+async def fake_upstream_drops(request):
+    # Sends a status line and one SSE chunk, like a real stream in progress,
+    # then breaks the connection instead of finishing the response cleanly.
+    resp = web.StreamResponse(headers={"Content-Type": "text/event-stream"})
+    await resp.prepare(request)
+    await resp.write(b'data: {"choices":[{"delta":{"content":"hi"}}]}\n\n')
+    raise ConnectionResetError("simulated upstream drop")
+
+
+async def test_gateway_closes_stream_instead_of_hanging_when_upstream_drops_mid_response(aiohttp_client, tmp_path):
+    up = web.Application()
+    up.router.add_post("/v1/chat/completions", fake_upstream_drops)
+    up_client = await aiohttp_client(up)
+    journal = tmp_path / "journal.jsonl"
+    gw = await aiohttp_client(make_app(str(up_client.make_url("")).rstrip("/"), str(journal)))
+    ctx = {"run_id": "r1", "suite": "lcb", "rep": 1,
+           "sampling": {"temperature": 0.6}, "chat_template_kwargs": {}}
+    assert (await gw.post("/_bench/context", json=ctx)).status == 200
+    # The bug this guards against is a hang: the client never gets a
+    # terminating chunk and blocks on read() forever. Bound the read so a
+    # regression fails the test instead of freezing the suite.
+    r = await gw.post("/v1/chat/completions", json={"messages": [], "stream": True})
+    raw = await asyncio.wait_for(r.read(), timeout=5)
+    assert b'"content":"hi"' in raw
+    rec = json.loads(journal.read_text().splitlines()[-1])
+    assert rec["run_id"] == "r1" and "error" in rec

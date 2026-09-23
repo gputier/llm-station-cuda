@@ -111,6 +111,11 @@ def make_app(upstream: str, journal_path: str) -> web.Application:
                "timings": None, "usage": None, "reasoning_chars": 0}
         headers = {k: v for k, v in request.headers.items() if k.lower() not in STRIPPED_HEADERS}
         t0 = time.monotonic()
+        # Set once the streaming branch below has sent a status line and at
+        # least started the body: once that happened the client already has
+        # a 200, and a failure past that point cannot be turned into a 502
+        # (aiohttp refuses to replace a response already prepared).
+        resp = None
         try:
             async with request.app[SESSION].post(upstream + path, json=body, headers=headers) as up:
                 rec["status"] = up.status
@@ -145,6 +150,19 @@ def make_app(upstream: str, journal_path: str) -> web.Application:
             rec["error"] = f"{type(exc).__name__}: {exc}"
             rec["total_s"] = time.monotonic() - t0
             request.app[JOURNAL].write(json.dumps(rec, ensure_ascii=False) + "\n")
+            if resp is not None and resp.prepared:
+                # The client already got a 200 and part of the chunked body:
+                # close that stream cleanly instead of leaving it hanging on
+                # a terminating chunk that will never arrive. write_eof is a
+                # no-op if the body already ended on its own; if the client's
+                # own connection is also gone by now, fall back to closing
+                # the transport so nothing is left half-open.
+                try:
+                    await resp.write_eof()
+                except ConnectionError:
+                    if request.transport is not None:
+                        request.transport.close()
+                return resp
             return web.json_response({"error": rec["error"]}, status=502)
         rec["total_s"] = time.monotonic() - t0
         request.app[JOURNAL].write(json.dumps(rec, ensure_ascii=False) + "\n")
