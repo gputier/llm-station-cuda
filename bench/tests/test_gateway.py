@@ -4,6 +4,10 @@ from benchrun.gateway import make_app
 
 
 async def fake_upstream(request):
+    # Append-only: assigning into request.app after the app has started is
+    # deprecated in aiohttp, so headers and bodies seen are collected into
+    # lists set up before start instead of written as fresh app keys.
+    request.app["headers_seen"].append(dict(request.headers))
     body = await request.json()
     request.app["seen"].append(body)
     if body.get("stream"):
@@ -24,6 +28,7 @@ async def fake_upstream(request):
 async def start(aiohttp_client, tmp_path):
     up = web.Application()
     up["seen"] = []
+    up["headers_seen"] = []
     up.router.add_post("/v1/chat/completions", fake_upstream)
     up_client = await aiohttp_client(up)
     journal = tmp_path / "journal.jsonl"
@@ -67,3 +72,32 @@ async def test_gateway_refuses_without_context(aiohttp_client, tmp_path):
     await gw.delete("/_bench/context")
     r = await gw.post("/v1/chat/completions", json={"messages": []})
     assert r.status == 409
+
+
+async def test_gateway_strips_hop_by_hop_and_encoding_headers(aiohttp_client, tmp_path):
+    gw, up, _ = await start(aiohttp_client, tmp_path)
+    await gw.post("/v1/chat/completions", json={"messages": []},
+                   headers={"Connection": "close", "Accept-Encoding": "gzip"})
+    seen = {k.lower(): v for k, v in up["headers_seen"][-1].items()}
+    assert "connection" not in seen
+    # aiohttp's own client session sets its own Accept-Encoding for its
+    # auto-decompression: what must not happen is the client's raw value
+    # ("gzip" alone, sent to the gateway above) reaching upstream unchanged.
+    assert seen.get("accept-encoding") != "gzip"
+
+
+async def test_gateway_returns_502_and_journals_when_upstream_unreachable(aiohttp_client, tmp_path):
+    journal = tmp_path / "journal.jsonl"
+    # Nothing listens on this loopback port: the connection is refused before
+    # any response is ever received, exercising the unreachable-upstream path.
+    gw = await aiohttp_client(make_app("http://127.0.0.1:1", str(journal)))
+    ctx = {"run_id": "r1", "suite": "lcb", "rep": 1,
+           "sampling": {"temperature": 0.6}, "chat_template_kwargs": {}}
+    assert (await gw.post("/_bench/context", json=ctx)).status == 200
+    r = await gw.post("/v1/chat/completions", json={"messages": []})
+    assert r.status == 502
+    assert "error" in await r.json()
+    rec = json.loads(journal.read_text().splitlines()[-1])
+    assert rec["run_id"] == "r1" and rec["status"] is None
+    assert rec["total_s"] is not None
+    assert "error" in rec

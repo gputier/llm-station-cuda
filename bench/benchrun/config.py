@@ -7,6 +7,9 @@ from pathlib import Path
 import yaml
 
 VARIANTS = {"R1", "R2", "R3"}
+# Without both flags llama-server binds to loopback only, which the gateway
+# (running elsewhere, or in another container) then cannot reach.
+REQUIRED_ARG_FLAGS = ("--host", "--port")
 # Sampling is enforced per request by the gateway, never baked into the server
 # command line: a flag here would silently disagree with what the gateway sends.
 SAMPLING_FLAGS = {
@@ -44,6 +47,9 @@ def load_config(path) -> BenchConfig:
         raise ConfigError(f"{path}: missing keys {missing}")
     if data["variant"] not in VARIANTS:
         raise ConfigError(f"{path}: variant must be one of {sorted(VARIANTS)}")
+    for flag in REQUIRED_ARG_FLAGS:
+        if flag not in data["args"]:
+            raise ConfigError(f"{path}: args must include '{flag}' or llama-server binds to loopback only")
     for flag in data["args"]:
         if flag in SAMPLING_FLAGS:
             raise ConfigError(f"{path}: {flag} belongs in 'sampling', not in 'args'")
