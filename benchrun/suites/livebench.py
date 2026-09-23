@@ -8,7 +8,9 @@ The release is pinned (RELEASE) and passed with --livebench-release-option;
 without it the harness keeps questions already retired. Tasks are listed from
 the live dataset, so a task retired before RELEASE yields no question at all
 (web_of_lies_v2 at 2026-06-25): run() fails when a requested category grades
-nothing.
+nothing. Volume at RELEASE, counted with the harness's own load_questions:
+282 questions, reasoning 100 (spatial 50, zebra_puzzle 50) and math 182
+(AMPS_Hard 100, math_comp 46, olympiad 36).
 
 run_livebench.py calls its sibling scripts by bare name, which only resolves
 from the inner livebench/livebench directory: run() works from there and
@@ -53,6 +55,11 @@ class LiveBenchSuite:
     name = "livebench"
 
     def __init__(self, categories: tuple[str, ...] = ("reasoning", "math"), release: str = RELEASE):
+        # common.get_categories_tasks keeps what precedes the first "_" of a
+        # category name, so "data_analysis" would load dataset "data".
+        for category in categories:
+            if "_" in category:
+                raise ValueError(f"livebench category {category} holds an underscore the pinned harness truncates")
         self.categories = categories
         self.release = release
 

@@ -11,8 +11,10 @@ VARIANTS = {"R1", "R2", "R3"}
 # machine, model and variant end up as path segments (Campaign._cell) and as
 # literal values interpolated into PowerShell single-quoted strings (Station).
 # Restricting them to a safe character set closes both doors at once, rather
-# than escaping at every point of use.
-FIELD_NAME_RE = re.compile(r"^[A-Za-z0-9._-]+$")
+# than escaping at every point of use. No underscore: BFCL reads "_" in a
+# model name as an escaped "/" (eval_runner.runner, ast_checker), so a served
+# alias holding one fails its registry lookup at evaluation.
+FIELD_NAME_RE = re.compile(r"^[A-Za-z0-9.-]+$")
 # Without both flags llama-server binds to loopback only, which the gateway
 # (running elsewhere, or in another container) then cannot reach.
 REQUIRED_ARG_FLAGS = ("--host", "--port")

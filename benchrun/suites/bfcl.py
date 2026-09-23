@@ -103,6 +103,13 @@ class BfclSuite:
             ],
             check=True,
         )
+        # Score files list failures only: a category the harness skipped
+        # would otherwise count every one of its items as passed.
+        written = {path.name for path in rep_dir.glob("**/BFCL_v4_*.json")}
+        for category in self.categories:
+            for kind in ("result", "score"):
+                if f"BFCL_v4_{category}_{kind}.json" not in written:
+                    raise RuntimeError(f"bfcl category {category} wrote no {kind} file")
         failing = {row["item_id"]: row for row in parse_bfcl(score_dir)}
         rows = []
         for item_id in _result_item_ids(result_dir):
