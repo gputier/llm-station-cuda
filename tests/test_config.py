@@ -30,12 +30,13 @@ def test_variant_must_be_r1_r2_r3(tmp_path):
         load_config(p)
 
 
-def test_sampling_flags_forbidden_in_args(tmp_path):
+@pytest.mark.parametrize("flag", ["--temp", "--temperature", "--dry-multiplier", "--mirostat", "--xtc-probability", "-s"])
+def test_sampling_flags_forbidden_in_args(tmp_path, flag):
     data = yaml.safe_load((FIX / "config_ok.yaml").read_text())
-    data["args"] += ["--temp", "0.3"]
+    data["args"] += [flag, "0.3"]
     p = tmp_path / "c.yaml"
     p.write_text(yaml.safe_dump(data))
-    with pytest.raises(ConfigError, match="--temp"):
+    with pytest.raises(ConfigError, match=flag):
         load_config(p)
 
 
