@@ -24,6 +24,57 @@ class FailingStartStation(FakeStation):
         raise RuntimeError("start blew up")
 
 
+class FailingStartAndStopStation(FakeStation):
+    """start() and stop() both raise, but only for the named model: the
+    other model's pass goes through cleanly, so a campaign of two
+    configurations can prove the second still runs to completion."""
+
+    def __init__(self, failing_model):
+        super().__init__()
+        self.failing_model = failing_model
+        self._current_model = None
+
+    def start(self, cfg, timeout_s=900):
+        self.log.append("start")
+        self._current_model = cfg.model
+        if cfg.model == self.failing_model:
+            raise RuntimeError("start blew up")
+
+    def stop(self):
+        self.log.append("stop")
+        if self._current_model == self.failing_model:
+            raise RuntimeError("stop blew up")
+
+
+class FailingStopStation(FakeStation):
+    def stop(self):
+        self.log.append("stop")
+        raise RuntimeError("stop blew up")
+
+
+class FailingVramMidSuiteStation(FakeStation):
+    """vram() raises on its second call onward, but only for the named
+    model: the first (post-warmup) reading succeeds, the one after the
+    first rep raises, and the other model's pass is unaffected."""
+
+    def __init__(self, failing_model):
+        super().__init__()
+        self.failing_model = failing_model
+        self._current_model = None
+        self.vram_calls = 0
+
+    def start(self, cfg, timeout_s=900):
+        self.log.append("start")
+        self._current_model = cfg.model
+        self.vram_calls = 0
+
+    def vram(self):
+        self.vram_calls += 1
+        if self._current_model == self.failing_model and self.vram_calls >= 2:
+            raise RuntimeError("vram read blew up")
+        return {"used_mb": 20000, "shared_mb": 10}
+
+
 class RisingVramStation(FakeStation):
     """vram() reports low usage on its first call (right after warmup), then
     a spike on every later call (during a suite), to prove a spill that only
@@ -172,3 +223,60 @@ def test_runner_marks_spill_seen_during_a_suite(tmp_path, monkeypatch):
     assert meta["spill"] is True
     assert meta["vram"]["shared_mb"] == 900
     assert meta["vram"]["samples"] == 4
+
+
+def test_runner_records_both_start_and_stop_failure_and_continues(tmp_path, monkeypatch):
+    cfg_bad = CFG
+    cfg_good = dataclasses.replace(CFG, model="tiel2")
+    station = FailingStartAndStopStation(failing_model=cfg_bad.model)
+    suite = FakeSuite()
+    camp = Campaign(station, "http://gw", [suite], tmp_path, reps=3)
+    monkeypatch.setattr(camp, "_set_context", lambda *a: None)
+    with pytest.raises(CampaignError, match="99/tiel/R1"):
+        camp.run([cfg_bad, cfg_good])
+    good_base = tmp_path / "99" / "tiel2" / "R1" / "fake"
+    assert all((good_base / f"rep{k}.done").exists() for k in (1, 2, 3))
+    bad_meta = json.loads((tmp_path / "99" / "tiel" / "R1" / "meta.json").read_text())
+    assert "start blew up" in bad_meta["error"]
+    assert "stop blew up" in bad_meta["stop_error"]
+    good_meta = json.loads((tmp_path / "99" / "tiel2" / "R1" / "meta.json").read_text())
+    assert "error" not in good_meta and "stop_error" not in good_meta
+    error_txt = (tmp_path / "99" / "tiel" / "R1" / "error.txt").read_text()
+    assert "start blew up" in error_txt and "stop blew up" in error_txt
+    assert not (tmp_path / "99" / "tiel2" / "R1" / "error.txt").exists()
+
+
+def test_runner_records_stop_failure_when_suite_succeeds(tmp_path, monkeypatch):
+    station = FailingStopStation()
+    suite = FakeSuite()
+    camp, _ = make(tmp_path, station=station, suite=suite)
+    monkeypatch.setattr(camp, "_set_context", lambda *a: None)
+    with pytest.raises(CampaignError, match="stop blew up"):
+        camp.run([CFG])
+    assert suite.calls == 3
+    base = tmp_path / "99" / "tiel" / "R1" / "fake"
+    assert all((base / f"rep{k}.done").exists() for k in (1, 2, 3))
+    meta = json.loads((tmp_path / "99" / "tiel" / "R1" / "meta.json").read_text())
+    assert "error" not in meta
+    assert "stop blew up" in meta["stop_error"]
+    assert (tmp_path / "99" / "tiel" / "R1" / "error.txt").exists()
+
+
+def test_runner_records_vram_failure_mid_suite_and_continues(tmp_path, monkeypatch):
+    cfg_bad = CFG
+    cfg_good = dataclasses.replace(CFG, model="tiel2")
+    station = FailingVramMidSuiteStation(failing_model=cfg_bad.model)
+    suite = FakeSuite()
+    camp = Campaign(station, "http://gw", [suite], tmp_path, reps=3)
+    monkeypatch.setattr(camp, "_set_context", lambda *a: None)
+    with pytest.raises(CampaignError, match="vram read blew up"):
+        camp.run([cfg_bad, cfg_good])
+    bad_base = tmp_path / "99" / "tiel" / "R1" / "fake"
+    assert (bad_base / "rep1.done").exists()
+    assert not (bad_base / "rep2.done").exists()
+    bad_meta = json.loads((tmp_path / "99" / "tiel" / "R1" / "meta.json").read_text())
+    assert "vram read blew up" in bad_meta["error"]
+    good_base = tmp_path / "99" / "tiel2" / "R1" / "fake"
+    assert all((good_base / f"rep{k}.done").exists() for k in (1, 2, 3))
+    good_meta = json.loads((tmp_path / "99" / "tiel2" / "R1" / "meta.json").read_text())
+    assert "error" not in good_meta

@@ -11,6 +11,7 @@ import dataclasses
 import json
 import pathlib
 import time
+import traceback
 import urllib.request
 from dataclasses import dataclass
 from typing import Protocol
@@ -89,11 +90,12 @@ class Campaign:
             started = time.time()
             vram_samples: list[dict] = []
             error = None
+            error_tb = None
             try:
                 # A failed start() can still have launched the process on the
                 # station before raising (e.g. a health-check timeout): stop()
-                # runs in the finally below regardless, so nothing is ever
-                # left running because of a start that failed on our end.
+                # is attempted below regardless, so nothing is ever left
+                # running because of a start that failed on our end.
                 self.station.start(cfg)
                 self.station.warmup()
                 vram_samples.append(self.station.vram())
@@ -113,19 +115,44 @@ class Campaign:
                     vram_samples.append(self.station.vram())
             except Exception as exc:  # noqa: BLE001 - recorded per config, campaign continues
                 error = exc
-            finally:
+                error_tb = traceback.format_exc()
+            # stop() is guarded on its own, never inside the try/except above
+            # and never left to a bare finally: a station that is unreachable
+            # typically fails start() AND stop() the same way, and letting
+            # stop()'s exception replace the one already caught would drop the
+            # original error, skip this cell's meta.json, and escape run()
+            # entirely, taking the rest of the campaign down with it.
+            stop_error = None
+            stop_error_tb = None
+            try:
                 self.station.stop()
-            # meta.json is written whether the pass succeeded or failed: the
-            # station is already stopped above, and a failed pass still needs
-            # its vram reading and timing on disk for the post-mortem. Reps
-            # that did not reach their .done marker stay pending and are
-            # redone on the next run, unaffected by this write.
+            except Exception as exc:  # noqa: BLE001 - recorded per config, campaign continues
+                stop_error = exc
+                stop_error_tb = traceback.format_exc()
+            # meta.json is written whether the pass succeeded or failed: a
+            # failed pass still needs its vram reading and timing on disk for
+            # the post-mortem. Reps that did not reach their .done marker stay
+            # pending and are redone on the next run, unaffected by this write.
             vram = _peak_vram(vram_samples)
             meta = {"vram": vram, "spill": bool(vram) and vram["shared_mb"] > self.spill_limit_mb,
                     "config": dataclasses.asdict(cfg), "started": started, "ended": time.time()}
+            cell_label = f"{cfg.machine}/{cfg.model}/{cfg.variant}"
+            failure_parts = []
+            tracebacks = []
             if error is not None:
                 meta["error"] = f"{type(error).__name__}: {error}"
-                failures.append((f"{cfg.machine}/{cfg.model}/{cfg.variant}", meta["error"]))
+                failure_parts.append(meta["error"])
+                tracebacks.append(f"--- error ---\n{error_tb}")
+            if stop_error is not None:
+                meta["stop_error"] = f"{type(stop_error).__name__}: {stop_error}"
+                failure_parts.append(f"stop also failed: {meta['stop_error']}")
+                tracebacks.append(f"--- stop_error ---\n{stop_error_tb}")
+            if failure_parts:
+                failures.append((cell_label, "; ".join(failure_parts)))
+                # meta["error"]/meta["stop_error"] stay short (class + message)
+                # so meta.json remains easy to scan; the full traceback for an
+                # unattended overnight run goes here instead.
+                (cell / "error.txt").write_text("\n".join(tracebacks), encoding="utf-8")
             (cell / "meta.json").write_text(json.dumps(meta, ensure_ascii=False, indent=2))
         if failures:
             detail = "; ".join(f"{cell}: {err}" for cell, err in failures)
