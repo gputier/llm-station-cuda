@@ -118,6 +118,13 @@ class RaisingSuite:
         raise RuntimeError("suite exploded")
 
 
+class EmptySuite:
+    name = "empty"
+
+    def run(self, ctx):
+        return []
+
+
 class SystemExitSuite:
     """Raises SystemExit on its second call, as if a suite called sys.exit()
     partway through a pass: the first rep's .done must survive, stop() must
@@ -210,6 +217,18 @@ def test_runner_writes_meta_when_suite_raises(tmp_path, monkeypatch):
     assert station.log == ["start", "warmup", "stop"]
     meta = json.loads((tmp_path / "99" / "tiel" / "R1" / "meta.json").read_text())
     assert "error" in meta and "suite exploded" in meta["error"]
+
+
+def test_runner_records_a_suite_that_grades_nothing(tmp_path, monkeypatch):
+    # A harness that silently selects zero items (a retired LiveBench task, a
+    # wrong release) must fail the cell, not leave an empty "done" pass.
+    camp, _ = make(tmp_path, suite=EmptySuite())
+    monkeypatch.setattr(camp, "_set_context", lambda *a: None)
+    with pytest.raises(CampaignError, match="graded no item"):
+        camp.run([CFG])
+    cell = tmp_path / "99" / "tiel" / "R1"
+    assert not (cell / "empty" / "rep1.done").exists()
+    assert "graded no item" in json.loads((cell / "meta.json").read_text())["error"]
 
 
 def test_runner_records_start_failure_and_continues(tmp_path, monkeypatch):
