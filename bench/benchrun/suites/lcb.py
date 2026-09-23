@@ -9,11 +9,8 @@ off to the unmodified lcb_runner.runner.main.main().
 
 Proven by two real runs on 2026-09-23 (spark on the 99, release_v6), whose
 eval_all file is cut into tests/fixtures/lcb_eval_sample.json. Memory: the
-pinned load_code_generation_dataset() decompresses the test cases of the
-whole split before filtering by date, and peaks at 7.3 GiB of resident
-memory on release_v6 even when the Hugging Face cache is already built. The
-Docker VM needs at least 8 GiB (7.75 GiB usable here, enough with nothing
-else running in it).
+launcher's date-first loader keeps the load under 1 GiB on release_v6 after
+2025-01-01, where the pinned one peaks at 7.3 GiB (see lcb_run.py).
 
 Output length: the harness sends max_tokens 2000 by default, which cut every
 answer of a reasoning model before any code (four empty answers in the first
@@ -30,7 +27,7 @@ from benchrun.suites import NETWORK
 
 IMAGE = "bench-lcb"
 # Named volume holding the Hugging Face cache of the dataset (about 9 GB for
-# release_v6), built once by bench/harness/lcb_run.py and reused by every run.
+# release_v6), built by bench/harness/lcb_run.py on first use and reused by every run.
 HF_CACHE_VOLUME = "bench-hf-cache"
 SCENARIO = "codegeneration"
 # One sample per problem. Temperature and top_p only shape the output file
