@@ -1,0 +1,35 @@
+{
+    "testdir": "/output/rep1-results/python/exercises/practice/zebra-puzzle",
+    "testcase": "zebra-puzzle",
+    "model": "openai/bench-spark-R1",
+    "edit_format": "whole",
+    "tests_outcomes": [
+        false,
+        false
+    ],
+    "cost": 0.0,
+    "duration": 56.12973380088806,
+    "test_timeouts": 0,
+    "commit_hash": "5dc9490",
+    "num_error_outputs": 2,
+    "num_user_asks": 2,
+    "num_exhausted_context_windows": 2,
+    "num_malformed_responses": 0,
+    "syntax_errors": 0,
+    "indentation_errors": 0,
+    "lazy_comments": 0,
+    "reasoning_effort": null,
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "thinking_tokens": null,
+    "chat_hashes": [
+        [
+            "e53835726dd1151bac01c4266bd0315b6b668558",
+            "51603b79833e86f49b4c86fd34db901c4bc2ecb5"
+        ],
+        [
+            "e53835726dd1151bac01c4266bd0315b6b668558",
+            "51603b79833e86f49b4c86fd34db901c4bc2ecb5"
+        ]
+    ]
+}

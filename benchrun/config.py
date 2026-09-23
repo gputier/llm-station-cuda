@@ -76,9 +76,14 @@ def load_config(path) -> BenchConfig:
     )
 
 
+def served_alias(cfg: BenchConfig) -> str:
+    # Name of the launch spec on the station, and model name the harnesses send.
+    return f"bench-{cfg.model}-{cfg.variant}"
+
+
 def render_launch_spec(cfg: BenchConfig) -> dict:
     return {
-        "name": f"bench-{cfg.model}-{cfg.variant}",
+        "name": served_alias(cfg),
         "exe": cfg.exe,
         "workDir": cfg.workdir,
         "cudaBin": cfg.cudabin,
