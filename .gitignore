@@ -50,3 +50,13 @@ bench/inedit/
 api-key.txt
 *.key
 *.pem
+
+# Bench: station addresses and run journals stay local.
+bench/.env
+bench/runs/
+
+# Python caches and build metadata.
+__pycache__/
+*.pyc
+*.egg-info/
+.pytest_cache/
