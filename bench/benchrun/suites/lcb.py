@@ -23,12 +23,9 @@ import json
 import subprocess
 
 from benchrun.config import served_alias
-from benchrun.suites import NETWORK
+from benchrun.suites import HF_CACHE_VOLUME, NETWORK
 
 IMAGE = "bench-lcb"
-# Named volume holding the Hugging Face cache of the dataset (about 9 GB for
-# release_v6), built by bench/harness/lcb_run.py on first use and reused by every run.
-HF_CACHE_VOLUME = "bench-hf-cache"
 SCENARIO = "codegeneration"
 # One sample per problem. Temperature and top_p only shape the output file
 # name: the gateway overwrites sampling on every request.

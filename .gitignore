@@ -44,6 +44,11 @@ bench/epreuves.jsonl
 bench/inedit/
 *.jsonl
 
+# Exception: a real captured LiveBench judgment file used as a test fixture
+# (task 10). It carries question_id, task and score only, no problem text or
+# model answer, so publishing it does not defeat the policy above.
+!bench/tests/fixtures/livebench_judgment_sample.jsonl
+
 # Local secrets.
 .env
 .env.*
