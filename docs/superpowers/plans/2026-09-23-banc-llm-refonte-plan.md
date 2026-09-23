@@ -2025,7 +2025,7 @@ git commit -m "feat(bench): agrégateur et tableau de septembre 2026"
 
 - [ ] **Step 2: Rédiger la convention (doc-copywriter, anti-ai-patterns)**
 
-Contenu fixé par la section 8 de la spec : fiche d'identité sourcée, trois configurations, porte d'entrée (template lu, appel d'outil réel, `draft_n`, rappel à la fenêtre servie), banc standard en 3 passes, ligne au tableau, et règle de mise en service (battre le modèle en place au-delà de la marge, sur son rôle).
+Contenu fixé par la section 8 de la spec : fiche d'identité sourcée, trois configurations, porte d'entrée (template lu, appel d'outil réel, `draft_n`, rappel à la fenêtre servie), banc standard en 3 passes, ligne au tableau, et règle de mise en service (battre le modèle en place au-delà de la marge, sur son rôle). Ajout demandé par Guillaume le 23/09/2026 : changer la version épinglée d'un harnais (`pins.env`) ou d'un jeu (`SETS.sha256`) invalide la comparaison ; tous les modèles déjà mesurés repassent le banc sur la nouvelle version avant qu'une ligne neuve entre au tableau, et le tableau porte la version des harnais de chaque ligne.
 
 - [ ] **Step 3: Faire passer et committer**
 
