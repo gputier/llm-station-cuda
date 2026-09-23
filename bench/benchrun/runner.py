@@ -139,6 +139,8 @@ class Campaign:
                         self._set_context(cfg, suite.name, rep)
                         ctx = SuiteContext(self.gateway_url, cfg, rep, out, self.private_root)
                         results = suite.run(ctx)
+                        if not results:
+                            raise RuntimeError(f"suite {suite.name} graded no item (rep {rep})")
                         with open(out / f"rep{rep}.jsonl", "w", encoding="utf-8") as fh:
                             for r in results:
                                 fh.write(json.dumps(r, ensure_ascii=False) + "\n")
