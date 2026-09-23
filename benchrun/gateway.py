@@ -6,6 +6,7 @@ often temperature 0), relays the answer byte for byte, and journals timings.
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import time
 
@@ -13,6 +14,17 @@ import aiohttp
 from aiohttp import web
 
 RELAYED_POSTS = ("/v1/chat/completions", "/v1/completions", "/v1/messages")
+
+# Hop-by-hop headers are per-connection, not per-request: forwarding them lets
+# the harness's "Connection: close" tear down the gateway's pooled connection
+# to upstream, folding a fresh TCP connect into ttft_s and total_s. Content
+# length changes once sampling is overwritten, and accept-encoding is dropped
+# so upstream never compresses a body the gateway re-emits uncompressed.
+STRIPPED_HEADERS = {
+    "host", "content-length", "connection", "keep-alive", "transfer-encoding",
+    "upgrade", "proxy-authenticate", "proxy-authorization", "te", "trailer",
+    "accept-encoding",
+}
 
 
 def _apply(body: dict, ctx: dict, path: str) -> dict:
@@ -93,45 +105,57 @@ def make_app(upstream: str, journal_path: str) -> web.Application:
         rec = {"run_id": ctx["run_id"], "suite": ctx["suite"], "rep": ctx["rep"], "path": path,
                "t_start": time.time(), "ttft_s": None, "total_s": None, "status": None,
                "request_sampling": {k: body.get(k) for k in ctx["sampling"]},
+               # llama-server's /v1/messages (Anthropic shape) returns no
+               # "timings" field: for Anthropic-shaped passes this stays null
+               # and decode rate is read from the server's own log instead.
                "timings": None, "usage": None, "reasoning_chars": 0}
-        headers = {k: v for k, v in request.headers.items() if k.lower() not in ("host", "content-length")}
+        headers = {k: v for k, v in request.headers.items() if k.lower() not in STRIPPED_HEADERS}
         t0 = time.monotonic()
-        async with request.app[SESSION].post(upstream + path, json=body, headers=headers) as up:
-            rec["status"] = up.status
-            if body.get("stream"):
-                resp = web.StreamResponse(status=up.status, headers={
-                    "Content-Type": up.headers.get("Content-Type", "text/event-stream")})
-                await resp.prepare(request)
-                tail = b""
-                async for chunk in up.content.iter_any():
-                    if rec["ttft_s"] is None:
-                        rec["ttft_s"] = time.monotonic() - t0
-                    await resp.write(chunk)
-                    tail += chunk
-                    cut = tail.rfind(b"\n\n")
-                    if cut >= 0:
-                        _scan_sse(tail[:cut], rec)
-                        tail = tail[cut + 2:]
-                _scan_sse(tail, rec)
-                await resp.write_eof()
-            else:
-                raw = await up.read()
-                rec["ttft_s"] = time.monotonic() - t0
-                try:
-                    payload = json.loads(raw)
-                    rec["timings"] = payload.get("timings")
-                    rec["usage"] = payload.get("usage")
-                    rec["reasoning_chars"] = _reasoning_chars(payload)
-                except ValueError:
-                    pass
-                resp = web.Response(status=up.status, body=raw, content_type=up.content_type)
+        try:
+            async with request.app[SESSION].post(upstream + path, json=body, headers=headers) as up:
+                rec["status"] = up.status
+                if body.get("stream"):
+                    resp = web.StreamResponse(status=up.status, headers={
+                        "Content-Type": up.headers.get("Content-Type", "text/event-stream")})
+                    await resp.prepare(request)
+                    tail = b""
+                    async for chunk in up.content.iter_any():
+                        if rec["ttft_s"] is None:
+                            rec["ttft_s"] = time.monotonic() - t0
+                        await resp.write(chunk)
+                        tail += chunk
+                        cut = tail.rfind(b"\n\n")
+                        if cut >= 0:
+                            _scan_sse(tail[:cut], rec)
+                            tail = tail[cut + 2:]
+                    _scan_sse(tail, rec)
+                    await resp.write_eof()
+                else:
+                    raw = await up.read()
+                    rec["ttft_s"] = time.monotonic() - t0
+                    try:
+                        payload = json.loads(raw)
+                        rec["timings"] = payload.get("timings")
+                        rec["usage"] = payload.get("usage")
+                        rec["reasoning_chars"] = _reasoning_chars(payload)
+                    except ValueError:
+                        pass
+                    resp = web.Response(status=up.status, body=raw, content_type=up.content_type)
+        except (aiohttp.ClientError, asyncio.TimeoutError) as exc:
+            rec["error"] = f"{type(exc).__name__}: {exc}"
+            rec["total_s"] = time.monotonic() - t0
+            request.app[JOURNAL].write(json.dumps(rec, ensure_ascii=False) + "\n")
+            return web.json_response({"error": rec["error"]}, status=502)
         rec["total_s"] = time.monotonic() - t0
         request.app[JOURNAL].write(json.dumps(rec, ensure_ascii=False) + "\n")
         return resp
 
     async def relay_get(request):
-        async with request.app[SESSION].get(upstream + request.path_qs) as up:
-            return web.Response(status=up.status, body=await up.read(), content_type=up.content_type)
+        try:
+            async with request.app[SESSION].get(upstream + request.path_qs) as up:
+                return web.Response(status=up.status, body=await up.read(), content_type=up.content_type)
+        except (aiohttp.ClientError, asyncio.TimeoutError) as exc:
+            return web.json_response({"error": f"{type(exc).__name__}: {exc}"}, status=502)
 
     app.router.add_post("/_bench/context", set_ctx)
     app.router.add_delete("/_bench/context", clear_ctx)
