@@ -20,9 +20,18 @@ FIELD_NAME_RE = re.compile(r"^[A-Za-z0-9.-]+$")
 REQUIRED_ARG_FLAGS = ("--host", "--port")
 # Sampling is enforced per request by the gateway, never baked into the server
 # command line: a flag here would silently disagree with what the gateway sends.
+# Every flag and alias of the "sampling params" section of llama-server --help
+# at b10826, read on the 99 on 2026-09-23.
 SAMPLING_FLAGS = {
-    "--temp", "--top-p", "--top-k", "--min-p", "--presence-penalty",
-    "--repeat-penalty", "--frequency-penalty",
+    "--samplers", "-s", "--seed", "--sampler-seq", "--sampling-seq", "--ignore-eos",
+    "--temp", "--temperature", "--top-k", "--top-p", "--min-p", "--top-nsigma",
+    "--top-n-sigma", "--xtc-probability", "--xtc-threshold", "--typical", "--typical-p",
+    "--repeat-last-n", "--repeat-penalty", "--presence-penalty", "--frequency-penalty",
+    "--dry-multiplier", "--dry-base", "--dry-allowed-length", "--dry-penalty-last-n",
+    "--dry-sequence-breaker", "--adaptive-target", "--adaptive-decay", "--dynatemp-range",
+    "--dynatemp-exp", "--mirostat", "--mirostat-lr", "--mirostat-ent", "-l", "--logit-bias",
+    "--grammar", "--grammar-file", "-j", "--json-schema", "-jf", "--json-schema-file",
+    "-bs", "--backend-sampling",
 }
 REQUIRED = ("machine", "model", "variant", "label", "exe", "workdir", "args", "sampling", "sources")
 
