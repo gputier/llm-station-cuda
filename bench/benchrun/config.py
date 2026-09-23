@@ -1,12 +1,18 @@
 """Bench configuration: one YAML file per model x variant x machine."""
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
 import yaml
 
 VARIANTS = {"R1", "R2", "R3"}
+# machine, model and variant end up as path segments (Campaign._cell) and as
+# literal values interpolated into PowerShell single-quoted strings (Station).
+# Restricting them to a safe character set closes both doors at once, rather
+# than escaping at every point of use.
+FIELD_NAME_RE = re.compile(r"^[A-Za-z0-9._-]+$")
 # Without both flags llama-server binds to loopback only, which the gateway
 # (running elsewhere, or in another container) then cannot reach.
 REQUIRED_ARG_FLAGS = ("--host", "--port")
@@ -45,6 +51,10 @@ def load_config(path) -> BenchConfig:
     missing = [k for k in REQUIRED if k not in data]
     if missing:
         raise ConfigError(f"{path}: missing keys {missing}")
+    for field_name in ("machine", "model", "variant"):
+        value = str(data[field_name])
+        if not FIELD_NAME_RE.match(value):
+            raise ConfigError(f"{path}: {field_name} must match {FIELD_NAME_RE.pattern!r}, got {value!r}")
     if data["variant"] not in VARIANTS:
         raise ConfigError(f"{path}: variant must be one of {sorted(VARIANTS)}")
     for flag in REQUIRED_ARG_FLAGS:

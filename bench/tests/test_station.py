@@ -35,3 +35,12 @@ def test_start_times_out_when_health_never_ok(monkeypatch):
 
 def test_parse_vram():
     assert parse_vram("24576\n", "123456789\n") == {"used_mb": 24576, "shared_mb": 117}
+
+
+def test_ctl_path_with_quote_is_escaped_in_command(monkeypatch):
+    run = FakeRun()
+    st = Station("u@h", "http://h:8080", r"D:\LLM-Setup\it's\llm-ctl.ps1", runner=run)
+    monkeypatch.setattr(st, "_health_ok", lambda: True)
+    st.start(CFG, timeout_s=1)
+    assert "it''s" in run.calls[1][-1]
+    assert "it's" not in run.calls[1][-1]

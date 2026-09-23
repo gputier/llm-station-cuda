@@ -24,6 +24,17 @@ def parse_vram(nvidia_out: str, shared_bytes_out: str) -> dict:
     return {"used_mb": used, "shared_mb": shared}
 
 
+def ps_quote(value: str) -> str:
+    """Escape a value for interpolation inside a PowerShell single-quoted string.
+
+    PowerShell's own escape for a literal single quote inside '...' is to
+    double it: doing this at every interpolation point, rather than trusting
+    the caller, is what keeps ctl_path or a spec path free to contain a quote
+    without breaking out of the quoted argument.
+    """
+    return str(value).replace("'", "''")
+
+
 class Station:
     def __init__(self, ssh_target: str, base_url: str, ctl_path: str, runner=subprocess.run):
         self.ssh_target = ssh_target
@@ -61,7 +72,7 @@ class Station:
             self.run(["scp", "-q", fh.name, f"{self.ssh_target}:{remote.replace(chr(92), '/')}"], check=True)
         finally:
             os.unlink(fh.name)
-        self._ps(f"& '{self.ctl_path}' -Action bench -Spec '{remote}'")
+        self._ps(f"& '{ps_quote(self.ctl_path)}' -Action bench -Spec '{ps_quote(remote)}'")
         deadline = time.monotonic() + timeout_s
         while True:
             if self._health_ok():
@@ -71,7 +82,7 @@ class Station:
             time.sleep(5)
 
     def stop(self) -> None:
-        self._ps(f"& '{self.ctl_path}' -Action stop")
+        self._ps(f"& '{ps_quote(self.ctl_path)}' -Action stop")
 
     def warmup(self) -> None:
         body = json.dumps({"messages": [{"role": "user", "content": "Say ok."}], "max_tokens": 16}).encode()

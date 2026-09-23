@@ -62,3 +62,21 @@ def test_args_must_include_port_flag(tmp_path):
     p.write_text(yaml.safe_dump(data))
     with pytest.raises(ConfigError, match="--port"):
         load_config(p)
+
+
+def test_model_with_space_is_rejected(tmp_path):
+    data = yaml.safe_load((FIX / "config_ok.yaml").read_text())
+    data["model"] = "ti el"
+    p = tmp_path / "c.yaml"
+    p.write_text(yaml.safe_dump(data))
+    with pytest.raises(ConfigError, match="model"):
+        load_config(p)
+
+
+def test_model_with_quote_is_rejected(tmp_path):
+    data = yaml.safe_load((FIX / "config_ok.yaml").read_text())
+    data["model"] = "ti'el"
+    p = tmp_path / "c.yaml"
+    p.write_text(yaml.safe_dump(data))
+    with pytest.raises(ConfigError, match="model"):
+        load_config(p)
