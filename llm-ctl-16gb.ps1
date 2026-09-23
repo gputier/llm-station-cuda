@@ -1,5 +1,5 @@
 param(
-  [ValidateSet('tiel','qwen36','stop','status','logs')]
+  [ValidateSet('bench','tiel','qwen36','stop','status','logs')]
   [string]$Action,
   [string]$Name,   # optional: for 'stop' and 'logs', targets a named instance
   [int]$Tail = 40, # for 'logs': history lines to show before following live
@@ -15,7 +15,12 @@ param(
   # -Extra alone cannot do: --spec-type accumulates rather than replaces, so
   # asking for another type on a profile that already has one runs BOTH. That
   # cost 36% of tiel's decode on the 5090 box on 2026-09-10.
-  [switch]$NoSpec
+  [switch]$NoSpec,
+  # Path to a bench launch spec (JSON: name, exe, workDir, cudaBin, args, env).
+  # Written by benchrun, never by hand. See bench/benchrun/config.py.
+  [string]$Spec = '',
+  # With -Action bench: print the command line and start nothing.
+  [switch]$DryRun
 )
 
 # ---------------------------------------------------------------------------
@@ -425,5 +430,20 @@ switch ($Action) {
   'stop'   { if ($Name) { Stop-One $Name } else { Stop-All }; break }
   'status' { Get-Status; break }
   'logs'   { Show-Logs $Name $Tail; break }
-  default  { Write-Output "USAGE: llm-ctl.ps1 -Action tiel|qwen36|stop|status|logs" }
+
+  'bench' {
+    if (-not $Spec -or -not (Test-Path $Spec)) { Write-Output "ERROR spec not found: $Spec"; exit 2 }
+    $s = Get-Content -Raw $Spec | ConvertFrom-Json
+    $benchArgs = @($s.args)
+    if ($DryRun) {
+      Write-Output ("DRYRUN " + $s.exe + " " + ((@('--alias', $s.name) + $benchArgs) -join ' '))
+      break
+    }
+    $envVars = @{}
+    foreach ($p in $s.env.PSObject.Properties) { $envVars[$p.Name] = $p.Value }
+    Start-LLM $s.name $benchArgs $s.exe $s.workDir $envVars
+    break
+  }
+
+  default  { Write-Output "USAGE: llm-ctl.ps1 -Action tiel|qwen36|bench|stop|status|logs" }
 }

@@ -1,0 +1,1 @@
+{"name":"bench-tiel-R1","exe":"D:\\LLM-Setup\\beellama-v0.4.6\\llama-server.exe","workDir":"D:\\LLM-Setup\\beellama-v0.4.6","cudaBin":null,"args":["-m","D:\\models\\tiel-coder-35b-a3b-mtp\\Tiel-Coder-35B-A3B-MTP-UD-IQ3_XXS.gguf","--host","0.0.0.0","--port","8080","--ctx-size","8192"],"env":{"GGML_KVARN_WINDOW_CHUNK":"16384"}}

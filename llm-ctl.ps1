@@ -1,5 +1,5 @@
 param(
-  [ValidateSet('bonsai','bonsai2','embed','kat','muse','nex','ornith','qwen','qwenf','qwent','qwenu','spark','tiel','stop','status','logs')]
+  [ValidateSet('bench','bonsai','bonsai2','embed','kat','muse','nex','ornith','qwen','qwenf','qwent','qwenu','spark','tiel','stop','status','logs')]
   [string]$Action,
   [string]$Name,  # optional: for 'stop' and 'logs', targets a named instance
   [int]$Tail = 40, # for 'logs': history lines to show before following live
@@ -18,7 +18,12 @@ param(
   # -Extra alone cannot do: --spec-type accumulates rather than replaces, so
   # asking for another type on a profile that already has one runs BOTH. That is
   # not academic, it cost 36% of tiel's decode on 2026-09-10.
-  [switch]$NoSpec
+  [switch]$NoSpec,
+  # Path to a bench launch spec (JSON: name, exe, workDir, cudaBin, args, env).
+  # Written by benchrun, never by hand. See bench/benchrun/config.py.
+  [string]$Spec = '',
+  # With -Action bench: print the command line and start nothing.
+  [switch]$DryRun
 )
 
 # ---------------------------------------------------------------------------
@@ -448,6 +453,19 @@ switch ($Action) {
   'stop'   { if ($Name) { Stop-One $Name } else { Stop-All }; break }
   'status' { Get-Status; break }
   'logs'   { Show-Logs $Name $Tail; break }
+
+  'bench' {
+    if (-not $Spec -or -not (Test-Path $Spec)) { Write-Output "ERROR spec not found: $Spec"; exit 2 }
+    $s = Get-Content -Raw $Spec | ConvertFrom-Json
+    $benchArgs = @($s.args)
+    if ($DryRun) {
+      Write-Output ("DRYRUN " + $s.exe + " " + ((@('--alias', $s.name) + $benchArgs) -join ' '))
+      break
+    }
+    foreach ($p in $s.env.PSObject.Properties) { Set-Item -Path "Env:$($p.Name)" -Value $p.Value }
+    Start-LLM $s.name $benchArgs $null $s.exe $s.workDir $s.cudaBin
+    break
+  }
 
   'muse' {
     # Muse Glimmer 30B: dense backbone + perception encoder + DFlash drafter

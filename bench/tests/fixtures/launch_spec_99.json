@@ -1,0 +1,1 @@
+{"name":"bench-spark-R1","exe":"D:\\LLM-Setup\\llama-cpp-b10883\\llama-server.exe","workDir":"D:\\LLM-Setup\\llama-cpp-b10883","cudaBin":"C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.3\\bin","args":["-m","D:\\models\\spark-x2.5-4b\\Spark-X2.5-4B-Q8_0.gguf","--host","0.0.0.0","--port","8080","--ctx-size","8192"],"env":{}}
