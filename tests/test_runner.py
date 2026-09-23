@@ -52,6 +52,16 @@ class FailingStopStation(FakeStation):
         raise RuntimeError("stop blew up")
 
 
+class WarmupInterruptStation(FakeStation):
+    """warmup() raises KeyboardInterrupt, as if an operator hit Ctrl-C mid
+    campaign: stop() must still run, unlike an ordinary Exception it must
+    not be swallowed."""
+
+    def warmup(self):
+        self.log.append("warmup")
+        raise KeyboardInterrupt()
+
+
 class FailingVramMidSuiteStation(FakeStation):
     """vram() raises on its second call onward, but only for the named
     model: the first (post-warmup) reading succeeds, the one after the
@@ -106,6 +116,16 @@ class RaisingSuite:
 
     def run(self, ctx):
         raise RuntimeError("suite exploded")
+
+
+class SystemExitSuite:
+    """Raises SystemExit, as if a suite called sys.exit(): stop() must still
+    run, and the SystemExit must still propagate out of run()."""
+
+    name = "fake"
+
+    def run(self, ctx):
+        raise SystemExit(1)
 
 
 class FailsForModel:
@@ -280,3 +300,21 @@ def test_runner_records_vram_failure_mid_suite_and_continues(tmp_path, monkeypat
     assert all((good_base / f"rep{k}.done").exists() for k in (1, 2, 3))
     good_meta = json.loads((tmp_path / "99" / "tiel2" / "R1" / "meta.json").read_text())
     assert "error" not in good_meta
+
+
+def test_runner_stops_station_on_keyboard_interrupt_during_warmup(tmp_path, monkeypatch):
+    station = WarmupInterruptStation()
+    camp, _ = make(tmp_path, station=station)
+    monkeypatch.setattr(camp, "_set_context", lambda *a: None)
+    with pytest.raises(KeyboardInterrupt):
+        camp.run([CFG])
+    assert station.log == ["start", "warmup", "stop"]
+
+
+def test_runner_stops_station_on_system_exit_during_suite(tmp_path, monkeypatch):
+    station = FakeStation()
+    camp = Campaign(station, "http://gw", [SystemExitSuite()], tmp_path, reps=3)
+    monkeypatch.setattr(camp, "_set_context", lambda *a: None)
+    with pytest.raises(SystemExit):
+        camp.run([CFG])
+    assert station.log == ["start", "warmup", "stop"]

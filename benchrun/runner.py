@@ -91,11 +91,13 @@ class Campaign:
             vram_samples: list[dict] = []
             error = None
             error_tb = None
+            stop_error = None
+            stop_error_tb = None
             try:
                 # A failed start() can still have launched the process on the
                 # station before raising (e.g. a health-check timeout): stop()
-                # is attempted below regardless, so nothing is ever left
-                # running because of a start that failed on our end.
+                # runs in the finally below regardless, so nothing is ever
+                # left running because of a start that failed on our end.
                 self.station.start(cfg)
                 self.station.warmup()
                 vram_samples.append(self.station.vram())
@@ -116,19 +118,24 @@ class Campaign:
             except Exception as exc:  # noqa: BLE001 - recorded per config, campaign continues
                 error = exc
                 error_tb = traceback.format_exc()
-            # stop() is guarded on its own, never inside the try/except above
-            # and never left to a bare finally: a station that is unreachable
-            # typically fails start() AND stop() the same way, and letting
-            # stop()'s exception replace the one already caught would drop the
-            # original error, skip this cell's meta.json, and escape run()
-            # entirely, taking the rest of the campaign down with it.
-            stop_error = None
-            stop_error_tb = None
-            try:
-                self.station.stop()
-            except Exception as exc:  # noqa: BLE001 - recorded per config, campaign continues
-                stop_error = exc
-                stop_error_tb = traceback.format_exc()
+            finally:
+                # stop() must run on every exit path out of the block above,
+                # including a BaseException such as KeyboardInterrupt or
+                # SystemExit (an operator's Ctrl-C during a suite, say): a
+                # bare except Exception would not catch those, and without a
+                # finally the station would be left with a model loaded while
+                # the interrupt propagates. Guarded on its own so a stop()
+                # failure never replaces an error already caught above (a
+                # station that is unreachable typically fails start() AND
+                # stop() the same way) and, for an ordinary Exception, never
+                # escapes to abort the rest of the campaign; a BaseException
+                # still propagates out of run() once this finally completes,
+                # as it must.
+                try:
+                    self.station.stop()
+                except Exception as exc:  # noqa: BLE001 - recorded per config, campaign continues
+                    stop_error = exc
+                    stop_error_tb = traceback.format_exc()
             # meta.json is written whether the pass succeeded or failed: a
             # failed pass still needs its vram reading and timing on disk for
             # the post-mortem. Reps that did not reach their .done marker stay
