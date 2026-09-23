@@ -320,7 +320,7 @@ function Show-Logs($name, $tail) {
   Get-Content $errLog -Tail $tail -Wait
 }
 
-function Start-LLM($name, $modelArgs, $cudaDevices = $null, $exePath = $null, $workDirPath = $null, $cudaBinPath = $null) {
+function Start-LLM($name, $modelArgs, $cudaDevices = $null, $exePath = $null, $workDirPath = $null, $cudaBinPath = $null, $envVars = @{}) {
   # Every profile is served under its own name. Without this flag /v1/models
   # reports the model id as the full Windows path of the GGUF, backslashes
   # included: callers store that string, and it breaks the day the file moves.
@@ -410,7 +410,19 @@ function Start-LLM($name, $modelArgs, $cudaDevices = $null, $exePath = $null, $w
   # CPU-only instances: hide the GPU to avoid a pointless CUDA init.
   if ($null -ne $cudaDevices) { $env:CUDA_VISIBLE_DEVICES = $cudaDevices }
   $inner = "cd /d `"$workDirPath`" && `"$exePath`" $quoted > NUL 2> `"$errLog`""
-  $r = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{ CommandLine = "cmd.exe /c $inner"; CurrentDirectory = $workDirPath }
+  $createArgs = @{ CommandLine = "cmd.exe /c $inner"; CurrentDirectory = $workDirPath }
+  # Caller-supplied env vars (the 'bench' action). A process created through
+  # Win32_Process.Create does not inherit this session's Env: (measured
+  # 2026-09-23: LLAMA_ARG_CTX_SIZE=4096 set in Env: gave n_ctx=689920), so they
+  # go in an explicit Win32_ProcessStartup block, as in llm-ctl-16gb.ps1. That
+  # block replaces the child's whole environment: copy the current one, then
+  # lay the caller's variables over it.
+  if ($envVars.Count -gt 0) {
+    $vars = @(Get-ChildItem Env: | Where-Object { -not $envVars.ContainsKey($_.Name) } | ForEach-Object { "$($_.Name)=$($_.Value)" })
+    foreach ($k in $envVars.Keys) { $vars += "$k=$($envVars[$k])"; Write-Output "ENV $k=$($envVars[$k])" }
+    $createArgs.ProcessStartupInformation = New-CimInstance -ClassName Win32_ProcessStartup -ClientOnly -Property @{ EnvironmentVariables = [string[]]$vars }
+  }
+  $r = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments $createArgs
   $env:PATH = $savedPath
   if ($null -eq $savedCuda) { Remove-Item Env:\CUDA_VISIBLE_DEVICES -ErrorAction SilentlyContinue }
   else { $env:CUDA_VISIBLE_DEVICES = $savedCuda }
@@ -462,8 +474,9 @@ switch ($Action) {
       Write-Output ("DRYRUN " + $s.exe + " " + ((@('--alias', $s.name) + $benchArgs) -join ' '))
       break
     }
-    foreach ($p in $s.env.PSObject.Properties) { Set-Item -Path "Env:$($p.Name)" -Value $p.Value }
-    Start-LLM $s.name $benchArgs $null $s.exe $s.workDir $s.cudaBin
+    $envVars = @{}
+    foreach ($p in $s.env.PSObject.Properties) { $envVars[$p.Name] = $p.Value }
+    Start-LLM $s.name $benchArgs $null $s.exe $s.workDir $s.cudaBin $envVars
     break
   }
 
