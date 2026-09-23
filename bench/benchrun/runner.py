@@ -4,6 +4,10 @@ A configuration whose station start or suites fail is recorded in its own
 meta.json and the campaign continues with the next configuration; the
 failures are only raised, as a single CampaignError, once every configuration
 has had its turn.
+
+An operator interrupt (KeyboardInterrupt) or SystemExit also gets its cell's
+meta.json written, marked with "interrupted", but is never counted as a
+CampaignError failure: it stops the whole campaign immediately instead.
 """
 from __future__ import annotations
 
@@ -79,6 +83,34 @@ class Campaign:
                                      headers={"Content-Type": "application/json"}, method="POST")
         urllib.request.urlopen(req, timeout=10).read()
 
+    def _record_cell(self, cell, cfg, started, vram_samples, error, error_tb,
+                      stop_error, stop_error_tb, interrupted, interrupted_tb):
+        # Writes meta.json (and error.txt, if there is anything to report) for
+        # one cell. Called on both the normal and the interrupted exit path.
+        # Returns the short failure summary for CampaignError, or None.
+        vram = _peak_vram(vram_samples)
+        meta = {"vram": vram, "spill": bool(vram) and vram["shared_mb"] > self.spill_limit_mb,
+                "config": dataclasses.asdict(cfg), "started": started, "ended": time.time()}
+        failure_parts = []
+        tracebacks = []
+        if error is not None:
+            meta["error"] = f"{type(error).__name__}: {error}"
+            failure_parts.append(meta["error"])
+            tracebacks.append(f"--- error ---\n{error_tb}")
+        if stop_error is not None:
+            meta["stop_error"] = f"{type(stop_error).__name__}: {stop_error}"
+            failure_parts.append(f"stop also failed: {meta['stop_error']}")
+            tracebacks.append(f"--- stop_error ---\n{stop_error_tb}")
+        if interrupted is not None:
+            meta["interrupted"] = interrupted
+            tracebacks.append(f"--- interrupted ---\n{interrupted_tb}")
+        # meta["error"]/meta["stop_error"] stay short (class + message) so
+        # meta.json is readable at a glance; full tracebacks go to error.txt.
+        if tracebacks:
+            (cell / "error.txt").write_text("\n".join(tracebacks), encoding="utf-8")
+        (cell / "meta.json").write_text(json.dumps(meta, ensure_ascii=False, indent=2))
+        return "; ".join(failure_parts) if failure_parts else None
+
     def run(self, configs: list[BenchConfig]) -> None:
         failures = []
         for cfg in configs:
@@ -94,73 +126,53 @@ class Campaign:
             stop_error = None
             stop_error_tb = None
             try:
-                # A failed start() can still have launched the process on the
-                # station before raising (e.g. a health-check timeout): stop()
-                # runs in the finally below regardless, so nothing is ever
-                # left running because of a start that failed on our end.
-                self.station.start(cfg)
-                self.station.warmup()
-                vram_samples.append(self.station.vram())
-                for suite, rep in todo:
-                    out = cell / suite.name
-                    out.mkdir(parents=True, exist_ok=True)
-                    self._set_context(cfg, suite.name, rep)
-                    ctx = SuiteContext(self.gateway_url, cfg, rep, out, self.private_root)
-                    results = suite.run(ctx)
-                    with open(out / f"rep{rep}.jsonl", "w", encoding="utf-8") as fh:
-                        for r in results:
-                            fh.write(json.dumps(r, ensure_ascii=False) + "\n")
-                    (out / f"rep{rep}.done").write_text("")
-                    # Sampled again after every pass, not only after warmup:
-                    # a spill that only shows up once the context has grown
-                    # during a suite would otherwise never be seen.
-                    vram_samples.append(self.station.vram())
-            except Exception as exc:  # noqa: BLE001 - recorded per config, campaign continues
-                error = exc
-                error_tb = traceback.format_exc()
-            finally:
-                # stop() must run on every exit path out of the block above,
-                # including a BaseException such as KeyboardInterrupt or
-                # SystemExit (an operator's Ctrl-C during a suite, say): a
-                # bare except Exception would not catch those, and without a
-                # finally the station would be left with a model loaded while
-                # the interrupt propagates. Guarded on its own so a stop()
-                # failure never replaces an error already caught above (a
-                # station that is unreachable typically fails start() AND
-                # stop() the same way) and, for an ordinary Exception, never
-                # escapes to abort the rest of the campaign; a BaseException
-                # still propagates out of run() once this finally completes,
-                # as it must.
                 try:
-                    self.station.stop()
+                    # A failed start() can still have launched the process:
+                    # stop() below always runs regardless, so nothing is left
+                    # running because of a start that failed on our end.
+                    self.station.start(cfg)
+                    self.station.warmup()
+                    vram_samples.append(self.station.vram())
+                    for suite, rep in todo:
+                        out = cell / suite.name
+                        out.mkdir(parents=True, exist_ok=True)
+                        self._set_context(cfg, suite.name, rep)
+                        ctx = SuiteContext(self.gateway_url, cfg, rep, out, self.private_root)
+                        results = suite.run(ctx)
+                        with open(out / f"rep{rep}.jsonl", "w", encoding="utf-8") as fh:
+                            for r in results:
+                                fh.write(json.dumps(r, ensure_ascii=False) + "\n")
+                        (out / f"rep{rep}.done").write_text("")
+                        # Sampled after every pass, not only after warmup, so
+                        # a spill that only appears mid-suite is not missed.
+                        vram_samples.append(self.station.vram())
                 except Exception as exc:  # noqa: BLE001 - recorded per config, campaign continues
-                    stop_error = exc
-                    stop_error_tb = traceback.format_exc()
-            # meta.json is written whether the pass succeeded or failed: a
-            # failed pass still needs its vram reading and timing on disk for
-            # the post-mortem. Reps that did not reach their .done marker stay
-            # pending and are redone on the next run, unaffected by this write.
-            vram = _peak_vram(vram_samples)
-            meta = {"vram": vram, "spill": bool(vram) and vram["shared_mb"] > self.spill_limit_mb,
-                    "config": dataclasses.asdict(cfg), "started": started, "ended": time.time()}
-            cell_label = f"{cfg.machine}/{cfg.model}/{cfg.variant}"
-            failure_parts = []
-            tracebacks = []
-            if error is not None:
-                meta["error"] = f"{type(error).__name__}: {error}"
-                failure_parts.append(meta["error"])
-                tracebacks.append(f"--- error ---\n{error_tb}")
-            if stop_error is not None:
-                meta["stop_error"] = f"{type(stop_error).__name__}: {stop_error}"
-                failure_parts.append(f"stop also failed: {meta['stop_error']}")
-                tracebacks.append(f"--- stop_error ---\n{stop_error_tb}")
-            if failure_parts:
-                failures.append((cell_label, "; ".join(failure_parts)))
-                # meta["error"]/meta["stop_error"] stay short (class + message)
-                # so meta.json remains easy to scan; the full traceback for an
-                # unattended overnight run goes here instead.
-                (cell / "error.txt").write_text("\n".join(tracebacks), encoding="utf-8")
-            (cell / "meta.json").write_text(json.dumps(meta, ensure_ascii=False, indent=2))
+                    error = exc
+                    error_tb = traceback.format_exc()
+                finally:
+                    # Runs on every exit, Exception or BaseException alike, so
+                    # the station is never left with a model loaded. Guarded
+                    # on its own so a stop() failure never replaces an error
+                    # already caught above.
+                    try:
+                        self.station.stop()
+                    except Exception as exc:  # noqa: BLE001 - recorded per config, campaign continues
+                        stop_error = exc
+                        stop_error_tb = traceback.format_exc()
+            except BaseException as exc:
+                # KeyboardInterrupt / SystemExit: record this cell too, then
+                # re-raise unchanged so the campaign stops right here instead
+                # of continuing to the next configuration.
+                self._record_cell(cell, cfg, started, vram_samples, error, error_tb,
+                                   stop_error, stop_error_tb, type(exc).__name__,
+                                   traceback.format_exc())
+                raise
+            # Reps that did not reach their .done marker stay pending and are
+            # redone on the next run; this write does not affect that.
+            failure = self._record_cell(cell, cfg, started, vram_samples, error, error_tb,
+                                         stop_error, stop_error_tb, None, None)
+            if failure is not None:
+                failures.append((f"{cfg.machine}/{cfg.model}/{cfg.variant}", failure))
         if failures:
             detail = "; ".join(f"{cell}: {err}" for cell, err in failures)
             raise CampaignError(f"{len(failures)} configuration(s) failed: {detail}")
