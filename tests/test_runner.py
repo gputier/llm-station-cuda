@@ -119,13 +119,20 @@ class RaisingSuite:
 
 
 class SystemExitSuite:
-    """Raises SystemExit, as if a suite called sys.exit(): stop() must still
-    run, and the SystemExit must still propagate out of run()."""
+    """Raises SystemExit on its second call, as if a suite called sys.exit()
+    partway through a pass: the first rep's .done must survive, stop() must
+    still run, and the SystemExit must still propagate out of run()."""
 
     name = "fake"
 
+    def __init__(self):
+        self.calls = 0
+
     def run(self, ctx):
-        raise SystemExit(1)
+        self.calls += 1
+        if self.calls >= 2:
+            raise SystemExit(1)
+        return [{"item_id": "i1", "passed": 1, "detail": {}}]
 
 
 class FailsForModel:
@@ -309,6 +316,8 @@ def test_runner_stops_station_on_keyboard_interrupt_during_warmup(tmp_path, monk
     with pytest.raises(KeyboardInterrupt):
         camp.run([CFG])
     assert station.log == ["start", "warmup", "stop"]
+    meta = json.loads((tmp_path / "99" / "tiel" / "R1" / "meta.json").read_text())
+    assert meta["interrupted"] == "KeyboardInterrupt"
 
 
 def test_runner_stops_station_on_system_exit_during_suite(tmp_path, monkeypatch):
@@ -318,3 +327,8 @@ def test_runner_stops_station_on_system_exit_during_suite(tmp_path, monkeypatch)
     with pytest.raises(SystemExit):
         camp.run([CFG])
     assert station.log == ["start", "warmup", "stop"]
+    base = tmp_path / "99" / "tiel" / "R1" / "fake"
+    assert (base / "rep1.done").exists()
+    assert not (base / "rep2.done").exists()
+    meta = json.loads((tmp_path / "99" / "tiel" / "R1" / "meta.json").read_text())
+    assert meta["interrupted"] == "SystemExit"
