@@ -30,6 +30,10 @@ def register(alias: str) -> None:
         input_price=None,
         output_price=None,
         is_fc_model=True,
+        # OpenAICompletionsHandler sends "math.factorial" as "math_factorial"
+        # (OpenAI tool names allow no dot); without this flag the checker
+        # compares the dotted name and grades every such call wrong.
+        underscore_to_dot=True,
     )
 
 

@@ -60,10 +60,29 @@ usage pattern, just pointed at our own gateway instead.
 built once at import time from fixed literal dicts; there is no CLI flag to
 add a model at runtime. `bench/harness/bfcl_run.py` adds one entry to that
 already-imported dict (served alias -> `ModelConfig(model_handler=
-OpenAICompletionsHandler, is_fc_model=True, ...)`) before calling
+OpenAICompletionsHandler, is_fc_model=True, underscore_to_dot=True, ...)`)
+before calling
 `bfcl_eval`'s own `generation_main()`/`evaluation_main()` functions directly
 - the same two functions `bfcl generate`/`bfcl evaluate` call. No pinned
 source file is edited. Certainty: sure, proven live (see below).
+
+## Dotted function names: underscore_to_dot must be on
+
+`OpenAICompletionsHandler` compiles tools in the `OPENAI_COMPLETIONS` style,
+where `model_handler/utils.py` rewrites every "." of a function name to "_"
+(OpenAI tool names allow no dot): the model is asked for `math_factorial`,
+not `math.factorial`. The checker (`eval_checker/ast_eval/ast_checker.py`,
+`convert_func_name`) maps the expected name the same way only when the
+registry entry sets `underscore_to_dot=True`; the field defaults to False.
+Left off, every call to a dotted function is graded wrong even when the model
+got it right. Measured on spark, 2026-09-23, on the same generated answers
+evaluated twice: `multiple` 0 of 3 with the flag off, 3 of 3 with it on;
+`simple_python` 1 of 2, then 2 of 2. Certainty: sure.
+
+The same checker looks the registry up under `model_name.replace("_", "/")`
+(as does `eval_runner.runner`): BFCL reads "_" in a model name as an escaped
+"/". A served alias with an underscore would fail that lookup, which is why
+`benchrun/config.py` forbids "_" in machine, model and variant names.
 
 ## Category naming: "simple" does not exist at this pin
 
@@ -94,7 +113,7 @@ print(parse_test_category_argument(['simple_python','multiple','multi_turn_base'
 ModelConfig(model_name='bench-spark-R1', display_name='bench-spark-R1', url='',
 org='bench', license='n/a',
 model_handler=<class 'bfcl_eval.model_handler.api_inference.openai_completion.OpenAICompletionsHandler'>,
-input_price=None, output_price=None, is_fc_model=True, underscore_to_dot=False)
+input_price=None, output_price=None, is_fc_model=True, underscore_to_dot=True)
 ['multi_turn_base', 'multiple', 'simple_python']
 ```
 
@@ -143,7 +162,10 @@ Gateway journal, same run (`path` is `/v1/chat/completions`, the native
 tool-calling endpoint, for every one of the 5 requests; see
 task-10-report.md for the full journal excerpt).
 
-`bfcl evaluate --partial-eval` on the same 5 cases: 40% accuracy
-(2 correct, 3 wrong function/argument choices, all legitimate model
-mistakes, not harness or handler failures: see the score fixture). Certainty:
-sure, this is measured, not inferred.
+`bfcl evaluate --partial-eval` on those 5 cases first gave 40% accuracy: the
+3 failures were the dotted-name artifact above (`math_factorial` graded
+against `math.factorial`), not model mistakes. The fixture under
+`tests/fixtures/bfcl_score_sample` comes from a later pass with the flag on,
+2026-09-23, 8 `simple_python`, 8 `multiple` and 2 `multi_turn_base` cases:
+17 of 18 correct, the one failure (`multiple_7`, wrong call count) a genuine
+model mistake. Certainty: sure, this is measured, not inferred.

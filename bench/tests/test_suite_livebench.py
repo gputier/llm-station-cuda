@@ -76,3 +76,8 @@ def test_run_fails_when_a_category_grades_nothing(tmp_path, monkeypatch):
     monkeypatch.setattr(livebench.subprocess, "run", fake_run)
     with pytest.raises(RuntimeError, match="category math graded no question"):
         LiveBenchSuite(categories=("reasoning", "math")).run(ctx)
+
+
+def test_category_with_underscore_is_rejected():
+    with pytest.raises(ValueError, match="data_analysis"):
+        LiveBenchSuite(categories=("reasoning", "data_analysis"))
