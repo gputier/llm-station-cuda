@@ -1,4 +1,10 @@
-"""Campaign runner: configs x suites x reps, idempotent and resumable."""
+"""Campaign runner: configs x suites x reps, idempotent and resumable.
+
+A configuration whose station start or suites fail is recorded in its own
+meta.json and the campaign continues with the next configuration; the
+failures are only raised, as a single CampaignError, once every configuration
+has had its turn.
+"""
 from __future__ import annotations
 
 import dataclasses
@@ -10,6 +16,15 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from .config import BenchConfig
+
+
+class CampaignError(Exception):
+    """Raised after a full pass over all configurations if any of them failed.
+
+    Each configuration that failed already has its error recorded in its own
+    meta.json; this exception only surfaces the summary to the caller once
+    nothing is left to run.
+    """
 
 
 @dataclass
@@ -25,6 +40,16 @@ class Suite(Protocol):
     name: str
 
     def run(self, ctx: SuiteContext) -> list[dict]: ...
+
+
+def _peak_vram(samples: list[dict]) -> dict | None:
+    if not samples:
+        return None
+    return {
+        "used_mb": max(s["used_mb"] for s in samples),
+        "shared_mb": max(s["shared_mb"] for s in samples),
+        "samples": len(samples),
+    }
 
 
 class Campaign:
@@ -54,6 +79,7 @@ class Campaign:
         urllib.request.urlopen(req, timeout=10).read()
 
     def run(self, configs: list[BenchConfig]) -> None:
+        failures = []
         for cfg in configs:
             todo = self._pending(cfg)
             if not todo:
@@ -61,12 +87,16 @@ class Campaign:
             cell = self._cell(cfg)
             cell.mkdir(parents=True, exist_ok=True)
             started = time.time()
-            self.station.start(cfg)
-            vram = None
+            vram_samples: list[dict] = []
             error = None
             try:
+                # A failed start() can still have launched the process on the
+                # station before raising (e.g. a health-check timeout): stop()
+                # runs in the finally below regardless, so nothing is ever
+                # left running because of a start that failed on our end.
+                self.station.start(cfg)
                 self.station.warmup()
-                vram = self.station.vram()
+                vram_samples.append(self.station.vram())
                 for suite, rep in todo:
                     out = cell / suite.name
                     out.mkdir(parents=True, exist_ok=True)
@@ -77,19 +107,26 @@ class Campaign:
                         for r in results:
                             fh.write(json.dumps(r, ensure_ascii=False) + "\n")
                     (out / f"rep{rep}.done").write_text("")
-            except Exception as exc:  # noqa: BLE001 - recorded in meta.json, then re-raised
+                    # Sampled again after every pass, not only after warmup:
+                    # a spill that only shows up once the context has grown
+                    # during a suite would otherwise never be seen.
+                    vram_samples.append(self.station.vram())
+            except Exception as exc:  # noqa: BLE001 - recorded per config, campaign continues
                 error = exc
             finally:
                 self.station.stop()
-            # meta.json is written whether the pass succeeded or a suite raised:
-            # the station is already stopped above, and a failed pass still
-            # needs its vram reading and timing on disk for the post-mortem.
-            # Reps that did not reach their .done marker stay pending and are
+            # meta.json is written whether the pass succeeded or failed: the
+            # station is already stopped above, and a failed pass still needs
+            # its vram reading and timing on disk for the post-mortem. Reps
+            # that did not reach their .done marker stay pending and are
             # redone on the next run, unaffected by this write.
+            vram = _peak_vram(vram_samples)
             meta = {"vram": vram, "spill": bool(vram) and vram["shared_mb"] > self.spill_limit_mb,
                     "config": dataclasses.asdict(cfg), "started": started, "ended": time.time()}
             if error is not None:
                 meta["error"] = f"{type(error).__name__}: {error}"
+                failures.append((f"{cfg.machine}/{cfg.model}/{cfg.variant}", meta["error"]))
             (cell / "meta.json").write_text(json.dumps(meta, ensure_ascii=False, indent=2))
-            if error is not None:
-                raise error
+        if failures:
+            detail = "; ".join(f"{cell}: {err}" for cell, err in failures)
+            raise CampaignError(f"{len(failures)} configuration(s) failed: {detail}")

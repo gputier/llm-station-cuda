@@ -1,7 +1,8 @@
+import dataclasses
 import json
 import pathlib
 import pytest
-from benchrun.runner import Campaign
+from benchrun.runner import Campaign, CampaignError
 from benchrun.config import load_config
 
 CFG = load_config(pathlib.Path(__file__).parent / "fixtures" / "config_ok.yaml")
@@ -15,6 +16,27 @@ class FakeStation:
     def warmup(self): self.log.append("warmup")
     def stop(self): self.log.append("stop")
     def vram(self): return {"used_mb": 20000, "shared_mb": self.shared_mb}
+
+
+class FailingStartStation(FakeStation):
+    def start(self, cfg, timeout_s=900):
+        self.log.append("start")
+        raise RuntimeError("start blew up")
+
+
+class RisingVramStation(FakeStation):
+    """vram() reports low usage on its first call (right after warmup), then
+    a spike on every later call (during a suite), to prove a spill that only
+    shows up mid-suite is not missed."""
+
+    def __init__(self):
+        super().__init__()
+        self.vram_calls = 0
+
+    def vram(self):
+        self.vram_calls += 1
+        shared = 10 if self.vram_calls == 1 else 900
+        return {"used_mb": 20000, "shared_mb": shared}
 
 
 class FakeSuite:
@@ -33,6 +55,23 @@ class RaisingSuite:
 
     def run(self, ctx):
         raise RuntimeError("suite exploded")
+
+
+class FailsForModel:
+    """Raises only when run against the named model, to prove a campaign
+    keeps going on the remaining configurations after one of them fails."""
+
+    name = "fake"
+
+    def __init__(self, failing_model):
+        self.failing_model = failing_model
+        self.calls = 0
+
+    def run(self, ctx):
+        self.calls += 1
+        if ctx.cfg.model == self.failing_model:
+            raise RuntimeError("suite exploded")
+        return [{"item_id": "i1", "passed": 1, "detail": {}}]
 
 
 def make(tmp_path, station=None, suite=None):
@@ -88,8 +127,48 @@ def test_runner_writes_meta_when_suite_raises(tmp_path, monkeypatch):
     station = FakeStation()
     camp, _ = make(tmp_path, station=station, suite=RaisingSuite())
     monkeypatch.setattr(camp, "_set_context", lambda *a: None)
-    with pytest.raises(RuntimeError, match="suite exploded"):
+    with pytest.raises(CampaignError, match="suite exploded"):
         camp.run([CFG])
     assert station.log == ["start", "warmup", "stop"]
     meta = json.loads((tmp_path / "99" / "tiel" / "R1" / "meta.json").read_text())
     assert "error" in meta and "suite exploded" in meta["error"]
+
+
+def test_runner_records_start_failure_and_continues(tmp_path, monkeypatch):
+    station = FailingStartStation()
+    camp, _ = make(tmp_path, station=station)
+    monkeypatch.setattr(camp, "_set_context", lambda *a: None)
+    with pytest.raises(CampaignError, match="start blew up"):
+        camp.run([CFG])
+    assert station.log == ["start", "stop"]
+    meta = json.loads((tmp_path / "99" / "tiel" / "R1" / "meta.json").read_text())
+    assert "error" in meta and "start blew up" in meta["error"]
+    assert meta["vram"] is None
+
+
+def test_runner_continues_after_one_config_fails(tmp_path, monkeypatch):
+    cfg_bad = CFG
+    cfg_good = dataclasses.replace(CFG, model="tiel2")
+    suite = FailsForModel(failing_model=cfg_bad.model)
+    station = FakeStation()
+    camp = Campaign(station, "http://gw", [suite], tmp_path, reps=3)
+    monkeypatch.setattr(camp, "_set_context", lambda *a: None)
+    with pytest.raises(CampaignError, match="99/tiel/R1"):
+        camp.run([cfg_bad, cfg_good])
+    good_base = tmp_path / "99" / "tiel2" / "R1" / "fake"
+    assert all((good_base / f"rep{k}.done").exists() for k in (1, 2, 3))
+    bad_meta = json.loads((tmp_path / "99" / "tiel" / "R1" / "meta.json").read_text())
+    assert "error" in bad_meta and "suite exploded" in bad_meta["error"]
+    good_meta = json.loads((tmp_path / "99" / "tiel2" / "R1" / "meta.json").read_text())
+    assert "error" not in good_meta
+
+
+def test_runner_marks_spill_seen_during_a_suite(tmp_path, monkeypatch):
+    station = RisingVramStation()
+    camp, _ = make(tmp_path, station=station)
+    monkeypatch.setattr(camp, "_set_context", lambda *a: None)
+    camp.run([CFG])
+    meta = json.loads((tmp_path / "99" / "tiel" / "R1" / "meta.json").read_text())
+    assert meta["spill"] is True
+    assert meta["vram"]["shared_mb"] == 900
+    assert meta["vram"]["samples"] == 4
