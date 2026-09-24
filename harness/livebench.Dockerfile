@@ -9,3 +9,12 @@ RUN pip install --no-cache-dir -e .
 # pinned repo): auto-imported by the interpreter at every process start.
 COPY livebench_sitecustomize /livebench_sitecustomize
 ENV PYTHONPATH=/livebench_sitecustomize
+# Question-id selector for the mini/medium/large bench levels
+# (benchrun.suites.livebench._select_question_ids). Baked in like every
+# other launcher (lcb_run.py, bfcl_run.py, ...): a runtime bind mount would
+# need a HOST path, but runner-99/runner-97 call "docker run" over the
+# mounted host socket, resolved by the HOST daemon against the runner
+# container's OWN filesystem view (/bench/..., orchestration section of
+# this README). A -v source built from that path fails with exit 125,
+# "invalid mount config", proven live on the 99, 2026-09-24.
+COPY livebench_select_ids.py /select_ids.py

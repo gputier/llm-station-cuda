@@ -90,7 +90,7 @@ def test_category_with_underscore_is_rejected():
         LiveBenchSuite(categories=("reasoning", "data_analysis"))
 
 
-def test_select_question_ids_calls_the_mounted_listing_script(monkeypatch):
+def test_select_question_ids_calls_the_baked_in_listing_script(monkeypatch):
     suite = LiveBenchSuite(categories=("reasoning", "math"), limit=2, seed=42)
     calls = []
 
@@ -107,7 +107,8 @@ def test_select_question_ids_calls_the_mounted_listing_script(monkeypatch):
     cmd = calls[0]
     assert cmd[cmd.index("--limit") + 1] == "2"
     assert cmd[cmd.index("--seed") + 1] == "42"
-    assert str(livebench.SELECT_IDS_SCRIPT) in " ".join(cmd)
+    assert livebench.SELECT_IDS_SCRIPT in cmd  # baked in, no -v mount for it
+    assert not any(a.endswith("livebench_select_ids.py:ro") for a in cmd)
     assert cmd[-2:] == ["reasoning", "math"]
 
 

@@ -150,6 +150,21 @@ class SystemExitSuite:
         return [{"item_id": "i1", "passed": 1, "detail": {}}]
 
 
+class FailsOnceThenSucceeds:
+    """Raises on its first call, succeeds on every one after: proves one
+    suite's own failure does not stop a LATER suite in the same profile."""
+
+    def __init__(self, name):
+        self.name = name
+        self.calls = 0
+
+    def run(self, ctx):
+        self.calls += 1
+        if self.calls == 1:
+            raise ValueError("boom on first call")
+        return [{"item_id": "i1", "passed": 1, "detail": {}}]
+
+
 class FailsForModel:
     """Raises only when run against the named model, to prove a campaign
     keeps going on the remaining configurations after one of them fails."""
@@ -247,6 +262,63 @@ def test_runner_writes_meta_when_suite_raises(tmp_path, monkeypatch):
     assert station.log == ["start", "warmup", "stop"]
     meta = json.loads((tmp_path / "99" / "tiel" / "R1" / "meta.json").read_text())
     assert "error" in meta and "suite exploded" in meta["error"]
+
+
+def test_runner_a_failing_suite_does_not_stop_the_next_suite(tmp_path, monkeypatch):
+    # boom fails every rep; good must still run its own three reps for the
+    # same profile, not be skipped because boom went first.
+    station = FakeStation()
+    good = FakeSuite()
+    good.name = "good"
+    camp = Campaign(station, "http://gw", [RaisingSuite(), good], tmp_path, reps=3)
+    monkeypatch.setattr(camp, "_set_context", lambda *a: None)
+    with pytest.raises(CampaignError, match="suite exploded"):
+        camp.run([CFG])
+    assert good.calls == 3
+    good_base = tmp_path / "99" / "tiel" / "R1" / "good"
+    assert all((good_base / f"rep{k}.done").exists() for k in (1, 2, 3))
+    assert station.log == ["start", "warmup", "stop"]  # station only touched once
+
+
+def test_runner_a_failing_rep_writes_an_error_marker_no_done(tmp_path, monkeypatch):
+    suite = FailsOnceThenSucceeds(name="flaky")
+    camp = Campaign(FakeStation(), "http://gw", [suite], tmp_path, reps=3)
+    monkeypatch.setattr(camp, "_set_context", lambda *a: None)
+    with pytest.raises(CampaignError, match="boom on first call"):
+        camp.run([CFG])
+    base = tmp_path / "99" / "tiel" / "R1" / "flaky"
+    assert not (base / "rep1.done").exists()
+    error_text = (base / "rep1.error").read_text(encoding="utf-8")
+    assert "ValueError" in error_text and "boom on first call" in error_text
+    assert "Traceback" in error_text
+    # reps 2 and 3 got their own turn and succeeded, unaffected by rep1
+    assert (base / "rep2.done").exists() and (base / "rep3.done").exists()
+
+
+def test_runner_a_failing_rep_is_picked_up_on_resume(tmp_path, monkeypatch):
+    # No .done marker for the failed rep means Campaign._pending() retries
+    # it on the next launch, the same resumability every other rep gets.
+    suite = FailsOnceThenSucceeds(name="flaky")
+    camp = Campaign(FakeStation(), "http://gw", [suite], tmp_path, reps=3)
+    monkeypatch.setattr(camp, "_set_context", lambda *a: None)
+    with pytest.raises(CampaignError):
+        camp.run([CFG])
+    assert suite.calls == 3  # rep1 failed, rep2/rep3 succeeded
+    pending = camp._pending(CFG)
+    assert [rep for _, rep in pending] == [1]  # only the failed rep is left
+
+
+def test_runner_cell_still_marked_failed_when_only_one_suite_failed(tmp_path, monkeypatch):
+    station = FakeStation()
+    good = FakeSuite()
+    good.name = "good"
+    camp = Campaign(station, "http://gw", [RaisingSuite(), good], tmp_path, reps=1)
+    monkeypatch.setattr(camp, "_set_context", lambda *a: None)
+    with pytest.raises(CampaignError, match="99/tiel/R1"):
+        camp.run([CFG])
+    meta = json.loads((tmp_path / "99" / "tiel" / "R1" / "meta.json").read_text())
+    assert "error" in meta and "suite exploded" in meta["error"]
+    assert "boom rep1" in meta["error"]
 
 
 def test_runner_records_a_suite_that_grades_nothing(tmp_path, monkeypatch):

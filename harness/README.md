@@ -618,9 +618,14 @@ never reimplemented):
   `load_dataset_entry`. `evaluate` gets `--partial-eval` alongside whenever
   `--limit` was used, since the result set is then a strict subset of the
   category.
-- `livebench`: a new script, `harness/livebench_select_ids.py`, bind-mounted
-  into `bench-livebench` at run time (no image rebuild: it is never baked
-  into the Dockerfile), reuses the pinned harness's own
+- `livebench`: a new script, `harness/livebench_select_ids.py`, baked into
+  `bench-livebench` at `/select_ids.py` (`livebench.Dockerfile`'s own
+  `COPY`, like every other launcher). A first version bind-mounted it at run
+  time instead; that failed with exit 125 from inside the runner container
+  (see "Orchestration" above: a `-v` source must already be a HOST path,
+  and `pathlib.Path(__file__).resolve().parents[2]` from inside the runner
+  resolves to `/bench/...`, a path only the runner container's own
+  filesystem view knows). Reuses the pinned harness's own
   `common.get_categories_tasks`/`load_questions` to list every question id
   per category, then applies the same first-N/seeded-random selection as
   BFCL. The resulting ids are passed to `run_livebench.py` as

@@ -20,18 +20,20 @@ file per task is written.
 from __future__ import annotations
 
 import json
-import pathlib
 import subprocess
 
 from benchrun.config import served_alias
 from benchrun.suites import HF_CACHE_VOLUME, NETWORK, SAFETY_FACTOR, per_request_seconds, request_timeout_s
 
 IMAGE = "bench-livebench"
-# harness/livebench_select_ids.py, bind-mounted at runtime (never baked into
-# the image, module docstring): its own listing/selection mechanism, reused
-# by LiveBenchSuite.run() when limit is set, instead of a second Dockerfile.
-HARNESS_DIR = pathlib.Path(__file__).resolve().parents[2] / "harness"
-SELECT_IDS_SCRIPT = HARNESS_DIR / "livebench_select_ids.py"
+# harness/livebench_select_ids.py is baked into the image at /select_ids.py
+# (livebench.Dockerfile's own COPY, like every other launcher), never bind-
+# mounted at runtime: runner-99/runner-97 call "docker run" over the mounted
+# HOST docker socket, resolved by the HOST daemon against the runner
+# container's OWN filesystem, so a -v source built from a path inside THIS
+# container (/bench/...) is invalid there (exit 125, proven live on the 99,
+# 2026-09-24, bench/harness/README.md orchestration section).
+SELECT_IDS_SCRIPT = "/select_ids.py"
 # Dataset listing only (no model call): the same HF fetch/cache path the
 # real run pays for anyway, kept generous for a cold bench-hf-cache volume.
 SELECT_IDS_TIMEOUT_S = 300
@@ -104,10 +106,9 @@ class LiveBenchSuite:
             "docker", "run", "--rm",
             "--network", NETWORK,
             "-w", "/livebench/livebench",
-            "-v", f"{SELECT_IDS_SCRIPT}:/select_ids.py:ro",
             "-v", f"{HF_CACHE_VOLUME}:/root/.cache/huggingface",
             IMAGE,
-            "python", "/select_ids.py",
+            "python", SELECT_IDS_SCRIPT,
             "--release", self.release,
             "--limit", str(self.limit),
         ]

@@ -143,6 +143,7 @@ class Campaign:
                     self.station.start(cfg)
                     self.station.warmup()
                     vram_samples.append(self.station.vram())
+                    suite_failures: list[str] = []
                     for suite, rep in todo:
                         out = cell / suite.name
                         out.mkdir(parents=True, exist_ok=True)
@@ -150,12 +151,26 @@ class Campaign:
                         ctx = SuiteContext(self.gateway_url, cfg, rep, out, self.private_root)
                         try:
                             results = suite.run(ctx)
+                            if not results:
+                                raise RuntimeError(f"suite {suite.name} graded no item (rep {rep})")
                         except SuiteSkipped as skip:
                             (out / f"rep{rep}.skipped").write_text(str(skip), encoding="utf-8")
                             (out / f"rep{rep}.done").write_text("")
                             continue
-                        if not results:
-                            raise RuntimeError(f"suite {suite.name} graded no item (rep {rep})")
+                        except Exception as exc:  # noqa: BLE001 - one suite/rep's own
+                            # failure (a timed-out subprocess, a harness that
+                            # crashed on this rep, ...) must not stop every
+                            # OTHER suite of this profile from getting its own
+                            # chance to run: recorded here, without a .done
+                            # marker so it is retried on the next launch, and
+                            # the loop moves on to the next (suite, rep). The
+                            # cell as a whole is still marked failed below
+                            # (suite_failures raises once every suite has had
+                            # its turn), same as any other config failure.
+                            (out / f"rep{rep}.error").write_text(
+                                f"{type(exc).__name__}: {exc}\n\n{traceback.format_exc()}", encoding="utf-8")
+                            suite_failures.append(f"{suite.name} rep{rep}: {type(exc).__name__}: {exc}")
+                            continue
                         with open(out / f"rep{rep}.jsonl", "w", encoding="utf-8") as fh:
                             for r in results:
                                 fh.write(json.dumps(r, ensure_ascii=False) + "\n")
@@ -163,6 +178,8 @@ class Campaign:
                         # Sampled after every pass, not only after warmup, so
                         # a spill that only appears mid-suite is not missed.
                         vram_samples.append(self.station.vram())
+                    if suite_failures:
+                        raise RuntimeError(f"{len(suite_failures)} suite/rep failure(s): " + "; ".join(suite_failures))
                 except Exception as exc:  # noqa: BLE001 - recorded per config, campaign continues
                     error = exc
                     error_tb = traceback.format_exc()
