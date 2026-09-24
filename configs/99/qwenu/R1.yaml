@@ -53,12 +53,14 @@ sampling:
   min_p: 0.0
   presence_penalty: 1.5
   max_tokens: 8192
-chat_template_kwargs: {}
+chat_template_kwargs:
+  enable_thinking: false
 sources:
   temperature: "https://huggingface.co/Qwen/Qwen3.8-27B (mode non-thinking, lu le 2026-09-23)"
   top_p: "https://huggingface.co/Qwen/Qwen3.8-27B (mode non-thinking, lu le 2026-09-23)"
   top_k: "https://huggingface.co/Qwen/Qwen3.8-27B (mode non-thinking, lu le 2026-09-23)"
   min_p: "https://huggingface.co/Qwen/Qwen3.8-27B (mode non-thinking, lu le 2026-09-23)"
   presence_penalty: "https://huggingface.co/Qwen/Qwen3.8-27B (mode non-thinking, lu le 2026-09-23)"
-  max_tokens: ".superpowers/sdd/2026-09-23-banc-llm-refonte-plan/progress.md, ruling Y (modèle non-thinking)"
+  max_tokens: ".superpowers/sdd/2026-09-23-banc-llm-refonte-plan/progress.md, ruling Y (modèle non-thinking) ; 8192 déjà taillé pour une réponse sans réflexion (moitié des 16384 de la variante thinking R3)"
+  enable_thinking: "https://huggingface.co/Qwen/Qwen3.8-27B, section \"Instruct (or Non-Thinking) Mode\" : chat_template_kwargs={\"enable_thinking\": False} (lu le 2026-09-24) ; ce fichier sert le gabarit embarqué du gguf, qui lit la même variable (confirmé par le smoke test)"
 ctx_proven: null
