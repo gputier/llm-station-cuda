@@ -40,11 +40,27 @@ sys.path.insert(0, os.getcwd())
 
 
 def list_category_ids(category_name: str, release_set: set, release: str) -> list[str]:
-    """Every question id for one category, in the exact order and under the
-    exact release filter run_livebench.py's own gen_api_answer.py uses to
-    build its question list (its own loop over get_categories_tasks/tasks,
-    no --question-begin/--question-end slicing here since that mechanism
-    slices per TASK, not per category, see benchrun.suites.livebench)."""
+    """Every question id for one category, under the exact release filter
+    run_livebench.py's own gen_api_answer.py uses to build its question list
+    (its own loop over get_categories_tasks/tasks, no --question-begin/
+    --question-end slicing here since that mechanism slices per TASK, not
+    per category, see benchrun.suites.livebench).
+
+    Sorted before being returned: proven live (2026-09-24, three docker runs
+    of this same call in a row, same release, same category) that the
+    pinned load_questions' own row order is NOT stable across separate
+    process invocations (the underlying HF datasets .filter() step, on a
+    cold or freshly-rebuilt cache, does not guarantee the row order the
+    Filter/Generating-split progress bars suggest; a warm cache then keeps
+    whatever order got written, until the cache is rebuilt again). Feeding
+    select_ids() an unsorted list makes random.Random(seed).sample() (and
+    the deterministic ids[:limit] slice) select a DIFFERENT question for
+    the exact same seed, silently, since the seed picks by index position,
+    not by content: mini's own contract (same seed, same question, across
+    every profile of one launch) depended on the order being stable, which
+    it was not. Sorting makes the input to selection a canonical, content-
+    only order, independent of load order, cache state or process restarts.
+    """
     from common import get_categories_tasks, load_questions
 
     categories, tasks = get_categories_tasks(f"live_bench/{category_name}")
@@ -52,7 +68,7 @@ def list_category_ids(category_name: str, release_set: set, release: str) -> lis
     for task_name in tasks.get(category_name, []):
         for question in load_questions(categories[category_name], release_set, release, task_name, None):
             ids.append(question["question_id"])
-    return ids
+    return sorted(ids)
 
 
 def select_ids(categories: list[str], limit: int, seed: int | None, release: str) -> dict[str, list[str]]:

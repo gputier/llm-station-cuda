@@ -104,6 +104,51 @@ def test_build_mini_report_two_variants_get_their_own_section(tmp_path):
     assert "## 99/tiel/R1" in report and "## 99/tiel/R2" in report
 
 
+def _journal_line_anthropic(run_id, suite, rep, output_tokens, total_s):
+    # /v1/messages (agentic's own path): usage.output_tokens, no "timings"
+    # field at all (llama-server never reports one for this shape,
+    # benchrun.gateway's own module docstring).
+    return json.dumps({
+        "run_id": run_id, "suite": suite, "rep": rep,
+        "usage": {"output_tokens": output_tokens}, "total_s": total_s,
+        "timings": None,
+    })
+
+
+def test_build_mini_report_reads_anthropic_shaped_usage_for_agentic(tmp_path):
+    # Proven live, 2026-09-24: agentic showed 0 tokens because only
+    # usage.completion_tokens (OpenAI shape) was ever read.
+    out_root = tmp_path / "mini"
+    variant_dir = out_root / "99" / "tiel" / "R1"
+    _write_result(variant_dir, "agentic", "swe/some-task", 0)
+    journal = tmp_path / "journal-99.jsonl"
+    lines = [_journal_line_anthropic("99/tiel/R1", "agentic", 1, 2048, t) for t in (3.0, 4.0)]
+    journal.write_text("\n".join(lines) + "\n")
+
+    report = build_mini_report(out_root, "99", journal, seed=1, cap=2048, generated_at="2026-09-24T10:00:00")
+
+    rows = [l for l in report.splitlines() if l.startswith("| agentic")]
+    assert len(rows) == 1
+    assert "| 4096 |" in rows[0]  # 2048 + 2048, summed across the two requests
+    assert "| oui |" in rows[0]  # each request hit the 2048 cap: truncated
+
+
+def test_build_mini_report_excludes_speed_from_the_pass_count(tmp_path):
+    out_root = tmp_path / "mini"
+    variant_dir = out_root / "99" / "tiel" / "R1"
+    _write_result(variant_dir, "lcb", "problem-1", 1)
+    _write_result(variant_dir, "speed", "pp512", 1)
+    journal = tmp_path / "journal-99.jsonl"
+    journal.write_text(_journal_line("99/tiel/R1", "lcb", 1, 100, 1.0, 20.0) + "\n")
+
+    report = build_mini_report(out_root, "99", journal, seed=1, cap=2048, generated_at="2026-09-24T10:00:00")
+
+    assert "1 réussites sur 1" in report  # speed does not add to the denominator
+    speed_rows = [l for l in report.splitlines() if l.startswith("| speed")]
+    assert len(speed_rows) == 1 and "| mesure |" in speed_rows[0]
+    assert "| réussi |" not in speed_rows[0] and "| échoué |" not in speed_rows[0]
+
+
 def test_build_mini_report_shows_a_failed_suite_as_erreur(tmp_path):
     out_root = tmp_path / "mini"
     variant_dir = out_root / "99" / "tiel" / "R1"

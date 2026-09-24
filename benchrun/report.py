@@ -31,6 +31,11 @@ SUITE_DESCRIPTIONS = {
     "speed": "mesure le débit de décodage, ce n'est pas une réussite",
 }
 
+# speed measures throughput, not a pass/fail test: excluded from the
+# "réussites sur N" summary (N counts the 7 graded suites, not all 8), same
+# convention benchrun.watch's own ranking already applies to it.
+UNRANKED_SUITES = {"speed"}
+
 
 def _suite_description(suite: str, item_id: str) -> str:
     base = SUITE_DESCRIPTIONS.get(suite, suite)
@@ -67,7 +72,23 @@ def _aggregate(rows: list[dict], cap: int) -> dict:
     """Sums tokens and duration across every journal line that matches one
     run_id/suite/rep: with the mini preset's one item per test, that is
     every request the item took, one for a single-turn test, several for a
-    multi-turn one (BFCL's multi_turn_base category, the agentic suite)."""
+    multi-turn one (BFCL's multi_turn_base category, the agentic suite).
+
+    Token count: gateway.py journals the response body's own "usage" object
+    verbatim, whatever shape the relayed path sent (rec["path"] says which).
+    /v1/chat/completions and /v1/completions (OpenAI shape) put it in
+    usage.completion_tokens; /v1/messages (Anthropic shape, the agentic
+    suite's own path) puts it in usage.output_tokens instead (proven live,
+    2026-09-24: agentic's own rows showed 0 tokens before this, since only
+    completion_tokens was ever read). Truncation: the gateway journal does
+    not carry finish_reason/stop_reason at all (relay_post only ever stores
+    timings/usage/reasoning_chars), so both shapes are flagged the same way
+    already in place for OpenAI's own finish_reason == "length": the token
+    count landing on the configured cap. That is exactly what Anthropic's
+    own stop_reason == "max_tokens" would mean too (output_tokens hits
+    max_tokens precisely when the response was cut there), so no per-format
+    branch is needed beyond reading the right token field.
+    """
     completion_tokens = 0
     duration_s = 0.0
     decode_tps_values = []
@@ -75,6 +96,8 @@ def _aggregate(rows: list[dict], cap: int) -> dict:
     for rec in rows:
         usage = rec.get("usage") or {}
         tokens = usage.get("completion_tokens")
+        if tokens is None:
+            tokens = usage.get("output_tokens")
         if tokens is None:
             tokens = (rec.get("timings") or {}).get("predicted_n")
         if tokens:
@@ -115,7 +138,7 @@ def _profile_rows(variant_dir: pathlib.Path, run_id: str, journal_lines: list[di
         rep_file = suite_dir / "rep1.jsonl"
         error_file = suite_dir / "rep1.error"
         if not rep_file.exists():
-            if error_file.exists():
+            if error_file.exists() and suite not in UNRANKED_SUITES:
                 total_count += 1
                 rows.append({
                     "suite": suite,
@@ -136,16 +159,21 @@ def _profile_rows(variant_dir: pathlib.Path, run_id: str, journal_lines: list[di
             item_id = item.get("item_id") or "-"
             passed = bool(item.get("passed"))
             agg = _aggregate(_journal_rows(journal_lines, run_id, suite, 1), cap)
-            total_count += 1
-            passed_count += 1 if passed else 0
-            token_values.append(agg["completion_tokens"])
-            duration_total += agg["duration_s"]
-            truncated_count += 1 if agg["truncated"] else 0
+            # speed measures throughput, not a pass/fail test (same
+            # exclusion watch.py's own ranking already makes, UNRANKED_
+            # SUITES): it gets its own row but never counts toward the
+            # profile's "réussites sur N" summary.
+            if suite not in UNRANKED_SUITES:
+                total_count += 1
+                passed_count += 1 if passed else 0
+                token_values.append(agg["completion_tokens"])
+                duration_total += agg["duration_s"]
+                truncated_count += 1 if agg["truncated"] else 0
             rows.append({
                 "suite": suite,
                 "description": _suite_description(suite, item_id),
                 "item_id": item_id,
-                "result": "réussi" if passed else "échoué",
+                "result": "mesure" if suite in UNRANKED_SUITES else ("réussi" if passed else "échoué"),
                 "completion_tokens": agg["completion_tokens"],
                 "truncated": agg["truncated"],
                 "duration_s": agg["duration_s"],
