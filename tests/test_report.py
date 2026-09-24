@@ -31,7 +31,7 @@ def test_build_mini_report_one_profile_one_test(tmp_path):
     journal = tmp_path / "journal-99.jsonl"
     journal.write_text(_journal_line("99/tiel/R1", "lcb", 1, 512, 12.5, 30.0) + "\n")
 
-    report = build_mini_report(out_root, "99", journal, seed=42, cap=2048, generated_at="2026-09-24T10:00:00")
+    report = build_mini_report(out_root, "99", journal, seed=42, caps_by_suite={}, default_cap=2048, generated_at="2026-09-24T10:00:00")
 
     assert "Graine de tirage : 42" in report
     assert "Plafond de réponse : 2048" in report
@@ -56,7 +56,7 @@ def test_build_mini_report_sums_multi_request_items(tmp_path):
     ]
     journal.write_text("\n".join(lines) + "\n")
 
-    report = build_mini_report(out_root, "99", journal, seed=1, cap=2048, generated_at="2026-09-24T10:00:00")
+    report = build_mini_report(out_root, "99", journal, seed=1, caps_by_suite={}, default_cap=2048, generated_at="2026-09-24T10:00:00")
 
     assert "500" in report  # 300 + 200 completion tokens, summed
     assert "échoué" in report
@@ -69,10 +69,52 @@ def test_build_mini_report_flags_truncation_at_the_cap(tmp_path):
     journal = tmp_path / "journal-99.jsonl"
     journal.write_text(_journal_line("99/tiel/R1", "aider", 1, 2048, 60.0, 15.0) + "\n")
 
-    report = build_mini_report(out_root, "99", journal, seed=1, cap=2048, generated_at="2026-09-24T10:00:00")
+    report = build_mini_report(out_root, "99", journal, seed=1, caps_by_suite={}, default_cap=2048, generated_at="2026-09-24T10:00:00")
 
     rows = [l for l in report.splitlines() if l.startswith("| aider")]
     assert len(rows) == 1 and "| oui |" in rows[0]
+
+
+def test_build_mini_report_uses_the_per_suite_cap_not_a_flat_one(tmp_path):
+    # Guillaume, 2026-09-25: lcb/livebench/aider get 16384, everything else
+    # keeps 2048. 2048 tokens on aider (its own real cap is 16384) must NOT
+    # be flagged truncated; the same 2048 tokens on bfcl (default cap) must.
+    out_root = tmp_path / "mini"
+    variant_dir = out_root / "99" / "tiel" / "R1"
+    _write_result(variant_dir, "aider", "python/some-exercise", 1)
+    _write_result(variant_dir, "bfcl", "multiple_1", 1)
+    journal = tmp_path / "journal-99.jsonl"
+    journal.write_text(
+        _journal_line("99/tiel/R1", "aider", 1, 2048, 10.0, 15.0) + "\n"
+        + _journal_line("99/tiel/R1", "bfcl", 1, 2048, 1.0, 20.0) + "\n"
+    )
+
+    report = build_mini_report(
+        out_root, "99", journal, seed=1,
+        caps_by_suite={"lcb": 16384, "livebench": 16384, "aider": 16384},
+        default_cap=2048, generated_at="2026-09-24T10:00:00",
+    )
+
+    aider_row = next(l for l in report.splitlines() if l.startswith("| aider"))
+    bfcl_row = next(l for l in report.splitlines() if l.startswith("| bfcl"))
+    assert "| non |" in aider_row  # 2048 tokens, own cap 16384: not truncated
+    assert "| oui |" in bfcl_row  # 2048 tokens, default cap 2048: truncated
+
+
+def test_build_mini_report_header_lists_the_per_suite_caps(tmp_path):
+    out_root = tmp_path / "mini"
+    journal = tmp_path / "journal-99.jsonl"
+
+    report = build_mini_report(
+        out_root, "99", journal, seed=1,
+        caps_by_suite={"lcb": 16384, "livebench": 16384, "aider": 16384},
+        default_cap=2048, generated_at="2026-09-24T10:00:00",
+    )
+
+    header = next(l for l in report.splitlines() if l.startswith("Généré le"))
+    assert "2048 tokens par défaut" in header
+    assert "16384" in header
+    assert "aider" in header and "lcb" in header and "livebench" in header
 
 
 def test_build_mini_report_untruncated_item_says_non(tmp_path):
@@ -82,7 +124,7 @@ def test_build_mini_report_untruncated_item_says_non(tmp_path):
     journal = tmp_path / "journal-99.jsonl"
     journal.write_text(_journal_line("99/tiel/R1", "aider", 1, 40, 3.0, 15.0) + "\n")
 
-    report = build_mini_report(out_root, "99", journal, seed=1, cap=2048, generated_at="2026-09-24T10:00:00")
+    report = build_mini_report(out_root, "99", journal, seed=1, caps_by_suite={}, default_cap=2048, generated_at="2026-09-24T10:00:00")
 
     rows = [l for l in report.splitlines() if l.startswith("| aider")]
     assert len(rows) == 1 and "| non |" in rows[0]
@@ -99,7 +141,7 @@ def test_build_mini_report_two_variants_get_their_own_section(tmp_path):
         + _journal_line("99/tiel/R2", "lcb", 1, 150, 3.0, 25.0) + "\n"
     )
 
-    report = build_mini_report(out_root, "99", journal, seed=1, cap=2048, generated_at="2026-09-24T10:00:00")
+    report = build_mini_report(out_root, "99", journal, seed=1, caps_by_suite={}, default_cap=2048, generated_at="2026-09-24T10:00:00")
 
     assert "## 99/tiel/R1" in report and "## 99/tiel/R2" in report
 
@@ -125,7 +167,7 @@ def test_build_mini_report_reads_anthropic_shaped_usage_for_agentic(tmp_path):
     lines = [_journal_line_anthropic("99/tiel/R1", "agentic", 1, 2048, t) for t in (3.0, 4.0)]
     journal.write_text("\n".join(lines) + "\n")
 
-    report = build_mini_report(out_root, "99", journal, seed=1, cap=2048, generated_at="2026-09-24T10:00:00")
+    report = build_mini_report(out_root, "99", journal, seed=1, caps_by_suite={}, default_cap=2048, generated_at="2026-09-24T10:00:00")
 
     rows = [l for l in report.splitlines() if l.startswith("| agentic")]
     assert len(rows) == 1
@@ -141,7 +183,7 @@ def test_build_mini_report_excludes_speed_from_the_pass_count(tmp_path):
     journal = tmp_path / "journal-99.jsonl"
     journal.write_text(_journal_line("99/tiel/R1", "lcb", 1, 100, 1.0, 20.0) + "\n")
 
-    report = build_mini_report(out_root, "99", journal, seed=1, cap=2048, generated_at="2026-09-24T10:00:00")
+    report = build_mini_report(out_root, "99", journal, seed=1, caps_by_suite={}, default_cap=2048, generated_at="2026-09-24T10:00:00")
 
     assert "1 réussites sur 1" in report  # speed does not add to the denominator
     speed_rows = [l for l in report.splitlines() if l.startswith("| speed")]
@@ -159,7 +201,7 @@ def test_build_mini_report_shows_a_failed_suite_as_erreur(tmp_path):
     journal = tmp_path / "journal-99.jsonl"
     journal.write_text("")
 
-    report = build_mini_report(out_root, "99", journal, seed=1, cap=2048, generated_at="2026-09-24T10:00:00")
+    report = build_mini_report(out_root, "99", journal, seed=1, caps_by_suite={}, default_cap=2048, generated_at="2026-09-24T10:00:00")
 
     rows = [l for l in report.splitlines() if l.startswith("| bfcl")]
     assert len(rows) == 1
@@ -170,7 +212,7 @@ def test_build_mini_report_shows_a_failed_suite_as_erreur(tmp_path):
 def test_build_mini_report_empty_machine_says_so(tmp_path):
     out_root = tmp_path / "mini"
     journal = tmp_path / "journal-99.jsonl"
-    report = build_mini_report(out_root, "99", journal, seed=1, cap=2048, generated_at="2026-09-24T10:00:00")
+    report = build_mini_report(out_root, "99", journal, seed=1, caps_by_suite={}, default_cap=2048, generated_at="2026-09-24T10:00:00")
     assert "Aucun profil trouvé" in report
 
 
@@ -203,7 +245,7 @@ def test_build_mini_report_reads_a_real_result_tree(tmp_path):
     try:
         journal = tmp_path / "journal-99.jsonl"  # no real journal copied: aggregates read as zero, that is fine here
         journal.write_text("")
-        report = build_mini_report(out_root, "99", journal, seed=1, cap=2048, generated_at="2026-09-24T10:00:00")
+        report = build_mini_report(out_root, "99", journal, seed=1, caps_by_suite={}, default_cap=2048, generated_at="2026-09-24T10:00:00")
     finally:
         for path in [*[p for p in dest.rglob("*")], dest]:
             try:

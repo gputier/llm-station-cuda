@@ -209,8 +209,20 @@ DETERMINISTIC_PRESET_SIZES = {
 }
 # Every response a mini suite grades is capped here (sampling_override, the
 # same mechanism SpeedSuite already relies on): keeps a mini pass close to
-# its ~10 min/model target regardless of a model card's own max_tokens.
-MINI_MAX_TOKENS = 2048
+# its target duration per model regardless of a model card's own max_tokens.
+# Per-suite, not one flat number (Guillaume, 2026-09-25): measured live on a
+# real mini launch that almost every LiveCodeBench answer hit the 2048 floor
+# and scored 0 %, a real reasoning solution routinely needs more room than a
+# short factual answer does. lcb/livebench/aider get 16384; every other
+# graded suite (bfcl, ruler, longbench_v2, agentic) keeps the original 2048
+# default (short, close-ended answers: a tool call, a needle, a multiple-
+# choice letter, a code diff already bounded by the task itself).
+MINI_MAX_TOKENS_DEFAULT = 2048
+MINI_MAX_TOKENS_BY_SUITE = {
+    "lcb": 16384,
+    "livebench": 16384,
+    "aider": 16384,
+}
 
 
 class _CappedSuite:
@@ -255,7 +267,10 @@ def mini_suites(private_root: pathlib.Path, machine: str, seed: int) -> list:
         LongBenchV2Suite(lengths=[32768], samples_per_length=1, selection_seed=seed),
         AgenticSuite(tasks_dir=agentic_dir, cache_dir=private_root / ".cache" / "tasks"),
     ]
-    return [_CappedSuite(suite, MINI_MAX_TOKENS) for suite in graded] + [
+    return [
+        _CappedSuite(suite, MINI_MAX_TOKENS_BY_SUITE.get(suite.name, MINI_MAX_TOKENS_DEFAULT))
+        for suite in graded
+    ] + [
         SpeedSuite(prompt_tokens=(512,), reps=1, journal_path=journal),
     ]
 
@@ -337,7 +352,8 @@ def run_bench(args: argparse.Namespace, env: dict) -> None:
             (level_dir / "seed.txt").write_text(f"{seed}\n", encoding="utf-8")
             report = build_mini_report(
                 out_root, args.machine, journal_path(private_root, args.machine),
-                seed, MINI_MAX_TOKENS, datetime.datetime.now().isoformat(timespec="seconds"),
+                seed, MINI_MAX_TOKENS_BY_SUITE, MINI_MAX_TOKENS_DEFAULT,
+                datetime.datetime.now().isoformat(timespec="seconds"),
             )
             (level_dir / "rapport.md").write_text(report, encoding="utf-8")
 

@@ -642,37 +642,52 @@ never reimplemented):
   and large), no harness change needed since both sets already live as
   plain files on the host.
 
-**mini's response cap.** Every graded mini response is capped at 2048
-tokens (`benchrun.__main__.MINI_MAX_TOKENS`), through `sampling_override`,
-the same mechanism `SpeedSuite` already relies on: `bench/configs` is never
-touched. `speed` is not capped (its own prompt/gen_tokens sizing is
-untouched by mini).
+**mini's response cap.** Every graded mini response is capped, through
+`sampling_override` (the same mechanism `SpeedSuite` already relies on):
+`bench/configs` is never touched. Per-suite, not one flat number
+(`benchrun.__main__.MINI_MAX_TOKENS_BY_SUITE`, default
+`MINI_MAX_TOKENS_DEFAULT`, Guillaume, 2026-09-25): `lcb`, `livebench` and
+`aider` get 16384 tokens, every other graded suite (`bfcl`, `ruler`,
+`longbench_v2`, `agentic`) keeps 2048. Measured live on a real mini launch:
+almost every LiveCodeBench answer hit the 2048 floor mid-reasoning and
+scored 0 %, while a short, close-ended answer (a tool call, a needle, a
+multiple-choice letter) never needed more than 2048 to begin with. `speed`
+is not capped at all (its own prompt/gen_tokens sizing is untouched by
+mini).
 
 **mini's report.** At the end of a mini launch, `benchrun.report.build_mini_report`
 writes `DIR/mini/<machine>/rapport.md`, built only from the results each
 suite already wrote to disk and the gateway's own journal (`run_id`/
 `suite`/`rep`, matched the same way `benchrun.watch` already reads them
-back), no model call of its own. It states the date, the seed and the 2048-
-token cap up front, and warns that these numbers measure the model under
-that cap, do not compare to a Full campaign, and (one question per test)
-can only ever be 0 % or 100 % per test. Then, one section per profile
-(`machine/model/variant`), one row per test: what the test judges in one
-short phrase, the question id, pass/fail, output tokens (summed across every
-request for that item, e.g. a multi-turn BFCL item or an agentic task),
-whether it was cut off at the cap, its duration and its decode throughput
-(both summed/averaged the same way); then a summary line: passes out of 8,
-mean tokens, how many responses were cut off, total duration.
+back), no model call of its own. It states the date, the seed and the
+per-suite caps up front (default plus overrides, e.g. "2048 tokens par
+défaut (16384 pour aider, lcb, livebench)"), and warns that these numbers
+measure the model under those caps, do not compare to a Full campaign, and
+(one question per test) can only ever be 0 % or 100 % per test. Then, one
+section per profile (`machine/model/variant`), one row per test: what the
+test judges in one short phrase, the question id, pass/fail (or "mesure"
+for `speed`, which is a throughput number, not a pass/fail test), output
+tokens (summed across every request for that item, e.g. a multi-turn BFCL
+item or an agentic task; both `usage.completion_tokens`, the OpenAI-shaped
+suites, and `usage.output_tokens`, the agentic suite's own Anthropic-shaped
+`/v1/messages` path, are read), whether it was cut off at ITS OWN cap, its
+duration and its decode throughput (both summed/averaged the same way);
+then a summary line: passes out of 7 (`speed` excluded from both the
+numerator and the denominator, same convention `benchrun.watch`'s own
+ranking already applies to it), mean tokens, how many responses were cut
+off, total duration.
 
 **Estimated duration.** Measured 2026-09-24: about 261 s per reasoning
 response on the 99, about 201 s on the 97 (both mean, per response, no
-context-length or output-length breakdown yet). This is a rough estimate,
-not a measured mini/medium/large pass: mini targets roughly 10 min per
-model (one question per suite, capped at 2048 tokens); medium and large are
-larger by construction and take longer, proportionally to their per-suite
-item counts above, for the same reasoning-heavy models. Since mini/medium/
-large now run all three profiles (R1/R2/R3) of each model instead of one,
-the wall time of a launch is about three times a single profile's own
-estimate.
+context-length or output-length breakdown yet). Mini's own wall time,
+measured on a real launch after the per-suite cap change above (2026-09-25):
+about 35 minutes per model on the 99, an estimate, not a fixed budget (a
+reasoning-heavy model spending its full 16384-token room on `lcb`/
+`livebench`/`aider` costs more than the flat-2048 mini this replaces).
+Medium and large are larger by construction and take longer, proportionally
+to their per-suite item counts above. Since mini/medium/large now run all
+three profiles (R1/R2/R3) of each model instead of one, the wall time of a
+launch is about three times a single profile's own estimate.
 
 **Live progress.** `bench/benchrun/watch.py` reads a single `--campaign`
 (unchanged, not modified by this change): to watch a bench-level launch

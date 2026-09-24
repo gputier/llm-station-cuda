@@ -204,8 +204,16 @@ def test_mini_suites_sizes_are_all_one_and_response_capped(tmp_path):
     assert by_name["longbench_v2"]._inner.samples_per_length == 1 and by_name["longbench_v2"]._inner.lengths == [32768]
     assert len(list(pathlib.Path(by_name["agentic"]._inner.tasks_dir).iterdir())) == 1
     for name in ("lcb", "aider", "bfcl", "livebench", "ruler", "longbench_v2", "agentic"):
-        assert by_name[name].sampling_override == {"max_tokens": entry.MINI_MAX_TOKENS}
-    assert not hasattr(by_name["speed"], "sampling_override") or by_name["speed"].sampling_override != {"max_tokens": entry.MINI_MAX_TOKENS}
+        expected = entry.MINI_MAX_TOKENS_BY_SUITE.get(name, entry.MINI_MAX_TOKENS_DEFAULT)
+        assert by_name[name].sampling_override == {"max_tokens": expected}
+    # lcb/livebench/aider get more room than the 2048 default (Guillaume,
+    # 2026-09-25: almost every LCB answer hit 2048 and scored 0 %, measured
+    # live on a real mini launch).
+    for name in ("lcb", "livebench", "aider"):
+        assert by_name[name].sampling_override == {"max_tokens": 16384}
+    for name in ("bfcl", "ruler", "longbench_v2", "agentic"):
+        assert by_name[name].sampling_override == {"max_tokens": 2048}
+    assert not hasattr(by_name["speed"], "sampling_override") or by_name["speed"].sampling_override != {"max_tokens": 2048}
     assert by_name["speed"].prompt_tokens == (512,) and by_name["speed"].reps == 1
 
 

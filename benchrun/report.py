@@ -68,6 +68,10 @@ def _read_journal(journal_path: pathlib.Path) -> list[dict]:
     return rows
 
 
+def _cap_for(suite: str, caps_by_suite: dict, default_cap: int) -> int:
+    return caps_by_suite.get(suite, default_cap)
+
+
 def _aggregate(rows: list[dict], cap: int) -> dict:
     """Sums tokens and duration across every journal line that matches one
     run_id/suite/rep: with the mini preset's one item per test, that is
@@ -126,7 +130,8 @@ def _error_type(error_file: pathlib.Path) -> str:
     return first_line.split(":", 1)[0].strip()
 
 
-def _profile_rows(variant_dir: pathlib.Path, run_id: str, journal_lines: list[dict], cap: int) -> tuple[list[dict], dict]:
+def _profile_rows(variant_dir: pathlib.Path, run_id: str, journal_lines: list[dict],
+                   caps_by_suite: dict, default_cap: int) -> tuple[list[dict], dict]:
     rows = []
     passed_count = 0
     total_count = 0
@@ -158,6 +163,7 @@ def _profile_rows(variant_dir: pathlib.Path, run_id: str, journal_lines: list[di
             item = json.loads(line)
             item_id = item.get("item_id") or "-"
             passed = bool(item.get("passed"))
+            cap = _cap_for(suite, caps_by_suite, default_cap)
             agg = _aggregate(_journal_rows(journal_lines, run_id, suite, 1), cap)
             # speed measures throughput, not a pass/fail test (same
             # exclusion watch.py's own ranking already makes, UNRANKED_
@@ -199,8 +205,23 @@ def _format_row(row: dict) -> str:
     )
 
 
+def _caps_header_phrase(caps_by_suite: dict, default_cap: int) -> str:
+    """One phrase listing every per-suite response cap, default first: e.g.
+    "2048 tokens par défaut (16384 pour aider, lcb, livebench)." Built from
+    the same table mini_suites uses to wrap each suite, so the header can
+    never drift from what actually ran (Guillaume, 2026-09-25: LiveCodeBench,
+    LiveBench and Aider need more room than a flat 2048 cap gives, measured
+    live: almost every LCB answer hit 2048 and scored 0 %)."""
+    if not caps_by_suite:
+        return f"{default_cap} tokens."
+    overrides = ", ".join(f"{suite}" for suite in sorted(caps_by_suite))
+    override_values = sorted(set(caps_by_suite.values()))
+    values_phrase = " ou ".join(str(v) for v in override_values)
+    return f"{default_cap} tokens par défaut ({values_phrase} pour {overrides})."
+
+
 def build_mini_report(out_root: pathlib.Path, machine: str, journal_path: pathlib.Path,
-                       seed: int, cap: int, generated_at: str) -> str:
+                       seed: int, caps_by_suite: dict, default_cap: int, generated_at: str) -> str:
     """out_root is DIR/mini (the mini preset's own --out): Campaign._cell
     nests exactly machine/model/variant under it (run_bench passes
     out_root=DIR/mini straight to Campaign, which appends cfg.machine
@@ -208,15 +229,22 @@ def build_mini_report(out_root: pathlib.Path, machine: str, journal_path: pathli
     read is out_root/machine/model/variant, not a doubled machine level (a
     real second mini run on 2026-09-24 proved this: rapport.md said "Aucun
     profil trouvé" over an existing out_root/97/tiel/R1/.../rep1.jsonl tree,
-    because this function used to look one level too deep)."""
+    because this function used to look one level too deep).
+
+    caps_by_suite/default_cap mirror benchrun.__main__.MINI_MAX_TOKENS_BY_
+    SUITE/MINI_MAX_TOKENS_DEFAULT exactly (passed in by run_bench, not
+    imported here, so this module stays free of a benchrun.__main__ import):
+    each suite's own truncation check uses its own cap, not one flat number
+    for every suite (Guillaume, 2026-09-25)."""
     machine_root = out_root / machine
     journal_lines = _read_journal(journal_path)
     lines = [
         f"# Rapport Mini, machine {machine}",
         "",
-        f"Généré le {generated_at}. Graine de tirage : {seed}. Plafond de réponse : {cap} tokens.",
+        f"Généré le {generated_at}. Graine de tirage : {seed}. "
+        f"Plafond de réponse : {_caps_header_phrase(caps_by_suite, default_cap)}",
         "",
-        "Ces notes mesurent le modèle sous une contrainte de réponse à 2048 tokens, pas ses "
+        "Ces notes mesurent le modèle sous contrainte de plafond de réponse, pas ses "
         "capacités complètes : elles ne se comparent pas à une campagne Full. Avec une seule "
         "question par épreuve, chaque note vaut 0 % ou 100 %, jamais une valeur intermédiaire.",
         "",
@@ -227,7 +255,7 @@ def build_mini_report(out_root: pathlib.Path, machine: str, journal_path: pathli
     for model_dir in sorted(p for p in machine_root.iterdir() if p.is_dir()):
         for variant_dir in sorted(p for p in model_dir.iterdir() if p.is_dir()):
             run_id = f"{machine}/{model_dir.name}/{variant_dir.name}"
-            rows, summary = _profile_rows(variant_dir, run_id, journal_lines, cap)
+            rows, summary = _profile_rows(variant_dir, run_id, journal_lines, caps_by_suite, default_cap)
             lines.append(f"## {run_id}")
             lines.append("")
             lines.append("| épreuve | juge | question | résultat | tokens | coupée | durée (s) | décodage (tok/s) |")
