@@ -106,6 +106,22 @@ class LiveBenchSuite:
             "docker", "run", "--rm",
             "--network", NETWORK,
             "-w", "/livebench/livebench",
+            # huggingface_hub's own root logger (get_logger, used by
+            # datasets/load_dataset under the hood) attaches a bare
+            # logging.StreamHandler() the first time anything logs through
+            # it; proven live (2026-09-24, from inside a real runner
+            # container, docker-outside-of-docker) that this specific
+            # "unauthenticated requests" WARNING lands on the CHILD
+            # process's stdout in that container, not stderr, ahead of
+            # /select_ids.py's own json.dump(..., sys.stdout): capture_
+            # output below then hands json.loads a stream with a log line
+            # in front of the JSON, "Expecting value: line 1 column 1".
+            # HF_HUB_VERBOSITY=error is the library's own documented knob
+            # for this (huggingface_hub.utils.logging), set here rather
+            # than patched into the pinned image: it silences the warning
+            # at its source instead of hoping nothing else ever writes to
+            # this subprocess's stdout.
+            "-e", "HF_HUB_VERBOSITY=error",
             "-v", f"{HF_CACHE_VOLUME}:/root/.cache/huggingface",
             IMAGE,
             "python", SELECT_IDS_SCRIPT,
@@ -116,7 +132,18 @@ class LiveBenchSuite:
             cmd += ["--seed", str(self.seed)]
         cmd += list(self.categories)
         proc = subprocess.run(cmd, check=True, timeout=SELECT_IDS_TIMEOUT_S, capture_output=True, text=True)
-        selected = json.loads(proc.stdout)
+        try:
+            selected = json.loads(proc.stdout)
+        except json.JSONDecodeError as exc:
+            # Surfaces stderr (and the raw stdout) directly in the raised
+            # error instead of a bare "Expecting value" with no context: the
+            # cause above is handled, but a future, different source of
+            # stdout noise must be diagnosable from this message alone, not
+            # from a re-run with print statements added by hand.
+            raise RuntimeError(
+                f"livebench_select_ids.py produced non-JSON stdout ({exc}).\n"
+                f"stdout: {proc.stdout!r}\nstderr: {proc.stderr!r}"
+            ) from exc
         return [question_id for category in self.categories for question_id in selected[category]]
 
     def run(self, ctx) -> list[dict]:

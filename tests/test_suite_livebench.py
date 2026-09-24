@@ -110,6 +110,27 @@ def test_select_question_ids_calls_the_baked_in_listing_script(monkeypatch):
     assert livebench.SELECT_IDS_SCRIPT in cmd  # baked in, no -v mount for it
     assert not any(a.endswith("livebench_select_ids.py:ro") for a in cmd)
     assert cmd[-2:] == ["reasoning", "math"]
+    assert "HF_HUB_VERBOSITY=error" in cmd  # silences the warning that leaked onto stdout, proven live 2026-09-24
+
+
+def test_select_question_ids_reports_stdout_and_stderr_on_bad_json(monkeypatch):
+    # Proven live (2026-09-24, from inside a real runner container): a
+    # library warning ahead of the JSON on stdout used to surface as a bare
+    # "Expecting value" with no way to tell what actually happened.
+    suite = LiveBenchSuite(categories=("reasoning",), limit=1)
+
+    class _FakeCompletedProcess:
+        stdout = "WARNING:huggingface_hub.utils._http:some noise\n"
+        stderr = "some other diagnostic on stderr"
+
+    def fake_run(cmd, check, timeout, capture_output, text):
+        return _FakeCompletedProcess()
+
+    monkeypatch.setattr(livebench.subprocess, "run", fake_run)
+    with pytest.raises(RuntimeError) as excinfo:
+        suite._select_question_ids()
+    assert "WARNING:huggingface_hub" in str(excinfo.value)
+    assert "some other diagnostic on stderr" in str(excinfo.value)
 
 
 def test_run_with_limit_passes_question_id_to_the_main_call(tmp_path, monkeypatch):
