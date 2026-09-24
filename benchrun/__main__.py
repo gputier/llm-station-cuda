@@ -1,15 +1,20 @@
-"""Entry point: campaign runner and pilot (Task 16).
+"""Entry point: campaign runner and the mini/medium/large bench levels
+(2026-09-24, replaces Task 16's "pilot" subcommand entirely).
 
 Two subcommands:
 - "run" builds every requested suite at the campaign size (spec, phase 1),
-  loads every config matching --configs and hands them to Campaign.run.
-- "pilot" runs one model (tiel), one configuration (R1), every suite at the
-  minimum size (spec, phase 2), on a single machine, and records loading time
-  and each suite's wall time to a JSON file under BENCH_PRIVATE (see
-  pilot_result_path): the runner and gateway containers only ever mount
-  bench/ (Ruling J), not docs/, so merging that JSON into
-  docs/pilote-2026-09.md so the campaign's duration can be projected is a
-  separate, host-side step.
+  loads every config matching --configs and hands them to Campaign.run. The
+  Full campaign always uses this subcommand; its argv, suite sizes and
+  output paths are unchanged by everything below (see campaign_suites).
+- "bench" runs one of three fixed levels (--preset mini|medium|large) on
+  every R1/R2/R3 configuration of the requested models (one machine, one
+  pass, reps 1): mini draws one random question per suite (a fresh,
+  replayable seed, see mini_suites), medium and large take a fixed, larger
+  count per suite, deterministically (see DETERMINISTIC_PRESET_SIZES). Each
+  level writes under its own DIR/<preset>/<machine> subtree, so mini,
+  medium, large and a Full campaign's own --out never collide. mini also
+  writes seed.txt (the seed drawn, replayable with --seed) and rapport.md
+  (benchrun.report.build_mini_report) next to it.
 
 Station and the gateway URL both come from an environment file: this
 repository's write hook refuses any file named ".env*" (see bench/stations.example),
@@ -22,22 +27,25 @@ already substituted is never second-guessed by a stale copy on disk.
 from __future__ import annotations
 
 import argparse
+import datetime
 import glob
-import json
 import os
 import pathlib
+import random
 import tempfile
-import time
 
 from .config import load_config
-from .runner import Campaign, SuiteContext
+from .report import build_mini_report
+from .runner import Campaign
 from .station import Station
 from .suites.agentic import AgenticSuite
 from .suites.aider import AiderSuite
+from .suites.bfcl import DEFAULT_CATEGORIES as BFCL_DEFAULT_CATEGORIES
 from .suites.bfcl import BfclSuite
 from .suites.lcb import LiveCodeBenchSuite
 from .suites.livebench import LiveBenchSuite
 from .suites.longbench import LongBenchV2Suite
+from .suites.ruler import DEFAULT_TASKS as RULER_DEFAULT_TASKS
 from .suites.ruler import RulerSuite
 from .suites.speed import SpeedSuite
 
@@ -48,15 +56,8 @@ MACHINES = ("99", "97")
 # and gateway containers only ever mount bench/ at /bench (Ruling J), never
 # the whole repo, so this entry point (bench/benchrun/__main__.py) can only
 # reach configs/ (a bench/ sibling of benchrun/) this way, never docs/ (a
-# repo-root sibling of bench/, outside the mount). The pilot therefore
-# records its measurements under BENCH_PRIVATE (also mounted, see
-# run_pilot/_record_pilot_result) instead of writing docs/pilote-2026-09.md
-# directly; merging that JSON into the doc is a step run on the host, after
-# both machines' pilot containers have exited.
+# repo-root sibling of bench/, outside the mount).
 BENCH_ROOT = pathlib.Path(__file__).resolve().parents[1]
-# Model and variant the pilot always uses (spec, phase 2): tiel is the one
-# model present on both stations, R1 its first configuration.
-PILOT_MODEL, PILOT_VARIANT = "tiel", "R1"
 
 
 def load_env_file(path: str) -> dict:
@@ -126,124 +127,179 @@ def campaign_suites(names: list[str], private_root: pathlib.Path, machine: str) 
     return [factories[n]() for n in names]
 
 
-def _pilot_aider_exercises_file(private_root: pathlib.Path, n: int = 5) -> str:
+def _first_n_aider_exercises_file(private_root: pathlib.Path, n: int) -> str:
     """First n lines of the frozen 60-exercise subset, written to a fresh
     temp file. Returned as an ABSOLUTE path string: AiderSuite.run() joins
     private_root / exercises_file with pathlib's own "/" operator, which
     discards the left side when the right side is already absolute, so this
-    works regardless of where private_root points."""
+    works regardless of where private_root points. Used by the medium and
+    large bench levels (deterministic, fixed seed as far as this file goes:
+    there is nothing to seed, the same lines every time)."""
     full = (private_root / "sets" / "aider-subset-60.txt").read_text(encoding="utf-8").splitlines()
     keep = [line for line in full if line.strip()][:n]
-    fh = tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False, prefix="pilot-aider-")
+    return _write_exercises_file(keep, prefix="bench-aider-")
+
+
+def _random_aider_exercises_file(private_root: pathlib.Path, n: int, rng: random.Random) -> str:
+    """Same file shape as _first_n_aider_exercises_file, n lines drawn at
+    random from the full subset instead of the first n: used by the mini
+    bench level, whose rng is seeded once per launch (mini_suites) so every
+    profile of every model in that launch sees the same draw."""
+    full = (private_root / "sets" / "aider-subset-60.txt").read_text(encoding="utf-8").splitlines()
+    lines = [line for line in full if line.strip()]
+    keep = rng.sample(lines, min(n, len(lines)))
+    return _write_exercises_file(keep, prefix="mini-aider-")
+
+
+def _write_exercises_file(keep: list[str], prefix: str) -> str:
+    fh = tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False, prefix=prefix)
     fh.write("\n".join(keep) + "\n")
     fh.close()
     return fh.name
 
 
-def _pilot_agentic_tasks_dir(private_root: pathlib.Path, n: int = 5) -> pathlib.Path:
+def _first_n_agentic_tasks_dir(private_root: pathlib.Path, n: int) -> pathlib.Path:
     """A temp directory holding symlinks to the first n task directories
     (sorted by id, deterministic), so AgenticSuite.run's own directory scan
     (sorted iterdir over tasks_dir) sees exactly n tasks without this entry
-    point needing its own size knob on AgenticSuite itself."""
+    point needing its own size knob on AgenticSuite itself. Used by the
+    medium and large bench levels."""
+    all_tasks = _sorted_agentic_tasks(private_root)
+    return _symlink_tasks_dir(all_tasks[:n], prefix="bench-agentic-")
+
+
+def _random_agentic_tasks_dir(private_root: pathlib.Path, n: int, rng: random.Random) -> pathlib.Path:
+    """Same shape as _first_n_agentic_tasks_dir, n tasks drawn at random
+    instead of the first n: used by the mini bench level."""
+    all_tasks = _sorted_agentic_tasks(private_root)
+    return _symlink_tasks_dir(rng.sample(all_tasks, min(n, len(all_tasks))), prefix="mini-agentic-")
+
+
+def _sorted_agentic_tasks(private_root: pathlib.Path) -> list[pathlib.Path]:
     tasks_dir = private_root / "tasks"
-    all_tasks = sorted(p for p in tasks_dir.iterdir() if (p / "task.json").exists())
-    pilot_dir = pathlib.Path(tempfile.mkdtemp(prefix="pilot-agentic-"))
-    for task_dir in all_tasks[:n]:
-        (pilot_dir / task_dir.name).symlink_to(task_dir, target_is_directory=True)
-    return pilot_dir
+    return sorted(p for p in tasks_dir.iterdir() if (p / "task.json").exists())
 
 
-def pilot_suites(private_root: pathlib.Path, machine: str) -> list:
-    """Every suite at the spec's minimum pilot size (phase 2): LiveCodeBench
-    10, Aider 5, one BFCL category, RULER 32k, 5 maison tasks are named
-    explicitly in the spec; livebench, longbench_v2 and speed are not, so
-    they are cut to the smallest unit each suite's own constructor exposes
-    (one category, one length, one prompt length), the same "minimal size"
-    pattern the spec states for the rest. Judgment call, not sourced from the
-    spec text itself.
-    """
+def _symlink_tasks_dir(chosen: list[pathlib.Path], prefix: str) -> pathlib.Path:
+    out_dir = pathlib.Path(tempfile.mkdtemp(prefix=prefix))
+    for task_dir in chosen:
+        (out_dir / task_dir.name).symlink_to(task_dir, target_is_directory=True)
+    return out_dir
+
+
+# mini/medium/large's own suite sizes (Guillaume, 2026-09-24). Medium and
+# large are deterministic (first N, or the harness's own fixed selection
+# seed): this table is their entire sizing, nothing else varies between the
+# two. mini is built separately by mini_suites, below: every count there is
+# 1, drawn at random from a shared per-launch seed, which this table cannot
+# express.
+DETERMINISTIC_PRESET_SIZES = {
+    "medium": {
+        "lcb_n_problems": 10, "aider_n": 5, "bfcl_limit": 5, "livebench_limit": 5,
+        "ruler_lengths": [32768], "ruler_per_task": 1,
+        "longbench_lengths": [32768], "longbench_samples_per_length": 2,
+        "agentic_n": 2,
+    },
+    "large": {
+        "lcb_n_problems": 30, "aider_n": 20, "bfcl_limit": 30, "livebench_limit": 25,
+        "ruler_lengths": [32768, 131072], "ruler_per_task": 3,
+        "longbench_lengths": [32768, 131072], "longbench_samples_per_length": 5,
+        "agentic_n": 8,
+    },
+}
+# Every response a mini suite grades is capped here (sampling_override, the
+# same mechanism SpeedSuite already relies on): keeps a mini pass close to
+# its ~10 min/model target regardless of a model card's own max_tokens.
+MINI_MAX_TOKENS = 2048
+
+
+class _CappedSuite:
+    """Wraps a suite so Campaign._set_context applies sampling_override on
+    top of the configuration's own sampling, without changing anything else
+    about how the suite runs (name, run() both pass straight through). Used
+    only by the mini bench level."""
+
+    def __init__(self, inner, max_tokens: int):
+        self.name = inner.name
+        self._inner = inner
+        self.sampling_override = {"max_tokens": max_tokens}
+
+    def run(self, ctx) -> list[dict]:
+        return self._inner.run(ctx)
+
+
+def mini_suites(private_root: pathlib.Path, machine: str, seed: int) -> list:
+    """One random item per suite (Guillaume, 2026-09-24, final): the same
+    seed value drives every draw below, but each draw uses its OWN
+    random.Random(f"{seed}:<purpose>") rather than one shared generator, so
+    adding or reordering a draw here can never shift any other draw's
+    result. bfcl and livebench each first draw which ONE of their categories
+    to use (both suites are normally per-category; mini keeps them to
+    exactly one item total, like every other suite), then draw the one item
+    inside it (bfcl_run.py / livebench_select_ids.py, both seeded the same
+    way). Every graded suite is wrapped in _CappedSuite; speed is not (its
+    own prompt/gen_tokens sizing is untouched by the mini level)."""
     journal = journal_path(private_root, machine)
-    return [
-        LiveCodeBenchSuite(n_problems=10),
-        AiderSuite(exercises_file=_pilot_aider_exercises_file(private_root, 5)),
-        BfclSuite(categories=("simple_python",)),
-        LiveBenchSuite(categories=("reasoning",)),
-        RulerSuite(lengths=[32768], per_task=5),
-        LongBenchV2Suite(lengths=[32768], samples_per_length=5),
-        AgenticSuite(tasks_dir=_pilot_agentic_tasks_dir(private_root, 5),
-                      cache_dir=private_root / ".cache" / "tasks"),
-        SpeedSuite(prompt_tokens=(512,), gen_tokens=64, reps=1, journal_path=journal),
+    bfcl_category = random.Random(f"{seed}:bfcl-category").choice(BFCL_DEFAULT_CATEGORIES)
+    livebench_category = random.Random(f"{seed}:livebench-category").choice(("reasoning", "math"))
+    ruler_task = random.Random(f"{seed}:ruler-task").choice(RULER_DEFAULT_TASKS)
+    aider_file = _random_aider_exercises_file(private_root, 1, random.Random(f"{seed}:aider"))
+    agentic_dir = _random_agentic_tasks_dir(private_root, 1, random.Random(f"{seed}:agentic"))
+
+    graded = [
+        LiveCodeBenchSuite(n_problems=1, selection_seed=seed),
+        AiderSuite(exercises_file=aider_file),
+        BfclSuite(categories=(bfcl_category,), limit=1, seed=seed),
+        LiveBenchSuite(categories=(livebench_category,), limit=1, seed=seed),
+        RulerSuite(lengths=[32768], tasks=[ruler_task], per_task=1),
+        LongBenchV2Suite(lengths=[32768], samples_per_length=1, selection_seed=seed),
+        AgenticSuite(tasks_dir=agentic_dir, cache_dir=private_root / ".cache" / "tasks"),
+    ]
+    return [_CappedSuite(suite, MINI_MAX_TOKENS) for suite in graded] + [
+        SpeedSuite(prompt_tokens=(512,), reps=1, journal_path=journal),
     ]
 
 
-class _TimedSuite:
-    """Wraps a suite to record its wall time into a shared dict, without
-    changing anything about how Campaign drives it (name, sampling_override,
-    SuiteSkipped all pass through unchanged)."""
-
-    def __init__(self, inner, timings: dict):
-        self.name = inner.name
-        self._inner = inner
-        self._timings = timings
-        if hasattr(inner, "sampling_override"):
-            self.sampling_override = inner.sampling_override
-
-    def run(self, ctx: SuiteContext) -> list[dict]:
-        t0 = time.monotonic()
-        try:
-            return self._inner.run(ctx)
-        finally:
-            self._timings[self.name] = time.monotonic() - t0
+def sized_suites(level: str, private_root: pathlib.Path, machine: str) -> list:
+    sizes = DETERMINISTIC_PRESET_SIZES[level]
+    journal = journal_path(private_root, machine)
+    return [
+        LiveCodeBenchSuite(n_problems=sizes["lcb_n_problems"]),
+        AiderSuite(exercises_file=_first_n_aider_exercises_file(private_root, sizes["aider_n"])),
+        BfclSuite(limit=sizes["bfcl_limit"]),
+        LiveBenchSuite(limit=sizes["livebench_limit"]),
+        RulerSuite(lengths=sizes["ruler_lengths"], per_task=sizes["ruler_per_task"]),
+        LongBenchV2Suite(lengths=sizes["longbench_lengths"],
+                          samples_per_length=sizes["longbench_samples_per_length"]),
+        AgenticSuite(tasks_dir=_first_n_agentic_tasks_dir(private_root, sizes["agentic_n"]),
+                      cache_dir=private_root / ".cache" / "tasks"),
+        SpeedSuite(journal_path=journal),
+    ]
 
 
-class _TimedStation:
-    """Wraps a Station to record start() and warmup() durations separately
-    from the suites' own time (spec, phase 2: "chronomètre séparément le
-    chargement et l'évaluation"), while delegating every call unchanged."""
-
-    def __init__(self, inner: Station, timings: dict):
-        self._inner = inner
-        self._timings = timings
-
-    def start(self, cfg, timeout_s: int = 900) -> None:
-        t0 = time.monotonic()
-        self._inner.start(cfg, timeout_s=timeout_s)
-        self._timings["start_s"] = time.monotonic() - t0
-
-    def warmup(self) -> None:
-        t0 = time.monotonic()
-        self._inner.warmup()
-        self._timings["warmup_s"] = time.monotonic() - t0
-
-    def stop(self) -> None:
-        self._inner.stop()
-
-    def vram(self) -> dict:
-        return self._inner.vram()
+def bench_suites(preset: str, private_root: pathlib.Path, machine: str, seed: int | None = None) -> list:
+    if preset == "mini":
+        if seed is None:
+            raise ValueError("mini needs a seed")
+        return mini_suites(private_root, machine, seed)
+    if preset in DETERMINISTIC_PRESET_SIZES:
+        return sized_suites(preset, private_root, machine)
+    raise SystemExit(f"unknown preset {preset!r}, known: mini, medium, large")
 
 
-def pilot_result_path(private_root: pathlib.Path, machine: str) -> pathlib.Path:
-    return private_root / "runs" / "pilot" / f"{machine}.json"
-
-
-def _record_pilot_result(machine: str, private_root: pathlib.Path, station_timings: dict,
-                          suite_timings: dict, error: str | None) -> None:
-    """One JSON file per machine, under BENCH_PRIVATE (mounted in both
-    containers, but each machine only ever writes its own file): both
-    machines' pilot runs are launched in parallel (plan step 3), and giving
-    each one a distinct path is what keeps them from ever touching the same
-    bytes, no lock needed. Merging both files into docs/pilote-2026-09.md
-    (which the containers cannot reach, see BENCH_ROOT) is a separate, host-
-    side step.
-    """
-    out_path = pilot_result_path(private_root, machine)
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(json.dumps({
-        "machine": machine,
-        "error": error,
-        "station": station_timings,
-        "suites": suite_timings,
-    }, indent=2), encoding="utf-8")
+def bench_configs(machine: str, models: list[str] | None) -> list:
+    """Every R1/R2/R3 configuration of the requested models (every model
+    with a config for this machine when models is None), sorted so a given
+    model's three profiles stay adjacent: that is what lets mini_suites'
+    single shared seed give the three profiles of one model the exact same
+    draw, campaign after campaign."""
+    if models:
+        paths = []
+        for model in models:
+            paths += sorted(glob.glob(str(BENCH_ROOT / "configs" / machine / model / "R*.yaml")))
+    else:
+        paths = sorted(glob.glob(str(BENCH_ROOT / "configs" / machine / "*" / "R*.yaml")))
+    return [load_config(pathlib.Path(p)) for p in paths]
 
 
 def run_campaign(args: argparse.Namespace, env: dict) -> None:
@@ -258,25 +314,32 @@ def run_campaign(args: argparse.Namespace, env: dict) -> None:
     campaign.run(configs)
 
 
-def run_pilot(args: argparse.Namespace, env: dict) -> None:
+def run_bench(args: argparse.Namespace, env: dict) -> None:
     private_root = pathlib.Path(env["BENCH_PRIVATE"])
-    station_timings: dict = {}
-    suite_timings: dict = {}
-    station = _TimedStation(build_station(args.machine, env), station_timings)
-    suites = [_TimedSuite(s, suite_timings) for s in pilot_suites(private_root, args.machine)]
-    cfg_path = BENCH_ROOT / "configs" / args.machine / PILOT_MODEL / f"{PILOT_VARIANT}.yaml"
-    cfg = load_config(cfg_path)
-    out_root = private_root / "runs" / "pilot" / args.machine
+    station = build_station(args.machine, env)
+    models = args.models.split(",") if args.models else None
+    configs = bench_configs(args.machine, models)
+    if not configs:
+        raise SystemExit(f"no config matched machine {args.machine!r} models {models!r}")
+    out_root = pathlib.Path(args.out) / args.preset
+    seed = None
+    if args.preset == "mini":
+        seed = args.seed if args.seed is not None else random.SystemRandom().randrange(2**32)
+    suites = bench_suites(args.preset, private_root, args.machine, seed=seed)
     campaign = Campaign(station, gateway_url(args.machine), suites, out_root=out_root,
                          reps=1, private_root=private_root)
-    error = None
     try:
-        campaign.run([cfg])
-    except Exception as exc:  # noqa: BLE001 - recorded, then re-raised
-        error = f"{type(exc).__name__}: {exc}"
-        raise
+        campaign.run(configs)
     finally:
-        _record_pilot_result(args.machine, private_root, station_timings, suite_timings, error)
+        if args.preset == "mini":
+            level_dir = out_root / args.machine
+            level_dir.mkdir(parents=True, exist_ok=True)
+            (level_dir / "seed.txt").write_text(f"{seed}\n", encoding="utf-8")
+            report = build_mini_report(
+                out_root, args.machine, journal_path(private_root, args.machine),
+                seed, MINI_MAX_TOKENS, datetime.datetime.now().isoformat(timespec="seconds"),
+            )
+            (level_dir / "rapport.md").write_text(report, encoding="utf-8")
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -294,14 +357,20 @@ def main(argv: list[str] | None = None) -> None:
     run_p.add_argument("--reps", type=int, default=3)
     run_p.add_argument("--out", required=True)
 
-    sub.add_parser("pilot", parents=[common])
+    bench_p = sub.add_parser("bench", parents=[common])
+    bench_p.add_argument("--preset", required=True, choices=("mini", "medium", "large"))
+    bench_p.add_argument("--models", default=None,
+                          help="comma-separated model names; default every model with a config for --machine")
+    bench_p.add_argument("--out", required=True)
+    bench_p.add_argument("--seed", type=int, default=None,
+                          help="mini only: replay a previous mini launch's random draw")
 
     args = ap.parse_args(argv)
     env = resolve_env(args.env)
     if args.cmd == "run":
         run_campaign(args, env)
     else:
-        run_pilot(args, env)
+        run_bench(args, env)
 
 
 if __name__ == "__main__":

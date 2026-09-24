@@ -215,3 +215,36 @@ def test_apply_request_timeout_env_never_overrides_an_explicit_flag(monkeypatch)
     monkeypatch.setenv("BENCH_REQUEST_TIMEOUT_S", "321")
     rest = ["--openai_timeout", "999"]
     assert lcb_run.apply_request_timeout_env(rest) == rest
+
+
+def test_select_indices_defaults_to_the_fixed_selection_seed():
+    """Same call, no --selection-seed override: bit-for-bit the pre-mini
+    behavior, since benchrun.suites.lcb.LiveCodeBenchSuite only passes the
+    flag when the mini bench level asks for it."""
+    keep = list(range(50))
+    assert lcb_run.select_indices(keep, 5) == sorted(
+        __import__("random").Random(lcb_run.SELECTION_SEED).sample(keep, 5)
+    )
+
+
+def test_select_indices_seed_override_changes_the_draw():
+    keep = list(range(50))
+    default_draw = lcb_run.select_indices(keep, 5)
+    seeded_draw = lcb_run.select_indices(keep, 5, seed=999)
+    assert seeded_draw != default_draw  # a different seed, a different draw
+    assert len(seeded_draw) == 5 and set(seeded_draw) <= set(keep)
+
+
+def test_select_indices_same_override_seed_is_reproducible():
+    keep = list(range(50))
+    assert lcb_run.select_indices(keep, 5, seed=999) == lcb_run.select_indices(keep, 5, seed=999)
+
+
+def test_split_selection_seed_defaults_to_the_fixed_constant():
+    seed, rest = lcb_run.split_selection_seed(["--n", "1"])
+    assert seed == lcb_run.SELECTION_SEED and rest == ["--n", "1"]
+
+
+def test_split_selection_seed_reads_and_strips_the_flag():
+    seed, rest = lcb_run.split_selection_seed(["--n", "1", "--selection-seed", "42"])
+    assert seed == 42 and rest == ["--n", "1"]

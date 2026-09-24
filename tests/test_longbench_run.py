@@ -196,3 +196,35 @@ def test_no_eligible_item_in_this_band_is_reported_not_silent(capsys, monkeypatc
     )
     assert selected == []
     assert skipped == ["too-big"]
+
+
+def test_select_items_default_seed_matches_the_fixed_selection_seed():
+    # No seed kwarg passed: main()'s own --seed defaults to SELECTION_SEED
+    # (argparse), so this call is what "run"/medium/large actually get.
+    encoding = FakeEncoding()
+    data = [_item(f"item-{i:03d}", context_words=10) for i in range(50)]
+    default_call = longbench_run._select_items(
+        data, TEMPLATE, band_floor=0, band_ceiling=1000, ratio=1.0, window=10_000,
+        max_tokens=0, num_samples=5, encoding=encoding,
+    )
+    explicit_default_seed = longbench_run._select_items(
+        data, TEMPLATE, band_floor=0, band_ceiling=1000, ratio=1.0, window=10_000,
+        max_tokens=0, num_samples=5, encoding=encoding, seed=longbench_run.SELECTION_SEED,
+    )
+    assert [i["_id"] for i in default_call[0]] == [i["_id"] for i in explicit_default_seed[0]]
+
+
+def test_select_items_seed_override_changes_the_draw():
+    # mini's own runtime seed, threaded through main()'s --seed: a different
+    # seed value must draw a different sample from the same pool.
+    encoding = FakeEncoding()
+    data = [_item(f"item-{i:03d}", context_words=10) for i in range(50)]
+    default_ids = [i["_id"] for i in longbench_run._select_items(
+        data, TEMPLATE, band_floor=0, band_ceiling=1000, ratio=1.0, window=10_000,
+        max_tokens=0, num_samples=5, encoding=encoding,
+    )[0]]
+    overridden_ids = [i["_id"] for i in longbench_run._select_items(
+        data, TEMPLATE, band_floor=0, band_ceiling=1000, ratio=1.0, window=10_000,
+        max_tokens=0, num_samples=5, encoding=encoding, seed=424242,
+    )[0]]
+    assert overridden_ids != default_ids

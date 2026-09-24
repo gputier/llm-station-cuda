@@ -27,6 +27,14 @@ from benchrun.config import served_alias
 from benchrun.suites import HF_CACHE_VOLUME, NETWORK, SAFETY_FACTOR, per_request_seconds, request_timeout_s
 
 IMAGE = "bench-livebench"
+# harness/livebench_select_ids.py, bind-mounted at runtime (never baked into
+# the image, module docstring): its own listing/selection mechanism, reused
+# by LiveBenchSuite.run() when limit is set, instead of a second Dockerfile.
+HARNESS_DIR = pathlib.Path(__file__).resolve().parents[2] / "harness"
+SELECT_IDS_SCRIPT = HARNESS_DIR / "livebench_select_ids.py"
+# Dataset listing only (no model call): the same HF fetch/cache path the
+# real run pays for anyway, kept generous for a cold bench-hf-cache volume.
+SELECT_IDS_TIMEOUT_S = 300
 # Newest release in LIVE_BENCH_RELEASES at LIVEBENCH_SHA (pins.env), read
 # from livebench/common.py: LIVE_BENCH_RELEASES literal set.
 RELEASE = "2026-06-25"
@@ -74,7 +82,8 @@ def parse_livebench(judgment_jsonl: pathlib.Path) -> list[dict]:
 class LiveBenchSuite:
     name = "livebench"
 
-    def __init__(self, categories: tuple[str, ...] = ("reasoning", "math"), release: str = RELEASE):
+    def __init__(self, categories: tuple[str, ...] = ("reasoning", "math"), release: str = RELEASE,
+                 limit: int | None = None, seed: int | None = None):
         # common.get_categories_tasks keeps what precedes the first "_" of a
         # category name, so "data_analysis" would load dataset "data".
         for category in categories:
@@ -82,6 +91,32 @@ class LiveBenchSuite:
                 raise ValueError(f"livebench category {category} holds an underscore the pinned harness truncates")
         self.categories = categories
         self.release = release
+        # limit caps EACH requested category to `limit` questions, selected
+        # by harness/livebench_select_ids.py: the first `limit` ids in the
+        # pinned harness's own dataset order without a seed, a seeded random
+        # sample of `limit` with one. None (the default) runs every category
+        # in full, the "run" subcommand's own behavior, unchanged.
+        self.limit = limit
+        self.seed = seed
+
+    def _select_question_ids(self) -> list[str]:
+        cmd = [
+            "docker", "run", "--rm",
+            "--network", NETWORK,
+            "-w", "/livebench/livebench",
+            "-v", f"{SELECT_IDS_SCRIPT}:/select_ids.py:ro",
+            "-v", f"{HF_CACHE_VOLUME}:/root/.cache/huggingface",
+            IMAGE,
+            "python", "/select_ids.py",
+            "--release", self.release,
+            "--limit", str(self.limit),
+        ]
+        if self.seed is not None:
+            cmd += ["--seed", str(self.seed)]
+        cmd += list(self.categories)
+        proc = subprocess.run(cmd, check=True, timeout=SELECT_IDS_TIMEOUT_S, capture_output=True, text=True)
+        selected = json.loads(proc.stdout)
+        return [question_id for category in self.categories for question_id in selected[category]]
 
     def run(self, ctx) -> list[dict]:
         model_alias = served_alias(ctx.cfg)
@@ -89,6 +124,7 @@ class LiveBenchSuite:
         data_dir = ctx.out_dir / result_name / "data"
         data_dir.mkdir(parents=True, exist_ok=True)
         max_tokens = ctx.cfg.sampling.get("max_tokens", 0)
+        question_id_args = ["--question-id", *self._select_question_ids()] if self.limit is not None else []
         subprocess.run(
             [
                 "docker", "run", "--rm",
@@ -112,6 +148,7 @@ class LiveBenchSuite:
                 "--api-base", f"{ctx.base_url}/v1",
                 "--api-key", "x",
                 "--livebench-release-option", self.release,
+                *question_id_args,
             ],
             check=True,
             timeout=subprocess_timeout_s(self.categories, max_tokens),

@@ -43,8 +43,14 @@ MAX_CONSECUTIVE_FAILURES failures in a row (the endpoint went dead
 mid-run). Either way, a dead station must fail the suite, not produce a
 full run of empty answers silently scored as a real 0.
 
-Usage: lcb_run.py <served-alias> [--max-problems N] [lcb_runner.runner.main args...]
+Usage: lcb_run.py <served-alias> [--max-problems N] [--selection-seed S] [lcb_runner.runner.main args...]
 The launcher injects "--model <served-alias>" itself; do not pass --model.
+
+--selection-seed overrides SELECTION_SEED for this run only (defaults to
+SELECTION_SEED itself, so a caller that never passes the flag gets exactly
+today's behavior, bit for bit). benchrun.suites.lcb.LiveCodeBenchSuite only
+passes it when the bench level asks for a randomized, non-reproducible-by-
+default selection (the mini preset); every other caller leaves it unset.
 """
 from __future__ import annotations
 
@@ -122,10 +128,10 @@ def register(alias: str) -> None:
     LanguageModelStore[alias] = model
 
 
-def select_indices(keep: list[int], max_problems: int | None) -> list[int]:
+def select_indices(keep: list[int], max_problems: int | None, seed: int = SELECTION_SEED) -> list[int]:
     if max_problems is None or max_problems >= len(keep):
         return keep
-    return sorted(random.Random(SELECTION_SEED).sample(keep, max_problems))
+    return sorted(random.Random(seed).sample(keep, max_problems))
 
 
 def split_max_problems(args: list[str]) -> tuple[int | None, list[str]]:
@@ -135,8 +141,15 @@ def split_max_problems(args: list[str]) -> tuple[int | None, list[str]]:
     return int(args[i + 1]), args[:i] + args[i + 2:]
 
 
+def split_selection_seed(args: list[str]) -> tuple[int, list[str]]:
+    if "--selection-seed" not in args:
+        return SELECTION_SEED, args
+    i = args.index("--selection-seed")
+    return int(args[i + 1]), args[:i] + args[i + 2:]
+
+
 def load_code_generation_dataset_by_date(release_version="release_v1", start_date=None, end_date=None,
-                                         max_problems=None):
+                                         max_problems=None, selection_seed=SELECTION_SEED):
     # Same signature, rows and bounds as the pinned loader, plus the sample size.
     dataset = load_dataset(
         "livecodebench/code_generation_lite",
@@ -152,7 +165,7 @@ def load_code_generation_dataset_by_date(release_version="release_v1", start_dat
         if (low is None or low <= datetime.fromisoformat(raw))
         and (high is None or datetime.fromisoformat(raw) <= high)
     ]
-    keep = select_indices(keep, max_problems)
+    keep = select_indices(keep, max_problems, seed=selection_seed)
     problems = [CodeGenerationProblem(**row) for row in dataset.select(keep)]
     print(f"Loaded {len(problems)} problems")
     return problems
@@ -165,11 +178,14 @@ def main() -> None:
     if "--model" in rest:
         raise SystemExit("pass the served alias as the first argument, not --model")
     max_problems, rest = split_max_problems(rest)
+    selection_seed, rest = split_selection_seed(rest)
     rest = apply_request_timeout_env(rest)
     register(alias)
     disable_harness_retries()
     scenario_router.load_code_generation_dataset = (
-        lambda *a, **kw: load_code_generation_dataset_by_date(*a, max_problems=max_problems, **kw)
+        lambda *a, **kw: load_code_generation_dataset_by_date(
+            *a, max_problems=max_problems, selection_seed=selection_seed, **kw
+        )
     )
     sys.argv = [sys.argv[0], "--model", alias, *rest]
     from lcb_runner.runner.main import main as run_main

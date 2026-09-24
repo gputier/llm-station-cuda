@@ -73,19 +73,26 @@ def parse_lcb(eval_all: list[dict]) -> list[dict]:
 class LiveCodeBenchSuite:
     name = "lcb"
 
-    def __init__(self, n_problems: int = 100, release: str = "release_v6", after_date: str = "2025-01-01"):
+    def __init__(self, n_problems: int = 100, release: str = "release_v6", after_date: str = "2025-01-01",
+                 selection_seed: int | None = None):
         # The pinned CLI only filters by release and dates (182 problems for
         # release_v6 after 2025-01-01, measured); the launcher's own
         # --max-problems keeps a seeded sample of n_problems of them.
+        # selection_seed overrides the launcher's own fixed SELECTION_SEED
+        # (lcb_run.py) for this run only; left None, the launcher's own
+        # default applies and the docker run argv is byte-identical to
+        # before this parameter existed.
         self.n_problems = n_problems
         self.release = release
         self.after_date = after_date
+        self.selection_seed = selection_seed
 
     def run(self, ctx) -> list[dict]:
         model_alias = served_alias(ctx.cfg)
         result_name = f"rep{ctx.rep}-output"
         output_dir = ctx.out_dir / result_name
         max_tokens = ctx.cfg.sampling.get("max_tokens", 0)
+        selection_seed_args = ["--selection-seed", str(self.selection_seed)] if self.selection_seed is not None else []
         subprocess.run(
             [
                 "docker", "run", "--rm",
@@ -112,6 +119,7 @@ class LiveCodeBenchSuite:
                 "--temperature", str(PLACEHOLDER_TEMPERATURE),
                 "--top_p", str(PLACEHOLDER_TOP_P),
                 "--multiprocess", "1",
+                *selection_seed_args,
             ],
             check=True,
             timeout=subprocess_timeout_s(self.n_problems, max_tokens),

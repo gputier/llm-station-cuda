@@ -14,6 +14,10 @@ from benchrun.config import served_alias
 from benchrun.suites import NETWORK, SAFETY_FACTOR, per_request_seconds, request_timeout_s
 
 IMAGE = "bench-bfcl"
+# BfclSuite's own default categories, read by benchrun.__main__'s mini
+# preset (mini_suites draws one of these at random) rather than duplicated
+# there.
+DEFAULT_CATEGORIES = ("simple_python", "multiple", "multi_turn_base")
 # BFCL prompts (tool schema plus turn history) stay modest; kept generous.
 PROMPT_TOKENS_ESTIMATE = 1500
 # Conservative upper bound on items in any one category (categories vary;
@@ -77,11 +81,20 @@ class BfclSuite:
 
     def __init__(
         self,
-        categories: tuple[str, ...] = ("simple_python", "multiple", "multi_turn_base"),
+        categories: tuple[str, ...] = DEFAULT_CATEGORIES,
         handler: str = "OpenAICompletionsHandler",
+        limit: int | None = None,
+        seed: int | None = None,
     ):
+        # limit caps each category to its first `limit` items (dataset
+        # order) or, with seed set, a seeded random sample of `limit`:
+        # bfcl_run.py's own --limit/--seed (see its module docstring). None
+        # (the default) runs every category in full, the "run" subcommand's
+        # own behavior, unchanged.
         self.categories = categories
         self.handler = handler
+        self.limit = limit
+        self.seed = seed
 
     def run(self, ctx) -> list[dict]:
         model_alias = served_alias(ctx.cfg)
@@ -103,6 +116,10 @@ class BfclSuite:
         # bfcl_run.py reads this to size the OpenAI client's own timeout and
         # to set the SDK's max_retries to 0 (bench/harness/README.md).
         generate_env = [*common_env, "-e", f"BENCH_REQUEST_TIMEOUT_S={request_timeout_s(max_tokens, PROMPT_TOKENS_ESTIMATE)}"]
+        limit_flags = ["--limit", str(self.limit)] if self.limit is not None else []
+        if self.limit is not None and self.seed is not None:
+            limit_flags += ["--seed", str(self.seed)]
+        partial_eval_flags = ["--partial-eval"] if self.limit is not None else []
         subprocess.run(
             [
                 "docker", "run", "--rm",
@@ -114,6 +131,7 @@ class BfclSuite:
                 *category_flags,
                 "--result-dir", "/out/result",
                 "--allow-overwrite",
+                *limit_flags,
             ],
             check=True,
             timeout=generate_timeout_s(n_categories, max_tokens),
@@ -129,6 +147,7 @@ class BfclSuite:
                 *category_flags,
                 "--result-dir", "/out/result",
                 "--score-dir", "/out/score",
+                *partial_eval_flags,
             ],
             check=True,
             timeout=evaluate_timeout_s(n_categories),

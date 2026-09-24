@@ -1,4 +1,5 @@
 import dataclasses
+import json
 import pathlib
 import shutil
 
@@ -87,3 +88,75 @@ def test_run_fails_when_a_category_grades_nothing(tmp_path, monkeypatch):
 def test_category_with_underscore_is_rejected():
     with pytest.raises(ValueError, match="data_analysis"):
         LiveBenchSuite(categories=("reasoning", "data_analysis"))
+
+
+def test_select_question_ids_calls_the_mounted_listing_script(monkeypatch):
+    suite = LiveBenchSuite(categories=("reasoning", "math"), limit=2, seed=42)
+    calls = []
+
+    class _FakeCompletedProcess:
+        stdout = json.dumps({"reasoning": ["reasoning_q1", "reasoning_q2"], "math": ["math_q1", "math_q2"]})
+
+    def fake_run(cmd, check, timeout, capture_output, text):
+        calls.append(cmd)
+        return _FakeCompletedProcess()
+
+    monkeypatch.setattr(livebench.subprocess, "run", fake_run)
+    ids = suite._select_question_ids()
+    assert ids == ["reasoning_q1", "reasoning_q2", "math_q1", "math_q2"]
+    cmd = calls[0]
+    assert cmd[cmd.index("--limit") + 1] == "2"
+    assert cmd[cmd.index("--seed") + 1] == "42"
+    assert str(livebench.SELECT_IDS_SCRIPT) in " ".join(cmd)
+    assert cmd[-2:] == ["reasoning", "math"]
+
+
+def test_run_with_limit_passes_question_id_to_the_main_call(tmp_path, monkeypatch):
+    cfg = dataclasses.replace(CFG, model="spark")
+    ctx = SuiteContext("http://gw:8081", cfg, 1, tmp_path, tmp_path)
+    calls = []
+
+    class _FakeListingResult:
+        stdout = json.dumps({"reasoning": ["zebra_puzzle_3"]})
+
+    def fake_run(cmd, check, **kwargs):
+        calls.append(cmd)
+        if "capture_output" in kwargs:
+            return _FakeListingResult()
+        target = (
+            tmp_path / "rep1-livebench" / "data"
+            / "live_bench" / "reasoning" / "zebra_puzzle" / "model_judgment"
+            / "ground_truth_judgment.jsonl"
+        )
+        target.parent.mkdir(parents=True)
+        shutil.copy(FIX, target)
+
+    monkeypatch.setattr(livebench.subprocess, "run", fake_run)
+    rows = LiveBenchSuite(categories=("reasoning",), limit=1, seed=1).run(ctx)
+    assert [r["passed"] for r in rows] == [1, 0, 1]
+    assert len(calls) == 2  # the listing call, then the real run
+    main_call = calls[1]
+    assert main_call[main_call.index("--question-id") + 1] == "zebra_puzzle_3"
+
+
+def test_run_without_limit_makes_a_single_call_unchanged(tmp_path, monkeypatch):
+    # No limit set (the "run" subcommand's own default): no listing call,
+    # no --question-id, exactly the pre-existing single-call behavior.
+    cfg = dataclasses.replace(CFG, model="spark")
+    ctx = SuiteContext("http://gw:8081", cfg, 1, tmp_path, tmp_path)
+    calls = []
+
+    def fake_run(cmd, check, **kwargs):
+        calls.append(cmd)
+        target = (
+            tmp_path / "rep1-livebench" / "data"
+            / "live_bench" / "reasoning" / "zebra_puzzle" / "model_judgment"
+            / "ground_truth_judgment.jsonl"
+        )
+        target.parent.mkdir(parents=True)
+        shutil.copy(FIX, target)
+
+    monkeypatch.setattr(livebench.subprocess, "run", fake_run)
+    LiveBenchSuite(categories=("reasoning",)).run(ctx)
+    assert len(calls) == 1
+    assert "--question-id" not in calls[0]
