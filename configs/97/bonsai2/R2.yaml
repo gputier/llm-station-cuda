@@ -1,0 +1,70 @@
+machine: "97"
+model: bonsai2
+variant: R2
+label: "PTQ1_0, reasoning_effort medium (sourcee), carte Ada"
+exe: 'D:\LLM-Setup\llama-cpp-prism-bonsai2\llama-server.exe'
+workdir: 'D:\LLM-Setup\llama-cpp-prism-bonsai2'
+args:
+  - '-m'
+  - 'D:\models\ternary-bonsai-2-27b\Ternary-Bonsai-2-27B-PTQ1_0.gguf'
+  - '--n-gpu-layers'
+  - '99'
+  - '--flash-attn'
+  - 'on'
+  - '--jinja'
+  - '--chat-template-file'
+  - 'D:\models\ternary-bonsai-2-27b\chat-template-system-anywhere.jinja'
+  - '--host'
+  - '0.0.0.0'
+  - '--port'
+  - '8080'
+  - '--parallel'
+  - '1'
+  - '--ctx-size'
+  - '262144'
+  - '-b'
+  - '2048'
+  - '-ub'
+  - '512'
+  - '--cache-type-k'
+  - 'q8_0'
+  - '--cache-type-v'
+  - 'q8_0'
+env: {}
+sampling:
+  temperature: 1.0
+  top_p: 0.95
+  top_k: 20
+  min_p: 0.05
+  presence_penalty: 0.0
+  repeat_penalty: 1.0
+  max_tokens: 16384
+chat_template_kwargs:
+  reasoning_effort: medium
+sources:
+  temperature: "https://huggingface.co/prism-ml/Ternary-Bonsai-2-27B-gguf, README, Generation Parameters, mode thinking, lu le 2026-09-24"
+  top_p: "https://huggingface.co/prism-ml/Ternary-Bonsai-2-27B-gguf, README, Generation Parameters, mode thinking, lu le 2026-09-24"
+  top_k: "https://huggingface.co/prism-ml/Ternary-Bonsai-2-27B-gguf, README, Generation Parameters, mode thinking, lu le 2026-09-24"
+  min_p: "https://huggingface.co/prism-ml/Ternary-Bonsai-2-27B-gguf, README, Generation Parameters, mode thinking, lu le 2026-09-24"
+  presence_penalty: "https://huggingface.co/prism-ml/Ternary-Bonsai-2-27B-gguf, README, Generation Parameters, mode thinking, lu le 2026-09-24"
+  repeat_penalty: "https://huggingface.co/prism-ml/Ternary-Bonsai-2-27B-gguf, README, Generation Parameters, mode thinking, lu le 2026-09-24"
+  max_tokens: ".superpowers/sdd/2026-09-23-banc-llm-refonte-plan/progress.md, ruling Y (modele thinking par defaut, xhigh) ; huggingface.co/prism-ml/Ternary-Bonsai-2-27B-gguf, KNOWN_ISSUES.md, section Reasoning and Output Problems, lu le 2026-09-24"
+  reasoning_effort: "https://huggingface.co/prism-ml/Ternary-Bonsai-2-27B-gguf, README, Generation Parameters : \"The model defaults to xhigh reasoning effort; medium is available for shorter responses. Low reasoning effort is unsupported.\" ; KNOWN_ISSUES.md, section Reasoning & Output Problems : \"medium produces noticeably less reasoning and comparable accuracy with moderate output budgets\", et section Reasoning & Output Problems : valeurs acceptees low/medium/xhigh, high rend HTTP 500. Lu le 2026-09-24."
+# Deviation SOURCEE choisie pour cette carte : cette 97 tient a peine R1 en
+# VRAM (15906 Mio sur 16376, marge de 470 Mio) ; la fiche recommande
+# explicitement reasoning_effort medium comme moyen de reduire la
+# consommation de la trace de raisonnement sans changer le format de poids
+# ni le cache KV. Mesure reelle du 2026-09-24 : n_ctx=262144 confirme par
+# /props, VRAM 15918 Mio sur 16376 (comparable a R1, la reduction porte sur
+# le nombre de tokens de raisonnement produits, pas sur la memoire chargee),
+# appel d'outil reel reussi a travers la passerelle du banc (port 8097, une
+# ligne de journal, HTTP 200), prompt_tokens mesure a 281 contre 319 pour R1
+# (le message systeme rendu par le gabarit change de taille selon
+# reasoning_effort).
+#
+# Meme absence de speculation que R1, meme source (Bonsai-demo, README,
+# section Speculative Decoding, lu le 2026-09-24).
+# ctx_proven reste null, comme sur la 99 (docs/phase0-2026-09.md) : ce qui a
+# ete mesure est que le serveur accepte et sert la fenetre demandee (/props),
+# pas que le modele raisonne correctement a cette profondeur.
+ctx_proven: null

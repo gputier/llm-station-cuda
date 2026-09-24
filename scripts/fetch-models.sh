@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
-# Downloads the new model and template files listed in spec section 5.3, onto
-# the 99 only, next to the existing files in D:\models. Never touches the 97
-# (parallel-rules.md: "Do not touch the 97 in any way (no ssh)").
+# Downloads model and template files onto a station's D:\models, verifying
+# each one against an embedded SHA-256. Station 99 (default, no argument) or
+# station 97 (first argument "97"): each keeps its own manifest below, since
+# the two stations do not carry the same files. Usage:
+#   ./fetch-models.sh        # station 99, needs STATION_99_SSH
+#   ./fetch-models.sh 97     # station 97, needs STATION_97_SSH
 #
 # Every entry below was checked against the real Hugging Face repository
 # tree on 2026-09-23 (the API's /api/models/<repo>?blobs=true endpoint, which
@@ -30,13 +33,20 @@
 #     z-lab/Qwen3.8-27B-DFlash2-GGUF)
 set -euo pipefail
 
-if [ -z "${STATION_99_SSH:-}" ]; then
-    echo "STATION_99_SSH is not set (user@host of the 99, see bench/.env.example)." >&2
+STATION="${1:-99}"
+case "$STATION" in
+    99) SSH_VAR=STATION_99_SSH ;;
+    97) SSH_VAR=STATION_97_SSH ;;
+    *) echo "unknown station '${STATION}' (expected 99 or 97)" >&2; exit 2 ;;
+esac
+STATION_SSH="${!SSH_VAR:-}"
+if [ -z "$STATION_SSH" ]; then
+    echo "${SSH_VAR} is not set (user@host of the ${STATION}, see bench/.env.example)." >&2
     exit 2
 fi
 
 # repo|file_in_repo|dest_path_on_D|sha256
-MANIFEST=(
+MANIFEST_99=(
     "XHToken/Spark-X2.5-1.7B-GGUF|Spark-X2.5-1.7B-Q8_0.gguf|D:\\models\\spark-x2.5-4b\\Spark-X2.5-1.7B-Q8_0.gguf|cd77c03185a834bb1162a4b7713520be5838058bfc54873645beff470bb24442"
     "spiritbuun/Qwen3.6-27B-DFlash-GGUF|dflash-draft-3.6-q8_0.gguf|D:\\models\\ternary-bonsai-27b\\dflash-draft-3.6-q8_0.gguf|29ba8b816eedea674e8bdabbd29db8da69539117c76da40e40d2207c0fb224db"
     "prism-ml/Ternary-Bonsai-2-27B-gguf|Ternary-Bonsai-2-27B-PTQ1_0.gguf|D:\\models\\ternary-bonsai-2-27b\\Ternary-Bonsai-2-27B-PTQ1_0.gguf|53107f530aa52eb00912263ab1ee29bd199261c87cd7b4ad4ca1318c1fe33ee3"
@@ -44,6 +54,21 @@ MANIFEST=(
     "froggeric/Qwen-Fixed-Chat-Templates|chat_template.jinja|D:\\models\\shared\\froggeric-chat-template.jinja|e57684bae4156211a55473c5a63be976a405a37ab5be5ae0e5abf1df5349c4b2"
     "unsloth/Muse-Glimmer-30B-GGUF|mmproj-Muse-Glimmer-30B-BF16.gguf|D:\\models\\muse-glimmer-30b\\mmproj-BF16.gguf|d08cdcfa0b41d8e20554b52df404ba4f7b440d0bc502a90038508b6407df8ee1"
 )
+# Station 97 (RTX 4080 SUPER, 16 GB, Ada): bonsai2 R1/R2/R3, ruling of
+# Guillaume of 2026-09-24 (docs/phase0-2026-09.md, "Choix de packing bonsai2
+# R1", Option B). Same PTQ1_0 file and sha256 as the 99's entry above (one
+# Hugging Face repository, same published LFS sha256, checked again via
+# /api/models/prism-ml/Ternary-Bonsai-2-27B-gguf?blobs=true on 2026-09-24);
+# the chat template is not on Hugging Face, it is the same per-model file
+# already deployed to the 99 (bench/configs/99/bonsai2/*.yaml), copied
+# station to station and re-hashed on each side, not fetched again here.
+MANIFEST_97=(
+    "prism-ml/Ternary-Bonsai-2-27B-gguf|Ternary-Bonsai-2-27B-PTQ1_0.gguf|D:\\models\\ternary-bonsai-2-27b\\Ternary-Bonsai-2-27B-PTQ1_0.gguf|53107f530aa52eb00912263ab1ee29bd199261c87cd7b4ad4ca1318c1fe33ee3"
+)
+case "$STATION" in
+    99) MANIFEST=("${MANIFEST_99[@]}") ;;
+    97) MANIFEST=("${MANIFEST_97[@]}") ;;
+esac
 # The muse entry is the mmproj muse/R3 needs and R3 never had: the file names
 # already on disk for this profile (Muse-Glimmer-30B-UD-Q4_K_XL.gguf,
 # mmproj-kquant.gguf, dflash-kquant.gguf) match unsloth/Muse-Glimmer-30B-GGUF
@@ -62,7 +87,7 @@ MANIFEST=(
 # versions (v8 to v19/v16) and are not used here.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-scp -q "$SCRIPT_DIR/fetch-one.ps1" "$STATION_99_SSH:D:/LLM-Setup/bench-specs/fetch-one.ps1"
+scp -q "$SCRIPT_DIR/fetch-one.ps1" "$STATION_SSH:D:/LLM-Setup/bench-specs/fetch-one.ps1"
 
 fetch_one() {
     local repo="$1" path="$2" dest_win="$3" expected="$4"
@@ -79,7 +104,7 @@ fetch_one() {
     # still literally attached, which corrupts a "D:\..." path into
     # something PowerShell reads as an invalid drive name. Double quotes are
     # the ones cmd.exe actually strips, so the arguments below use those.
-    ssh -o ConnectTimeout=8 "$STATION_99_SSH" "powershell -NoProfile -ExecutionPolicy Bypass -File D:\\LLM-Setup\\bench-specs\\fetch-one.ps1 -Repo \"${repo}\" -RepoFile \"${path}\" -Dest \"${dest_win}\" -Expected \"${expected}\""
+    ssh -o ConnectTimeout=8 "$STATION_SSH" "powershell -NoProfile -ExecutionPolicy Bypass -File D:\\LLM-Setup\\bench-specs\\fetch-one.ps1 -Repo \"${repo}\" -RepoFile \"${path}\" -Dest \"${dest_win}\" -Expected \"${expected}\""
 }
 
 status=0
