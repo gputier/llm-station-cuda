@@ -13,11 +13,16 @@ release_v6); the replacement filters on the contest_date column first, with
 the same bounds, and builds the Hugging Face cache in batches of 10 examples
 when it is missing (the default batch of 1000 is killed above 7.2 GiB).
 
-Usage: lcb_run.py <served-alias> [lcb_runner.runner.main args...]
+The pinned CLI has no problem count, only date bounds. The launcher's own
+"--max-problems N" (removed before the pinned CLI sees the arguments) keeps a
+seeded sample of N problems from the date window, the same N for every model.
+
+Usage: lcb_run.py <served-alias> [--max-problems N] [lcb_runner.runner.main args...]
 The launcher injects "--model <served-alias>" itself; do not pass --model.
 """
 from __future__ import annotations
 
+import random
 import sys
 from datetime import datetime
 
@@ -25,6 +30,8 @@ from datasets import load_dataset
 from lcb_runner.benchmarks.code_generation import CodeGenerationProblem
 from lcb_runner.lm_styles import LanguageModel, LanguageModelList, LanguageModelStore, LMStyle
 from lcb_runner.runner import scenario_router
+
+SELECTION_SEED = 0
 
 
 def register(alias: str) -> None:
@@ -35,8 +42,22 @@ def register(alias: str) -> None:
     LanguageModelStore[alias] = model
 
 
-def load_code_generation_dataset_by_date(release_version="release_v1", start_date=None, end_date=None):
-    # Same signature, rows and bounds as the pinned loader.
+def select_indices(keep: list[int], max_problems: int | None) -> list[int]:
+    if max_problems is None or max_problems >= len(keep):
+        return keep
+    return sorted(random.Random(SELECTION_SEED).sample(keep, max_problems))
+
+
+def split_max_problems(args: list[str]) -> tuple[int | None, list[str]]:
+    if "--max-problems" not in args:
+        return None, args
+    i = args.index("--max-problems")
+    return int(args[i + 1]), args[:i] + args[i + 2:]
+
+
+def load_code_generation_dataset_by_date(release_version="release_v1", start_date=None, end_date=None,
+                                         max_problems=None):
+    # Same signature, rows and bounds as the pinned loader, plus the sample size.
     dataset = load_dataset(
         "livecodebench/code_generation_lite",
         split="test",
@@ -51,6 +72,7 @@ def load_code_generation_dataset_by_date(release_version="release_v1", start_dat
         if (low is None or low <= datetime.fromisoformat(raw))
         and (high is None or datetime.fromisoformat(raw) <= high)
     ]
+    keep = select_indices(keep, max_problems)
     problems = [CodeGenerationProblem(**row) for row in dataset.select(keep)]
     print(f"Loaded {len(problems)} problems")
     return problems
@@ -62,8 +84,11 @@ def main() -> None:
     alias, rest = sys.argv[1], sys.argv[2:]
     if "--model" in rest:
         raise SystemExit("pass the served alias as the first argument, not --model")
+    max_problems, rest = split_max_problems(rest)
     register(alias)
-    scenario_router.load_code_generation_dataset = load_code_generation_dataset_by_date
+    scenario_router.load_code_generation_dataset = (
+        lambda *a, **kw: load_code_generation_dataset_by_date(*a, max_problems=max_problems, **kw)
+    )
     sys.argv = [sys.argv[0], "--model", alias, *rest]
     from lcb_runner.runner.main import main as run_main
 

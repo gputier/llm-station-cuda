@@ -74,9 +74,9 @@ class LiveCodeBenchSuite:
     name = "lcb"
 
     def __init__(self, n_problems: int = 100, release: str = "release_v6", after_date: str = "2025-01-01"):
-        # n_problems is not enforced: the pinned CLI only filters by release
-        # and dates, so it documents the expected size of the selection
-        # (182 problems for release_v6 after 2025-01-01, measured).
+        # The pinned CLI only filters by release and dates (182 problems for
+        # release_v6 after 2025-01-01, measured); the launcher's own
+        # --max-problems keeps a seeded sample of n_problems of them.
         self.n_problems = n_problems
         self.release = release
         self.after_date = after_date
@@ -96,6 +96,7 @@ class LiveCodeBenchSuite:
                 "-v", f"{HF_CACHE_VOLUME}:/root/.cache/huggingface",
                 IMAGE,
                 "python", "/lcb_run.py", model_alias,
+                "--max-problems", str(self.n_problems),
                 "--scenario", SCENARIO,
                 "--evaluate",
                 "--release_version", self.release,
