@@ -52,6 +52,7 @@ def test_run_reads_the_file_the_harness_writes(tmp_path, monkeypatch):
     cmd = calls[0]
     assert f"{lcb.HF_CACHE_VOLUME}:/root/.cache/huggingface" in cmd
     assert cmd[cmd.index("--start_date") + 1] == "2025-04-05"
+    assert cmd[cmd.index("--max-problems") + 1] == "100"
     assert "OPENAI_BASE_URL=http://gw:8081/v1" in cmd
     assert seen_timeouts[0] is not None and seen_timeouts[0] > 0
     assert seen_timeouts[0] == lcb.subprocess_timeout_s(100, cfg.sampling.get("max_tokens", 0))
