@@ -103,9 +103,15 @@ def parse_longbench_v2(pred_jsonl_path) -> list[dict]:
 class LongBenchV2Suite:
     name = "longbench_v2"
 
-    def __init__(self, lengths: list[int] | None = None, samples_per_length: int = 20):
+    def __init__(self, lengths: list[int] | None = None, samples_per_length: int = 20,
+                 selection_seed: int | None = None):
         self.lengths = list(lengths) if lengths is not None else [32768, 131072]
         self.samples_per_length = samples_per_length
+        # Overrides the launcher's own fixed SELECTION_SEED (longbench_run.py)
+        # for this run only; left None, the launcher's own default applies
+        # and the docker run argv is byte-identical to before this parameter
+        # existed.
+        self.selection_seed = selection_seed
 
     def run(self, ctx) -> list[dict]:
         model_alias = served_alias(ctx.cfg)
@@ -129,6 +135,7 @@ class LongBenchV2Suite:
             floor = target
 
         rows: list[dict] = []
+        seed_args = ["--seed", str(self.selection_seed)] if self.selection_seed is not None else []
         for length in run_lengths:
             timeout = subprocess_timeout_s(self.samples_per_length, max_tokens, length)
             cell_dir = rep_dir / str(length)
@@ -149,6 +156,7 @@ class LongBenchV2Suite:
                     "--max-tokens", str(max_tokens),
                     "--num-samples", str(self.samples_per_length),
                     "--save-dir", "/out",
+                    *seed_args,
                 ],
                 check=True,
                 timeout=timeout,

@@ -73,6 +73,30 @@ def test_run_reads_the_files_the_harness_writes(tmp_path, monkeypatch):
     assert not any(a.startswith("BENCH_REQUEST_TIMEOUT_S=") for a in calls[1])
 
 
+def test_run_with_limit_passes_limit_seed_and_partial_eval(tmp_path, monkeypatch):
+    ctx = _ctx(tmp_path)
+    calls = []
+    monkeypatch.setattr(bfcl.subprocess, "run", _fake_harness(tmp_path, calls))
+    BfclSuite(categories=("simple_python",), limit=3, seed=42).run(ctx)
+    generate_call, evaluate_call = calls
+    assert generate_call[generate_call.index("--limit") + 1] == "3"
+    assert generate_call[generate_call.index("--seed") + 1] == "42"
+    assert "--partial-eval" in evaluate_call
+    assert "--limit" not in evaluate_call  # generate-only flag
+
+
+def test_run_without_limit_omits_the_new_flags_entirely(tmp_path, monkeypatch):
+    # The "run" subcommand's own default construction: argv must stay
+    # byte-for-byte what it was before --limit/--seed existed.
+    ctx = _ctx(tmp_path)
+    calls = []
+    monkeypatch.setattr(bfcl.subprocess, "run", _fake_harness(tmp_path, calls))
+    BfclSuite().run(ctx)
+    generate_call, evaluate_call = calls
+    assert "--limit" not in generate_call and "--seed" not in generate_call
+    assert "--partial-eval" not in evaluate_call
+
+
 def test_run_fails_when_a_category_has_no_score_file(tmp_path, monkeypatch):
     # A category whose evaluation never ran would otherwise count every one
     # of its items as passed, since score files only list failures.

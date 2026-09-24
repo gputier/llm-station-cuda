@@ -1856,6 +1856,7 @@ git commit -m "feat(bench): trois configurations par modèle"
 
 **Interfaces:**
 - Produces: `python -m benchrun run --machine 99|97 --configs <glob> --suites lcb,aider,bfcl,livebench,ruler,longbench_v2,agentic,speed --reps 3 --out $BENCH_PRIVATE/runs/<campagne>` ; `python -m benchrun pilot --machine 99|97`.
+- Note (2026-09-24) : la sous-commande `pilot` a ete retiree et remplacee par `python -m benchrun bench --preset mini` (bench/harness/README.md, section « Quatre niveaux »). Ce fichier reste tel quel pour l'historique du chantier.
 
 - [ ] **Step 1: `.env.example` et compose**
 

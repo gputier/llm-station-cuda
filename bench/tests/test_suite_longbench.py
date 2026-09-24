@@ -100,6 +100,15 @@ def test_run_reads_the_file_the_harness_writes(tmp_path, monkeypatch):
     cfg = dataclasses.replace(CFG, model="nex")
     expected_timeout = request_timeout_s(cfg.sampling.get("max_tokens", 0), 32768 * longbench.MEASURED_TOKEN_RATIO)
     assert f"BENCH_REQUEST_TIMEOUT_S={expected_timeout}" in calls[0]
+    assert "--seed" not in calls[0]  # default construction: argv unchanged
+
+
+def test_run_passes_seed_only_when_selection_seed_is_set(tmp_path, monkeypatch):
+    ctx = _ctx(tmp_path)
+    calls = []
+    monkeypatch.setattr(longbench.subprocess, "run", _fake_harness(tmp_path, calls))
+    LongBenchV2Suite(lengths=[32768], samples_per_length=3, selection_seed=777).run(ctx)
+    assert calls[0][calls[0].index("--seed") + 1] == "777"
 
 
 def test_run_passes_a_positive_timeout(tmp_path, monkeypatch):

@@ -203,6 +203,12 @@ def main() -> None:
     parser.add_argument("--max-tokens", type=int, required=True)
     parser.add_argument("--num-samples", type=int, required=True)
     parser.add_argument("--save-dir", required=True)
+    # Overrides SELECTION_SEED for this run only (defaults to SELECTION_SEED
+    # itself, so a caller that never passes the flag gets exactly today's
+    # behavior, bit for bit). benchrun.suites.longbench.LongBenchV2Suite only
+    # passes it for the mini bench level's randomized, non-reproducible-by-
+    # default selection; every other caller leaves it unset.
+    parser.add_argument("--seed", type=int, default=SELECTION_SEED)
     args = parser.parse_args()
 
     import tiktoken
@@ -214,7 +220,7 @@ def main() -> None:
 
     selected, skipped_ids = _select_items(
         data, template, args.band_floor, args.context_length, args.ratio, args.window,
-        args.max_tokens, args.num_samples, encoding,
+        args.max_tokens, args.num_samples, encoding, seed=args.seed,
     )
 
     save_dir = pathlib.Path(args.save_dir)

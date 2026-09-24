@@ -559,3 +559,121 @@ across every suite:
    (`None`): every client now carries its own correctly-sized timeout, and
    the gateway must never cut a slow-but-progressing relay out from under a
    client that is still legitimately waiting for it.
+
+## Four bench levels: mini, medium, large, Full (2026-09-24)
+
+`python -m benchrun bench --preset mini|medium|large --machine 99|97
+[--models model1,model2] --out DIR [--seed N]` runs one of three fixed
+levels on every `R1`/`R2`/`R3` configuration of the requested models (every
+model with a config for that machine when `--models` is not given), one
+machine, one pass, `reps 1`. Full is unchanged: it is still `python -m
+benchrun run --machine 99|97 --configs <glob> --suites
+lcb,aider,bfcl,livebench,ruler,longbench_v2,agentic,speed --reps N --out
+DIR`, exactly the argv, suite sizes and output paths it always had
+(`bench/tests/test_main.py` proves `campaign_suites` is untouched). Each
+level writes under its own `DIR/<preset>/<machine>` subtree, so mini,
+medium, large and a Full campaign's own `--out` never collide.
+
+Sizes actually coded (mini/medium/large), one item counted per suite (or per
+BFCL/LiveBench category for medium and large):
+
+- `lcb` (LiveCodeBench problems): mini 1, medium 10, large 30.
+- `aider` (Aider Polyglot exercises, from the frozen 60-exercise subset):
+  mini 1, medium 5, large 20.
+- `bfcl` (BFCL v4 items, per category `simple_python`/`multiple`/
+  `multi_turn_base`): mini 1 item in ONE randomly drawn category, medium 5
+  per category, large 30 per category.
+- `livebench` (questions, per category `reasoning`/`math`): mini 1 question
+  in ONE randomly drawn category, medium 5 per category, large 25 per
+  category.
+- `ruler` (RULER tasks, examples per task, lengths): mini 1 task drawn at
+  random from the 13 canonical tasks, 1 example, 32768 only; medium all 13
+  tasks, 1 example, 32768 only; large all 13 tasks, 3 examples, 32768 and
+  131072.
+- `longbench_v2` (samples per length, lengths): mini 1 sample at 32768 only;
+  medium 2 samples at 32768 only; large 5 samples at 32768 and 131072.
+- `agentic` (in-house tasks): mini 1 task drawn at random, medium 2, large 8
+  (both medium and large take the first N tasks sorted by id).
+- `speed` (throughput, not pass/fail): mini prompt 512 only, `reps 1`;
+  medium and large use `SpeedSuite`'s own current default (512/8192/32768,
+  `reps 3`).
+
+**mini's own draw.** Every mini item above is drawn at random, one seed per
+launch (`random.SystemRandom` if `--seed` is not given), the SAME seed for
+every model and every one of its three profiles in that launch (so R1/R2/R3
+stay comparable to each other, and every model sees the same questions).
+The seed is written to `DIR/mini/<machine>/seed.txt` and can be replayed
+with `--seed N`. `medium` and `large` stay fully deterministic (first N in
+each harness's own dataset order, or that harness's own fixed selection
+seed): re-running either with the same `--models` always grades the exact
+same items. Selection mechanism, per suite (native to each pinned harness,
+never reimplemented):
+- `lcb`: `harness/lcb_run.py`'s own `select_indices`/`SELECTION_SEED`, now
+  overridable with `--selection-seed` (defaults to the fixed constant, so a
+  caller that never passes it, including "run", is unaffected).
+- `bfcl`: `harness/bfcl_run.py`'s new `--limit`/`--seed`, which writes the
+  pinned harness's own `test_case_ids_to_generate.json` (read by
+  `bfcl_eval`'s `generate --run-ids` path) with the first N or a seeded
+  random sample of N ids per category, read via the pinned harness's own
+  `load_dataset_entry`. `evaluate` gets `--partial-eval` alongside whenever
+  `--limit` was used, since the result set is then a strict subset of the
+  category.
+- `livebench`: a new script, `harness/livebench_select_ids.py`, bind-mounted
+  into `bench-livebench` at run time (no image rebuild: it is never baked
+  into the Dockerfile), reuses the pinned harness's own
+  `common.get_categories_tasks`/`load_questions` to list every question id
+  per category, then applies the same first-N/seeded-random selection as
+  BFCL. The resulting ids are passed to `run_livebench.py` as
+  `--question-id`, its own native selection flag.
+- `ruler`: the 1/13 tasks are chosen from `RulerSuite`'s own `tasks`
+  parameter (a plain Python list, no harness call needed); the per-task
+  example count is RULER's own `--num-samples`.
+- `longbench_v2`: `harness/longbench_run.py`'s own `_select_items`/
+  `SELECTION_SEED`, now overridable with `--seed` the same way `lcb_run.py`
+  is.
+- `aider`/`agentic`: chosen host-side by `benchrun.__main__`
+  (`_random_aider_exercises_file`/`_random_agentic_tasks_dir` for mini,
+  `_first_n_aider_exercises_file`/`_first_n_agentic_tasks_dir` for medium
+  and large), no harness change needed since both sets already live as
+  plain files on the host.
+
+**mini's response cap.** Every graded mini response is capped at 2048
+tokens (`benchrun.__main__.MINI_MAX_TOKENS`), through `sampling_override`,
+the same mechanism `SpeedSuite` already relies on: `bench/configs` is never
+touched. `speed` is not capped (its own prompt/gen_tokens sizing is
+untouched by mini).
+
+**mini's report.** At the end of a mini launch, `benchrun.report.build_mini_report`
+writes `DIR/mini/<machine>/rapport.md`, built only from the results each
+suite already wrote to disk and the gateway's own journal (`run_id`/
+`suite`/`rep`, matched the same way `benchrun.watch` already reads them
+back), no model call of its own. It states the date, the seed and the 2048-
+token cap up front, and warns that these numbers measure the model under
+that cap, do not compare to a Full campaign, and (one question per test)
+can only ever be 0 % or 100 % per test. Then, one section per profile
+(`machine/model/variant`), one row per test: what the test judges in one
+short phrase, the question id, pass/fail, output tokens (summed across every
+request for that item, e.g. a multi-turn BFCL item or an agentic task),
+whether it was cut off at the cap, its duration and its decode throughput
+(both summed/averaged the same way); then a summary line: passes out of 8,
+mean tokens, how many responses were cut off, total duration.
+
+**Estimated duration.** Measured 2026-09-24: about 261 s per reasoning
+response on the 99, about 201 s on the 97 (both mean, per response, no
+context-length or output-length breakdown yet). This is a rough estimate,
+not a measured mini/medium/large pass: mini targets roughly 10 min per
+model (one question per suite, capped at 2048 tokens); medium and large are
+larger by construction and take longer, proportionally to their per-suite
+item counts above, for the same reasoning-heavy models. Since mini/medium/
+large now run all three profiles (R1/R2/R3) of each model instead of one,
+the wall time of a launch is about three times a single profile's own
+estimate.
+
+**Live progress.** `bench/benchrun/watch.py` reads a single `--campaign`
+(unchanged, not modified by this change): to watch a bench-level launch
+instead of a Full campaign, pass `--runs` the SAME directory the launch's
+own `--out` pointed at, and `--campaign mini` (or `medium`, `large`) instead
+of the default `pilot`, e.g. a launch started with `--out
+$BENCH_PRIVATE/runs/bench-2026-09-24` is watched with `python -m
+benchrun.watch --runs $BENCH_PRIVATE/runs/bench-2026-09-24 --campaign
+mini`.

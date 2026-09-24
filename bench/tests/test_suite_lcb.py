@@ -59,3 +59,21 @@ def test_run_reads_the_file_the_harness_writes(tmp_path, monkeypatch):
     assert "OPENAI_BASE_URL=http://gw:8081/v1" in cmd
     assert seen_timeouts[0] is not None and seen_timeouts[0] > 0
     assert seen_timeouts[0] == lcb.subprocess_timeout_s(100, cfg.sampling.get("max_tokens", 0))
+    assert "--selection-seed" not in cmd  # default construction: argv unchanged
+
+
+def test_run_passes_selection_seed_only_when_set(tmp_path, monkeypatch):
+    cfg = dataclasses.replace(CFG, model="spark")
+    ctx = SuiteContext("http://gw:8081", cfg, 1, tmp_path, tmp_path)
+    calls = []
+
+    def fake_run(cmd, check, **kwargs):
+        calls.append(cmd)
+        target = tmp_path / "rep1-output" / "bench-spark-R1" / "Scenario.codegeneration_1_0.6_eval_all.json"
+        target.parent.mkdir(parents=True)
+        shutil.copy(FIX, target)
+
+    monkeypatch.setattr(lcb.subprocess, "run", fake_run)
+    LiveCodeBenchSuite(release="release_v6", after_date="2025-04-05", selection_seed=999).run(ctx)
+    cmd = calls[0]
+    assert cmd[cmd.index("--selection-seed") + 1] == "999"

@@ -20,11 +20,27 @@ already accounts for a failed item, a silent SDK resend on a timeout it
 never sees is what abandons the server-side request instead (module
 docstring of bench/harness/lcb_run.py describes the same defect proven live
 on the 99, 2026-09-24).
+
+generate's own "--limit N" (optionally "--seed S") caps each requested
+category to N items instead of running it in full, through the pinned
+harness's own run-ids mechanism (selected_ids_by_category writes
+TEST_IDS_TO_GENERATE_PATH, then generation_main runs with run_ids=True):
+the first N ids in the dataset's own order without a seed, a seeded random
+sample of N with one. evaluate's own "--partial-eval" (unchanged, already
+present) must be passed alongside on the matching evaluate call whenever
+generate used "--limit", since the result files then hold a strict subset of
+each category and a full evaluation would otherwise count every missing
+item as a hard failure. Neither flag existed before benchrun's mini/medium/
+large bench levels (2026-09-24); a caller that never passes them (the "run"
+subcommand's full campaign) gets exactly the previous behavior.
 """
 from __future__ import annotations
 
+import json
 import os
+import random
 import sys
+from pathlib import Path
 from types import SimpleNamespace
 
 
@@ -85,15 +101,54 @@ def _parse_categories(rest: list[str]) -> tuple[list[str], dict[str, str]]:
             extra["run_ids"] = "1"
         elif token == "--partial-eval":
             extra["partial_eval"] = "1"
+        elif token == "--limit":
+            extra["limit"] = next(args_iter)
+        elif token == "--seed":
+            extra["seed"] = next(args_iter)
         else:
             raise SystemExit(f"unknown flag: {token}")
     return categories, extra
 
 
+# Fixed path the pinned harness itself reads when generation_main() is called
+# with run_ids=True (bfcl_eval._llm_response_generation.get_involved_test_entries
+# -> load_test_entries_from_id_file(TEST_IDS_TO_GENERATE_PATH), not something
+# this launcher can point elsewhere: the constant lives in the pinned repo,
+# not ours to edit (bench/harness/README.md rule 3).
+def selected_ids_by_category(categories: list[str], limit: int, seed: int | None) -> dict[str, list[str]]:
+    """Native selection, not a reimplementation: bfcl_eval.utils.load_dataset_entry
+    is the pinned harness's own dataset loader (the same one generation_main
+    uses internally), read here only to pick which of its ids go into the
+    run-ids file the harness already knows how to consume. Deterministic
+    (first `limit` ids in the dataset's own order) when seed is None,
+    seeded-random (one random.Random per category, so categories do not
+    share a draw) otherwise, kept reproducible across the three profiles of
+    one model within a single bench launch by reusing the same seed value."""
+    from bfcl_eval.utils import load_dataset_entry
+
+    selected: dict[str, list[str]] = {}
+    for category in categories:
+        ids = [entry["id"] for entry in load_dataset_entry(category)]
+        if seed is None:
+            selected[category] = ids[:limit]
+        else:
+            rng = random.Random(f"{seed}:{category}")
+            selected[category] = rng.sample(ids, min(limit, len(ids)))
+    return selected
+
+
 def generate(alias: str, rest: list[str]) -> None:
     from bfcl_eval._llm_response_generation import main as generation_main
+    from bfcl_eval.constants.eval_config import TEST_IDS_TO_GENERATE_PATH
 
     categories, extra = _parse_categories(rest)
+    limit = extra.get("limit")
+    run_ids = bool(extra.get("run_ids"))
+    if limit is not None:
+        seed = int(extra["seed"]) if "seed" in extra else None
+        selection = selected_ids_by_category(categories, int(limit), seed)
+        Path(TEST_IDS_TO_GENERATE_PATH).write_text(json.dumps(selection), encoding="utf-8")
+        run_ids = True
     args = SimpleNamespace(
         model=[alias],
         test_category=categories,
@@ -108,7 +163,7 @@ def generate(alias: str, rest: list[str]) -> None:
         local_model_path=None,
         result_dir=extra.get("result_dir"),
         allow_overwrite=bool(extra.get("allow_overwrite")),
-        run_ids=bool(extra.get("run_ids")),
+        run_ids=run_ids,
         enable_lora=False,
         max_lora_rank=None,
         lora_modules=None,
