@@ -393,3 +393,78 @@ synthetic generation; still comfortably inside the 7.75 GiB VM budget given
 this harness rule's own "one container at a time" discipline, so left as
 measured rather than optimized (a streaming JSON parser would need a new
 dependency for a cost that already fits).
+
+## Agentic suite: public sub-score (Task 12)
+
+The agentic suite (`benchrun/suites/agentic.py`) scores two populations,
+reported separately by their `item_id` prefix:
+
+- `private/*`: 9 tasks built from real fix commits in repositories under
+  the machine's own checkout root (`BENCH_REPOS_ROOT`, see below; the
+  README used to assume `~/git_projects`, stale on a machine where that
+  root lives elsewhere, e.g. `/Volumes/Git Ext./git_projects`; see
+  `Bench-LLM/tasks/SOURCES.md` in the companion private repository for
+  provenance). A private task's `task.json` carries
+  everything needed to reproduce its tarball byte-for-byte (`repo`,
+  `fix_commit`, `parent_commit`, `subdir`, `tree_id`, `benchrun.tasks.builder`);
+  the tarball itself is a derived artifact, cached at `Bench-LLM/.cache/tasks/<tree_id>.tar.gz`
+  (gitignored, never committed) and rebuilt on demand by `AgenticSuite` if
+  missing, its tree id checked against the recorded one before use.
+  `BENCH_REPOS_ROOT` (environment variable) must be set to that rebuild's
+  own checkout root for the one case that needs it, a cache miss;
+  `AgenticSuite` never requires it otherwise and raises a clear
+  `ReposRootNotConfiguredError` naming the variable if a rebuild is needed
+  and it is unset. `bench/.env.example` normally documents this, but this
+  repository's own write policy blocks a file matching `.env*`, so it is
+  documented here instead: copy the line below into your own shell profile
+  or `.env`, pointing at wherever your checkout root actually is:
+  `BENCH_REPOS_ROOT=/Volumes/Git Ext./git_projects`.
+- `swe/*`: a seeded subset of public tasks drawn from
+  [nebius/SWE-rebench-leaderboard](https://huggingface.co/datasets/nebius/SWE-rebench-leaderboard)
+  on Hugging Face, licensed CC-BY-4.0. Dataset pinned by revision sha
+  (`SWE_REBENCH_SHA` in `pins.env`); selected instance ids, draw seed and
+  selection rule recorded in `Bench-LLM/sets/swe-rebench-subset.txt`
+  (script: `Bench-LLM/sets/draw_swe_rebench_subset.py`).
+
+Attribution (CC-BY-4.0): SWE-rebench-leaderboard is published by Nebius.
+Citation:
+
+```bibtex
+@misc{badertdinov2025swerebenchautomatedpipelinetask,
+      title={SWE-rebench: An Automated Pipeline for Task Collection and Decontaminated Evaluation of Software Engineering Agents},
+      author={Ibragim Badertdinov and Alexander Golubev and Maksim Nekrashevich and Anton Shevtsov and Simon Karasik and Andrei Andriushchenko and Maria Trofimova and Daria Litvintseva and Boris Yangel},
+      year={2025},
+      eprint={2505.20411},
+      archivePrefix={arXiv},
+      primaryClass={cs.SE},
+      url={https://arxiv.org/abs/2505.20411}
+}
+```
+
+Each `swe/*` task reuses the instance's own published docker_image (Docker
+Hub, `swerebench/*`) rather than rebuilding an environment from scratch: the
+dataset ships one ready image per instance, and the harness's own design rule
+is to reuse a tool's native mechanism instead of reinventing it. Every image
+seen so far is `linux/amd64`; this host is `arm64` and runs them under QEMU
+emulation (`--platform linux/amd64`), which is markedly slower than a native
+pull/run.
+
+Real finding, corrects an earlier draft of this section: Claude Code's
+runtime (a Bun-compiled standalone executable) does not survive that
+emulation. Measured live: `claude --version` inside the SWE image prints
+`ASSERTION FAILED: MemoryExhaustion` from Bun's JSC heap allocator and aborts
+(`SIGABRT`, exit 134) with abundant free memory available, a QEMU/Bun
+interaction bug, not a resource limit. So the agent phase never runs inside
+the SWE image at all: `AgenticSuite.run` starts a SECOND, native (arm64)
+container from the same `bench-agent` image the private tasks use, with
+Claude Code already baked in at build time (never installed at prepare
+time, `agent.Dockerfile`'s `CLAUDE_CODE_VERSION` build arg, same
+`pins.env` entry the private-task image reads). The SWE container's
+`/testbed` is copied onto the host with `docker cp` before the agent phase
+and copied back after it; the SWE container itself only ever runs prepare
+(nothing: its dependencies are already installed in the published image)
+and grade (apply `test_patch`, never shown to the agent, then run
+`test_cmd` against the agent's edits). Grading checks that every id in
+`fail_to_pass` and `pass_to_pass` comes back `PASSED`, not just the test
+command's exit code, since a SWE task's `test_cmd` legitimately runs tests
+outside those two sets too.
