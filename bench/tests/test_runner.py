@@ -2,7 +2,8 @@ import dataclasses
 import json
 import pathlib
 import pytest
-from benchrun.runner import Campaign, CampaignError
+from benchrun import runner as runner_mod
+from benchrun.runner import Campaign, CampaignError, SuiteSkipped
 from benchrun.config import load_config
 
 CFG = load_config(pathlib.Path(__file__).parent / "fixtures" / "config_ok.yaml")
@@ -125,6 +126,13 @@ class EmptySuite:
         return []
 
 
+class NotApplicableSuite:
+    name = "longctx"
+
+    def run(self, ctx):
+        raise SuiteSkipped("every length above the served window")
+
+
 class SystemExitSuite:
     """Raises SystemExit on its second call, as if a suite called sys.exit()
     partway through a pass: the first rep's .done must survive, stop() must
@@ -161,6 +169,28 @@ class FailsForModel:
 
 def make(tmp_path, station=None, suite=None):
     return Campaign(station or FakeStation(), "http://gw", [suite or FakeSuite()], tmp_path, reps=3), suite
+
+
+def test_set_context_lays_the_suite_override_over_the_config_sampling(tmp_path, monkeypatch):
+    posted = []
+
+    class _Resp:
+        def read(self):
+            return b"{}"
+
+    def fake_urlopen(req, timeout=None):
+        posted.append(json.loads(req.data))
+        return _Resp()
+
+    class PinsMaxTokens(FakeSuite):
+        sampling_override = {"max_tokens": 256}
+
+    monkeypatch.setattr(runner_mod.urllib.request, "urlopen", fake_urlopen)
+    camp, _ = make(tmp_path)
+    camp._set_context(dataclasses.replace(CFG, sampling={"temperature": 0.6, "max_tokens": 16384}), PinsMaxTokens(), 1)
+    camp._set_context(dataclasses.replace(CFG, sampling={"temperature": 0.6, "max_tokens": 16384}), FakeSuite(), 1)
+    assert posted[0]["sampling"] == {"temperature": 0.6, "max_tokens": 256}
+    assert posted[1]["sampling"] == {"temperature": 0.6, "max_tokens": 16384}
 
 
 def test_runner_runs_three_reps_after_warmup(tmp_path, monkeypatch):
@@ -229,6 +259,20 @@ def test_runner_records_a_suite_that_grades_nothing(tmp_path, monkeypatch):
     cell = tmp_path / "99" / "tiel" / "R1"
     assert not (cell / "empty" / "rep1.done").exists()
     assert "graded no item" in json.loads((cell / "meta.json").read_text())["error"]
+
+
+def test_runner_records_a_skipped_suite_without_failing_the_config(tmp_path, monkeypatch):
+    # A long-context suite on an 8192-token model does not apply: the rep is
+    # marked skipped with its reason and done, the configuration does not fail.
+    camp, _ = make(tmp_path, suite=NotApplicableSuite())
+    monkeypatch.setattr(camp, "_set_context", lambda *a: None)
+    camp.run([CFG])
+    out = tmp_path / "99" / "tiel" / "R1" / "longctx"
+    assert (out / "rep1.skipped").read_text() == "every length above the served window"
+    assert (out / "rep1.done").exists()
+    assert not (out / "rep1.jsonl").exists()
+    assert all((out / f"rep{k}.skipped").exists() for k in (1, 2, 3))
+    assert "error" not in json.loads((tmp_path / "99" / "tiel" / "R1" / "meta.json").read_text())
 
 
 def test_runner_records_start_failure_and_continues(tmp_path, monkeypatch):
