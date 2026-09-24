@@ -306,6 +306,20 @@ template maison, T1.0/0.95/20).
 - R3 : template froggeric. Hypothèse : c'est lui qui cause la balise `</think>` parasite qui coupe
   une réponse sur deux. La requête fautive est capturée en phase 0 pour le prouver.
 
+Arbitrage du 24/09/2026 : Bonsai 2 ajouté sur la 97.
+
+**bonsai2**, Ternary-Bonsai-2-27B, PTQ1_0, fork PrismML de llama.cpp (build
+CUDA 12.4 Windows, la fiche demande cette variante pour les cartes Ada).
+Aucune spéculation : le dépôt source de référence pour l'exécution du modèle
+(`PrismML-Eng/Bonsai-demo`) ne publie aucun drafter officiel pour cette
+génération.
+- R1 : sampling thinking de la fiche, fenêtre 262144, KV `q8_0`.
+- R2 : `reasoning_effort: medium` (sourcé, fiche et KNOWN_ISSUES).
+- R3 : KV `q4_0` (non sourcé, marge VRAM sur cette carte de 16 Go).
+
+Détail, mesures et sources complètes : `docs/phase0-2026-09.md`, section
+"Bonsai 2 sur la 97 (2026-09-24)".
+
 ### Arbitrage du 23/09/2026
 
 Guillaume a tranché quatre points de la tâche 15, appliqués ci-dessus :

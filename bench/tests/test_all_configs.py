@@ -6,7 +6,7 @@ from benchrun.config import load_config
 ROOT = pathlib.Path(__file__).parents[1] / "configs"
 EXPECTED = {
     "99": ["muse", "qwen", "qwenu", "qwenf", "qwent", "tiel", "ornith", "kat", "nex", "spark", "bonsai", "bonsai2"],
-    "97": ["tiel", "qwen36"],
+    "97": ["tiel", "qwen36", "bonsai2"],
 }
 
 
