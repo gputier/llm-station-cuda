@@ -53,6 +53,23 @@ MANIFEST_99=(
     "JonathanColetti/Qwen3.8-27B-Uncensored-GGUF|Qwen3.8-27B-Uncensored-Q6_K.gguf|D:\\models\\qwen3.8-27b-uncensored\\Qwen3.8-27B-Uncensored-Q6_K.gguf|a50aa1478295b58ee3d93eabe02c17f6d5fcf6cb787fd8a0ab07ac629a46cae6"
     "froggeric/Qwen-Fixed-Chat-Templates|chat_template.jinja|D:\\models\\shared\\froggeric-chat-template.jinja|e57684bae4156211a55473c5a63be976a405a37ab5be5ae0e5abf1df5349c4b2"
     "unsloth/Muse-Glimmer-30B-GGUF|mmproj-Muse-Glimmer-30B-BF16.gguf|D:\\models\\muse-glimmer-30b\\mmproj-BF16.gguf|d08cdcfa0b41d8e20554b52df404ba4f7b440d0bc502a90038508b6407df8ee1"
+    # Three models added 2026-09-24 on Guillaume's ruling (task t16a). Each
+    # sha256 checked against /api/models/<repo>?blobs=true on 2026-09-24.
+    "XingChen-AGI/Xing4.0-29B-A4B-GGUF|xing4_0-29b-IQ4_NL.gguf|D:\\models\\xing4.0-29b-a4b\\xing4_0-29b-IQ4_NL.gguf|9c9c81cf83b6ce974d3440088318de83b727c0064124ca6c3c919289adadb4dd"
+    "tsinghua-sigs-robot-lab/VeriLoop-E2-Q8_0-GGUF|VeriLoop-E2-Q8_0.gguf|D:\\models\\veriloop-e2\\VeriLoop-E2-Q8_0.gguf|6204a47274cfbc0c69c39877fb06615ce842bbab264eea77e2e0a5e3ae2fb8e8"
+    # tsinghua-sigs-robot-lab/VeriLoop-E2-Q8_0-GGUF started answering HTTP 401
+    # anonymously around 2026-09-24 09:50 UTC, after the main file above was
+    # already downloaded and hash-verified: gated or pulled mid-session, see
+    # docs/phase0-2026-09.md. The MTP draft therefore comes from the sibling
+    # public repository. Its BF16 draft (mtp-VeriLoop-E2-BF16.gguf) was tried
+    # first and rejected by b11156 at load with a real tensor-count error
+    # ("expected 19, got 18"); not fetched here any more, see
+    # docs/phase0-2026-09.md. The Q8_0 draft from the same sibling repository
+    # loads cleanly (same file the gated repo also published, same sha256):
+    # checked against
+    # /api/models/tsinghua-sigs-robot-lab/VeriLoop-E2-GGUF?blobs=true on 2026-09-24.
+    "tsinghua-sigs-robot-lab/VeriLoop-E2-GGUF|mtp-VeriLoop-E2-Q8_0.gguf|D:\\models\\veriloop-e2\\mtp-VeriLoop-E2-Q8_0.gguf|b9920ce49c43dc94267a51e986573b1178c2250a7a362093ecade4275792ef8f"
+    "bartowski/Altworld_Hemmingway-1-GGUF|Altworld_Hemmingway-1-Q5_K_M.gguf|D:\\models\\hemmingway-1\\Altworld_Hemmingway-1-Q5_K_M.gguf|b0ebd5bab0919114303dfb20d8e517fdd75d92a8d20ffa8005b5de54abc05f2e"
 )
 # Station 97 (RTX 4080 SUPER, 16 GB, Ada): bonsai2 R1/R2/R3, ruling of
 # Guillaume of 2026-09-24 (docs/phase0-2026-09.md, "Choix de packing bonsai2
@@ -62,9 +79,42 @@ MANIFEST_99=(
 # the chat template is not on Hugging Face, it is the same per-model file
 # already deployed to the 99 (bench/configs/99/bonsai2/*.yaml), copied
 # station to station and re-hashed on each side, not fetched again here.
+#
+# Three more models added to the 97 campaign, ruling of Guillaume of
+# 2026-09-24: qwen36apex, katapex, occamy, all from the collection
+# huggingface.co/collections/IsValorum/apex-i-miniplus-v21-current. Every
+# size and sha256 below was read from
+# /api/models/<repo>?blobs=true on 2026-09-24, which matches the byte counts
+# Guillaume gave in the mandate exactly (15229762144, 14751301024,
+# 14751300704). GGUF header read directly (ranged GET on the resolve URL,
+# ASCII near the start of the file, no model loaded, no GPU touched):
+# general.architecture "qwen35moe" on all three, same key our existing kat
+# and nex configs on the 99 already run on b11156, so no --override-kv is
+# needed (unlike nex/bonsai on the 99, whose real key differed from the
+# assumed one).
 MANIFEST_97=(
     "prism-ml/Ternary-Bonsai-2-27B-gguf|Ternary-Bonsai-2-27B-PTQ1_0.gguf|D:\\models\\ternary-bonsai-2-27b\\Ternary-Bonsai-2-27B-PTQ1_0.gguf|53107f530aa52eb00912263ab1ee29bd199261c87cd7b4ad4ca1318c1fe33ee3"
+    "IsValorum/Qwen3.6-35B-A3B-MTP-APEX-I-MiniPlus-V2.1-GGUF|Qwen3.6-35B-A3B.APEX-I-MiniPlus-V2.1.gguf|D:\\models\\qwen36apex\\Qwen3.6-35B-A3B.APEX-I-MiniPlus-V2.1.gguf|afe2de904fa378863e25738bcdb0392ba48b9725b19ca8df738a5005139f3c42"
+    "IsValorum/Qwen3.6-35B-A3B-MTP-APEX-I-MiniPlus-V2.1-GGUF|mtp-Qwen3.6-35B-A3B-Q4_0.gguf|D:\\models\\qwen36apex\\mtp-Qwen3.6-35B-A3B-Q4_0.gguf|623351aeccfb9a26991ea6a7f0d24ef993a975fb2a508e4d95d3be1f72bf58da"
+    "IsValorum/KAT-Coder-V2.5-Dev-APEX-I-MiniPlus-V2.1-GGUF|KAT-Coder-V2.5-Dev.APEX-I-MiniPlus-V2.1.gguf|D:\\models\\katapex\\KAT-Coder-V2.5-Dev.APEX-I-MiniPlus-V2.1.gguf|aa01217072e43435daa9159076572d2da6b866824b3ebb507ce81652c864bca7"
+    "IsValorum/Occamy-1.0-APEX-I-MiniPlus-V2.1-GGUF|Occamy-1.0.APEX-I-MiniPlus-V2.1.gguf|D:\\models\\occamy\\Occamy-1.0.APEX-I-MiniPlus-V2.1.gguf|5fa88e7a3e7ea4833d6e45bb3dcaf34aa5a8ebaf85cebe3794c4a94f4d4cb303"
+    "IsValorum/Occamy-1.0-APEX-I-MiniPlus-V2.1-GGUF|mmproj-Accio-Lab_occamy-1.0-Q8_0.gguf|D:\\models\\occamy\\mmproj-Accio-Lab_occamy-1.0-Q8_0.gguf|17c9213e22ccf9b1b68c64eb7a4abd4ef5166d6164b7d9720d34e06c309fcd82"
 )
+# The Q4_0 MTP draft is the file IsValorum actually published (discussion #1
+# of the Abliterated sibling repo, read 2026-09-24: a user named Axway
+# re-quantized the forgotten Q8_0 draft down to Q3_K_M and measured the same
+# acceptance rate, 0.86133 vs 0.86429 over about 3300 generated drafts;
+# IsValorum replied "I forgot to quantize the MTP files for all the V2.1
+# models" and uploaded Q4_0 as the fix). Q3_K_M was never republished by
+# IsValorum, only measured by a third party in the discussion thread: this
+# manifest takes the file that is actually on the repository, Q4_0. Q8_0
+# (1989597056 bytes) is also published but not fetched: at 14.18 GiB of
+# weights already on a 16 GiB card, the extra 0.85 GiB over Q4_0 buys nothing
+# usable, see docs/phase0-2026-09.md for the VRAM measurement.
+# occamy's mmproj is the one file the repository publishes; the base card
+# (Accio-Lab/occamy-1.0) advertises OCR/document use of it, so it is kept
+# mounted on all three of occamy's variants rather than reserved for one, the
+# same way muse always mounts its own mmproj on the 99.
 case "$STATION" in
     99) MANIFEST=("${MANIFEST_99[@]}") ;;
     97) MANIFEST=("${MANIFEST_97[@]}") ;;

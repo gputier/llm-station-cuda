@@ -1,0 +1,52 @@
+machine: "99"
+model: hemmingway
+variant: R1
+label: "fidele a la fiche (seul sampling publie, generation_config.json) ; Q5_K_M choisi pour loger 262144 avec KV q8_0 sur cette carte ; MTP embarque active (--spec-type draft-mtp)"
+exe: 'D:\LLM-Setup\llama-cpp-b11156\llama-server.exe'
+workdir: 'D:\LLM-Setup\llama-cpp-b11156'
+cudabin: null
+args:
+  - '-m'
+  - 'D:\models\hemmingway-1\Altworld_Hemmingway-1-Q5_K_M.gguf'
+  - '--spec-type'
+  - 'draft-mtp'
+  - '--n-gpu-layers'
+  - '99'
+  - '--load-mode'
+  - 'mlock'
+  - '--flash-attn'
+  - 'on'
+  - '--jinja'
+  - '--host'
+  - '0.0.0.0'
+  - '--port'
+  - '8080'
+  - '--ctx-size'
+  - '262144'
+  - '--parallel'
+  - '1'
+  - '-b'
+  - '2048'
+  - '-ub'
+  - '512'
+  - '--cache-type-k'
+  - 'q8_0'
+  - '--cache-type-v'
+  - 'q8_0'
+  - '-cram'
+  - '24576'
+env: {}
+sampling:
+  temperature: 1.0
+  top_p: 0.95
+  top_k: 20
+  min_p: 0.0
+  max_tokens: 16384
+chat_template_kwargs: {}
+sources:
+  temperature: "https://huggingface.co/Altworld/Hemmingway-1/raw/main/generation_config.json, lu le 2026-09-24 (seul reglage publie ; discussion #3 'Temperature, etc?' du depot de quantification bartowski/Altworld_Hemmingway-1-GGUF, lue le 2026-09-24, montre qu'aucune reponse des auteurs n'a jamais ete donnee)"
+  top_p: "https://huggingface.co/Altworld/Hemmingway-1/raw/main/generation_config.json, lu le 2026-09-24"
+  top_k: "https://huggingface.co/Altworld/Hemmingway-1/raw/main/generation_config.json, lu le 2026-09-24"
+  min_p: "absent de generation_config.json, lu le 2026-09-24 : defaut transformers.GenerationConfig.min_p=None"
+  max_tokens: ".superpowers/sdd/2026-09-23-banc-llm-refonte-plan/progress.md, ruling Y (aucun budget de jetons publie par les auteurs, meme convention que bonsai2 et veriloop)"
+ctx_proven: null

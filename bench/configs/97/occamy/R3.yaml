@@ -1,0 +1,60 @@
+machine: "97"
+model: occamy
+variant: R3
+label: "cache K/V q4_0 (non sourcee, marge VRAM), meme sampling thinking que R1"
+exe: 'D:\LLM-Setup\llama-cpp-b11156\llama-server.exe'
+workdir: 'D:\LLM-Setup\llama-cpp-b11156'
+cudabin: null
+args:
+  - '-m'
+  - 'D:\models\occamy\Occamy-1.0.APEX-I-MiniPlus-V2.1.gguf'
+  - '--mmproj'
+  - 'D:\models\occamy\mmproj-Accio-Lab_occamy-1.0-Q8_0.gguf'
+  - '--n-gpu-layers'
+  - '99'
+  - '--flash-attn'
+  - 'on'
+  - '--jinja'
+  - '--host'
+  - '0.0.0.0'
+  - '--port'
+  - '8080'
+  - '--parallel'
+  - '1'
+  - '--ctx-size'
+  - '262144'
+  - '-b'
+  - '512'
+  - '-ub'
+  - '512'
+  - '--cache-type-k'
+  - 'q4_0'
+  - '--cache-type-v'
+  - 'q4_0'
+env: {}
+sampling:
+  temperature: 1.0
+  top_p: 0.95
+  top_k: 20
+  min_p: 0.0
+  presence_penalty: 1.5
+  max_tokens: 32768
+chat_template_kwargs:
+  enable_thinking: true
+  preserve_thinking: true
+sources:
+  temperature: "https://huggingface.co/Accio-Lab/occamy-1.0, README brut, section 6 Model Usage, exemple de code, lu le 2026-09-24 (meme sampling que R1, seul le cache change)"
+  top_p: "https://huggingface.co/Accio-Lab/occamy-1.0, README brut, meme exemple, lu le 2026-09-24"
+  top_k: "https://huggingface.co/Accio-Lab/occamy-1.0, README brut, meme exemple, lu le 2026-09-24"
+  min_p: "huggingface.co/Accio-Lab/occamy-1.0 ne publie pas de generation_config.json (404 confirme le 2026-09-24) ; defaut transformers GenerationConfig.min_p = None, aucun filtre"
+  presence_penalty: "https://huggingface.co/Accio-Lab/occamy-1.0, README brut, meme exemple, lu le 2026-09-24"
+  max_tokens: "https://huggingface.co/Accio-Lab/occamy-1.0, README brut, meme exemple (max_tokens=32768), lu le 2026-09-24 ; ruling Y"
+  enable_thinking: "https://huggingface.co/Accio-Lab/occamy-1.0, README brut, section 6, meme reglage que R1"
+  preserve_thinking: "https://huggingface.co/Accio-Lab/occamy-1.0, README brut, section 6, meme reglage que R1"
+# Deviation NON SOURCEE : aucune source publiee ne recommande ce cache. R1
+# (cache q8_0, mmproj monte) laisse tres peu de marge sur cette carte de
+# 16 Go, le mmproj ajoutant 0,57 Gio aux 13,74 Gio de poids texte deja tres
+# serres. R3 teste le cache K/V en q4_0 pour gagner de la marge VRAM, meme
+# logique que bonsai2/R3 et katapex/R3 sur cette meme machine. Fenetre et
+# VRAM reellement mesurees dans docs/phase0-2026-09.md.
+ctx_proven: null

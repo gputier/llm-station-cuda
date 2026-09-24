@@ -1,0 +1,56 @@
+machine: "99"
+model: xing
+variant: R2
+label: "deviation SOURCEE : identique a R1, MTP auto-speculatif active (--spec-type draft-mtp --spec-draft-n-max 2), discussion #1"
+exe: 'D:\LLM-Setup\llama-cpp-xing-pr29012\build-win\bin\llama-server.exe'
+workdir: 'D:\LLM-Setup\llama-cpp-xing-pr29012\build-win\bin'
+cudabin: 'C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.3\bin'
+args:
+  - '-m'
+  - 'D:\models\xing4.0-29b-a4b\xing4_0-29b-IQ4_NL.gguf'
+  - '--spec-type'
+  - 'draft-mtp'
+  - '--spec-draft-n-max'
+  - '2'
+  - '--n-gpu-layers'
+  - '999'
+  - '--flash-attn'
+  - 'on'
+  - '--jinja'
+  - '--host'
+  - '0.0.0.0'
+  - '--port'
+  - '8080'
+  - '--ctx-size'
+  - '262144'
+  - '--parallel'
+  - '1'
+  - '-b'
+  - '4096'
+  - '-ub'
+  - '2048'
+  - '--cache-type-k'
+  - 'q8_0'
+  - '--cache-type-v'
+  - 'q8_0'
+  - '-cram'
+  - '24576'
+env: {}
+sampling:
+  temperature: 1.0
+  top_p: 0.95
+  top_k: 50
+  min_p: 0.0
+  repeat_penalty: 1.05
+  max_tokens: 65536
+chat_template_kwargs:
+  enable_thinking: true
+sources:
+  temperature: "https://huggingface.co/XingChen-AGI/Xing4.0-29B-A4B-GGUF, README, table Recommended Parameters, ligne 'Complex reasoning / general tasks', lu le 2026-09-24"
+  top_p: "https://huggingface.co/XingChen-AGI/Xing4.0-29B-A4B-GGUF, README, table Recommended Parameters, ligne 'Complex reasoning / general tasks', lu le 2026-09-24"
+  top_k: "generation_config.json absent top_k, transformers 4.48.1 defaut 50 (src/transformers/generation/configuration_utils.py, ligne 422, verifie sur le tag v4.48.1 le 2026-09-24), meme choix que R1"
+  min_p: "absent de generation_config.json, lu le 2026-09-24 : defaut transformers.GenerationConfig.min_p=None"
+  repeat_penalty: "https://huggingface.co/XingChen-AGI/Xing4.0-29B-A4B/raw/main/generation_config.json ('repetition_penalty': 1.05), lu le 2026-09-24"
+  max_tokens: "https://huggingface.co/XingChen-AGI/Xing4.0-29B-A4B-GGUF, README, note de bas de page AA.LCR ('max_tokens=65536'), lu le 2026-09-24 : budget long-contexte des auteurs, laisse tourner les cellules 128K de RULER/LongBench v2 (bench/benchrun/suites/__init__.py lengths_to_run), meme choix que R1"
+  enable_thinking: "https://huggingface.co/XingChen-AGI/Xing4.0-29B-A4B-GGUF, README, exemple Quickstart, lu le 2026-09-24"
+ctx_proven: null

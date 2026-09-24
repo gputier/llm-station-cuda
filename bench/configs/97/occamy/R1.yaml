@@ -1,0 +1,93 @@
+machine: "97"
+model: occamy
+variant: R1
+label: "sampling thinking de la fiche de base, mmproj monte, cache q8_0"
+exe: 'D:\LLM-Setup\llama-cpp-b11156\llama-server.exe'
+workdir: 'D:\LLM-Setup\llama-cpp-b11156'
+cudabin: null
+args:
+  - '-m'
+  - 'D:\models\occamy\Occamy-1.0.APEX-I-MiniPlus-V2.1.gguf'
+  - '--mmproj'
+  - 'D:\models\occamy\mmproj-Accio-Lab_occamy-1.0-Q8_0.gguf'
+  - '--n-gpu-layers'
+  - '99'
+  - '--flash-attn'
+  - 'on'
+  - '--jinja'
+  - '--host'
+  - '0.0.0.0'
+  - '--port'
+  - '8080'
+  - '--parallel'
+  - '1'
+  - '--ctx-size'
+  - '262144'
+  - '-b'
+  - '512'
+  - '-ub'
+  - '512'
+  - '--cache-type-k'
+  - 'q8_0'
+  - '--cache-type-v'
+  - 'q8_0'
+env: {}
+sampling:
+  temperature: 1.0
+  top_p: 0.95
+  top_k: 20
+  min_p: 0.0
+  presence_penalty: 1.5
+  max_tokens: 32768
+chat_template_kwargs:
+  enable_thinking: true
+  preserve_thinking: true
+sources:
+  temperature: "https://huggingface.co/Accio-Lab/occamy-1.0, README brut, section 6 Model Usage, exemple de code, lu le 2026-09-24"
+  top_p: "https://huggingface.co/Accio-Lab/occamy-1.0, README brut, meme exemple, lu le 2026-09-24"
+  top_k: "https://huggingface.co/Accio-Lab/occamy-1.0, README brut, meme exemple (extra_body top_k=20), lu le 2026-09-24"
+  min_p: "huggingface.co/Accio-Lab/occamy-1.0 ne publie pas de generation_config.json (404 confirme le 2026-09-24) ; defaut transformers GenerationConfig.min_p = None, aucun filtre, meme raisonnement que nex et bonsai sur la 99"
+  presence_penalty: "https://huggingface.co/Accio-Lab/occamy-1.0, README brut, meme exemple, lu le 2026-09-24"
+  max_tokens: "https://huggingface.co/Accio-Lab/occamy-1.0, README brut, meme exemple (max_tokens=32768), lu le 2026-09-24 ; .superpowers/sdd/2026-09-23-banc-llm-refonte-plan/progress.md, ruling Y"
+  enable_thinking: "https://huggingface.co/Accio-Lab/occamy-1.0, README brut, meme exemple (chat_template_kwargs enable_thinking=True), lu le 2026-09-24"
+  preserve_thinking: "https://huggingface.co/Accio-Lab/occamy-1.0, README brut, meme exemple (preserve_thinking=True) ; section 6 : \"For multi-turn agent runs, retain the complete assistant message... including reasoning content\", lu le 2026-09-24"
+# Modele ajoute a la station 97, arbitrage de Guillaume du 24/09/2026, meme
+# collection que qwen36apex et katapex. Depot IsValorum/Occamy-1.0-APEX-I-
+# MiniPlus-V2.1-GGUF, fichier principal verifie 14751300704 octets
+# (identique au mandat), sha256
+# 5fa88e7a3e7ea4833d6e45bb3dcaf34aa5a8ebaf85cebe3794c4a94f4d4cb303. Le depot
+# publie aussi un mmproj (mmproj-Accio-Lab_occamy-1.0-Q8_0.gguf,
+# 614194528 octets, sha256
+# 17c9213e22ccf9b1b68c64eb7a4abd4ef5166d6164b7d9720d34e06c309fcd82) : c'est
+# le seul fichier de projection publie par ce depot, monte sur les trois
+# variantes comme le fait deja muse sur la 99, la fiche de base decrivant le
+# modele comme "Mixture-of-Experts causal model with vision encoder".
+#
+# La fiche APEX annonce une integration MTP ("releases receive integrated
+# MTP where supported"), mais AUCUNE tete MTP n'est publiee dans ce depot
+# (liste de fichiers confirmee par /api/models/<repo>?blobs=true le
+# 2026-09-24 : le GGUF principal, le mmproj, le README et .gitattributes
+# seulement) : la mention de la fiche ne se traduit pas par un fichier reel
+# ici. La fiche de base (Accio-Lab/occamy-1.0) confirme separement qu'une
+# "Experimental MTP head" existe comme depot A PART
+# (occamy-1.0-MTP), jamais fusionnee dans les poids principaux : aucune
+# speculation n'est configuree pour occamy sur cette machine.
+#
+# En-tete GGUF lu par requete a plage d'octets : general.architecture
+# "qwen35moe", 40 blocs, full_attention_interval=4, 2 tetes KV, cle/valeur
+# 256, meme famille hybride que les deux autres modeles APEX de ce mandat.
+# Base reelle Qwen/Qwen3.6-35B-A3B confirmee par le champ base_model du
+# README APEX ET par le README de la fiche Accio-Lab ("Starting Checkpoint:
+# Qwen3.6-35B-A3B").
+#
+# Fait a noter pour l'interpretation de la fenetre : la fiche Accio-Lab
+# donne "Base Architecture Context: 262,144 tokens" MAIS aussi "SFT Sequence
+# Length: 131,072 tokens" (meme tableau, section 2 Model Summary, lu le
+# 2026-09-24) : le modele n'a ete entraine en fin de chaine (SFT, HDPO,
+# fusion, SAO) qu'a la moitie de la fenetre architecturale. Servir 262144
+# jetons ici mesure ce que le SERVEUR accepte, pas ce que le modele a appris
+# a exploiter au-dela de 131072 : a signaler dans docs/phase0-2026-09.md,
+# pas seulement dans ce commentaire.
+#
+# ctx_proven reste null : /props confirme seulement la fenetre servie.
+ctx_proven: null

@@ -292,6 +292,66 @@ template maison, T1.0/0.95/20).
   dans `llm-ctl.ps1`), seule configuration de `bonsai` sur un autre moteur que R1 et R3.
 - R3 : KV q4_0 et ctx 393 216, avec le rappel à prouver.
 
+**xing**, Xing4.0-29B-A4B IQ4_NL (MLA + MoE + mHC, 29B dont 4B actifs, aucune release
+llama.cpp ne le sert : moteur compilé sur la 99 depuis la pull request #29012,
+`D:\LLM-Setup\llama-cpp-xing-pr29012`, reconstruit le 24/09/2026 après suppression le
+21/09/2026, voir docs/building-llama-cpp.md).
+- R1 : fidèle à la fiche, KV q8_0 (défaut de `run-server.bat`), ctx 262 144, sans
+  spéculation, `enable_thinking` actif par défaut, sampling T1.0/top_p 0.95/top_k
+  50/repeat_penalty 1.05 (README, table Recommended Parameters, mode raisonnement, plus
+  `top_k` absent de `generation_config.json` mais défaut transformers 4.48.1 à 50, vérifié
+  dans le code source), max_tokens 65 536 (note de bas de page AA.LCR, le banc
+  long-contexte des auteurs ; 131 072, leur budget AIME, a été écarté parce qu'il affame les
+  cellules 128K de RULER et LongBench v2, voir docs/phase0-2026-09.md). Source :
+  huggingface.co/XingChen-AGI/Xing4.0-29B-A4B-GGUF.
+- R2 : déviation SOURCÉE, MTP auto-spéculatif (`--spec-type draft-mtp --spec-draft-n-max
+  2`), acceptation mesurée à 0,48407 par un tiers dans la discussion #1 du dépôt de base.
+  Reste identique à R1 sinon.
+- R3 : la fenêtre 524 288 (512K, README « extensible to 512K ») a été essayée en direct et
+  rejetée par le moteur lui-même (log réel : « the slot context (524288) exceeds the
+  training context of the model (262144) - capping », aucune fenêtre au-delà de 262 144
+  n'est réellement servie sans un réglage YaRN que la fiche ne documente pas). R3 devient
+  donc une déviation NON SOURCÉE : identique à R2 (MTP actif) avec KV q4_0 au lieu de q8_0,
+  marge mémoire.
+
+**veriloop**, VeriLoop E2 Q8_0 (Tsinghua SIGS, post-entraînement sur base Qwen3.8-27B,
+262 144 natif, moteur b11156 officiel).
+- R1 : fidèle à la fiche côté sampling (T1.0/0.95/top-k 20, `reasoning_effort` par défaut
+  `xhigh`, chat_template.jinja) ; ctx 262 144 avec KV q4_0, réglage mesuré nécessaire pour
+  loger les 26,63 GiB de poids Q8_0 sur cette carte de 32 Go (les auteurs eux-mêmes n'ont
+  validé que 32 768 sans MTP, faute de mémoire au-delà). Sans spéculation.
+- R2 : déviation SOURCÉE, motif MTP des auteurs (drafter en CPU, `--n-gpu-layers-draft 0`),
+  mais à ctx 262 144 avec KV q4_0 comme R1, pas les 8 192 conservateurs de leur propre
+  motif (règle de Guillaume, 256K partout où ça tient) : mesuré en direct, tient, 509 Mio de
+  marge, la plus juste des trois. README section Optional MTP Speculative Decoding.
+- R3 : déviation NON SOURCÉE, KV q8_0 au lieu de q4_0 à ctx 262 144, en s'appuyant sur le
+  débordement en mémoire partagée (`-cram`) : aucune fiche ne valide ce point de
+  fonctionnement.
+
+**hemmingway**, Hemmingway-1 Q5_K_M (Altworld, licence CC-BY-NC-4.0, évaluation
+personnelle de Guillaume ; base Qwen3.8-27B, tête MTP embarquée dans le GGUF, quantifié
+par bartowski avec b10964, servi ici sur b11156 plus récent).
+- R1 : fidèle à la fiche (seul réglage publié, generation_config.json, T1.0/0.95/top-k 20 ;
+  une question sur le sampling posée par un utilisateur est restée sans réponse, discussion
+  #3 du dépôt bartowski). Q5_K_M choisi plutôt que Q6_K pour loger 262 144 avec KV q8_0 sur
+  cette carte (calcul sur l'architecture Qwen3_5, attention pleine sur 16 couches sur 64
+  seulement : marge insuffisante avec Q6_K une fois la tête MTP et l'espace de travail CUDA
+  comptés). MTP embarqué actif (`--spec-type draft-mtp`).
+- R2 : déviation NON SOURCÉE, MTP désactivé (`--spec-type` omis), pour isoler son apport
+  sur ce modèle précis.
+- R3 : déviation NON SOURCÉE, KV q4_0 pour la marge mémoire, MTP conservé.
+
+Arbitrage du 24/09/2026 : trois modèles ajoutés par Guillaume, tâche t16a. Le moteur
+`llama-cpp-xing-pr29012` que le mandat suppose présent sur la 99 avait en réalité été
+supprimé le 21/09/2026 (commit 712870f, docs/building-llama-cpp.md) : reconstruit à
+l'identique depuis le même commit épinglé (`63c16fb9797d00f13d70b5a618b4deb08953aef3`)
+avant tout autre geste sur ce modèle. Revue du contrôleur du 24/09/2026 après un premier
+contrôle de fumée : `xing` `top_k` corrigé de -1 (désactivé, à tort) à 50 (défaut réel de
+transformers 4.48.1 en l'absence de la clé) et `max_tokens` de 131 072 à 65 536 (pour ne
+pas affamer les cellules 128K des suites de contexte long) sur les trois configurations ;
+`veriloop/R2` reconfiguré de ctx 8 192 à 262 144 pour respecter la règle des 256K. Détail
+complet dans docs/phase0-2026-09.md.
+
 ### 5.2 Machine 97
 
 **tiel**, UD-IQ3_XXS, BeeLlama, KVarN 3, `-b/-ub 512`.
@@ -319,6 +379,53 @@ génération.
 
 Détail, mesures et sources complètes : `docs/phase0-2026-09.md`, section
 "Bonsai 2 sur la 97 (2026-09-24)".
+
+Arbitrage du 24/09/2026 : trois modèles APEX-I ajoutés sur la 97.
+
+**qwen36apex**, **katapex**, **occamy**, les trois de la collection
+`huggingface.co/collections/IsValorum/apex-i-miniplus-v21-current`
+("APEX-I-MiniPlus V2.1", `qwen35moe`, 35B-A3B hybride attention/DeltaNet,
+moteur b11156 stock).
+- **qwen36apex** (base Qwen3.6-35B-A3B, comparé au `qwen36` non-APEX de
+  cette même machine).
+  - R1 : sampling thinking général de la fiche de base, KV `q8_0`, sans MTP
+    (fidèle à la commande recommandée par la fiche APEX elle-même, qui ne
+    charge pas non plus de tête MTP). ctx 262 144.
+  - R2 : sourcée, spéculation MTP. Premier essai (drafter Q4_0 externe,
+    discussion #1 du dépôt Abliterated) rejeté en direct
+    (`invalid vector subscript`) ; l'en-tête du fichier principal relu a
+    montré que la tête MTP y est déjà intégrée (tenseurs `blk.40.nextn.*`),
+    même motif que `tiel`/`hemmingway` sur la 99 : `--spec-type draft-mtp`
+    seul, sans fichier externe. Verte, spéculation mesurée réelle
+    (`draft_n`/`draft_n_accepted` dans les timings). Voir
+    `docs/phase0-2026-09.md`.
+  - R3 : non sourcée, gabarit froggeric (même hypothèse que `qwen36/R3` sur
+    cette machine, cette fois avec le fichier réellement vérifié sur la
+    97).
+- **katapex** (base KAT-Coder-V2.5-Dev, pas de MTP, pas de mmproj).
+  - R1 : sampling thinking/agent de la fiche, KV `q8_0`, ctx 262 144.
+  - R2 : sourcée, "Preserve Thinking" de la même fiche (thinking actif,
+    sampling différent de R1 : temp 0,7/top_p 0,8/max_tokens 32768,
+    `chat_template_kwargs={"preserve_thinking": true}`). Le mode instruct
+    (`enable_thinking: false`) essayé d'abord a été écarté : Guillaume
+    demande le thinking actif dans chaque configuration de cette campagne.
+  - R3 : non sourcée, KV `q4_0` (marge VRAM).
+- **occamy** (base Accio-Lab/occamy-1.0, mmproj monté sur les trois, pas de
+  MTP malgré la mention de la fiche : tête MTP expérimentale publiée dans un
+  dépôt séparé, jamais fusionnée).
+  - R1 : sampling thinking de la fiche (section 6 Model Usage), KV `q8_0`,
+    ctx 262 144.
+  - R2 : sourcée, sampling précis de la discussion #8 ("Reasoning Loop"),
+    qui reprend les valeurs du mode "thinking, codage précis" de la fiche de
+    base Qwen3.6-35B-A3B.
+  - R3 : non sourcée, KV `q4_0` (marge VRAM).
+
+Détail, mesures, sourcing complet et incident de téléchargement :
+`docs/phase0-2026-09.md`, section "Trois modèles APEX-I sur la 97
+(2026-09-24)". Fait mesuré à retenir : sur ces trois modèles hybrides, la
+bascule KV q8_0 → q4_0 ne gagne presque rien en VRAM (contrairement à
+`bonsai2`, architecture dense), l'essentiel de la mémoire étant pris par les
+poids eux-mêmes (14 à 14,2 Gio).
 
 ### Arbitrage du 23/09/2026
 

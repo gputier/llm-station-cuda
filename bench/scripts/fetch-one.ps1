@@ -12,33 +12,53 @@ param(
 # huggingface-cli (0.0.0.0, under C:\Python313\Scripts) prints a deprecation
 # warning and downloads nothing, confirmed live on 2026-09-23. "hf" is the
 # CLI that actually works on this station.
+#
+# hf transfers through Xet (over 100 MB/s, HF_XET_HIGH_PERFORMANCE set);
+# without it the script stops rather than crawl on one HTTP connection.
+# "hf download" truncates its target before writing, so a file already
+# present with the right hash is never fetched again, and every download
+# lands in a staging directory, moved onto Dest only after the hash check.
 $ErrorActionPreference = "Stop"
 try {
     New-Item -ItemType Directory -Force -Path (Split-Path $Dest) | Out-Null
-    $cli = Get-Command hf -ErrorAction SilentlyContinue
-    if ($cli) {
-        $destDir = Split-Path $Dest
-        & hf download $Repo $RepoFile --local-dir $destDir
-        $downloaded = Join-Path $destDir $RepoFile
-        if ($downloaded -ne $Dest -and (Test-Path $downloaded)) {
-            Move-Item -Force $downloaded $Dest
+
+    if (Test-Path $Dest) {
+        $existingHash = (Get-FileHash -Algorithm SHA256 $Dest).Hash.ToLower()
+        if ($existingHash -eq $Expected) {
+            Write-Output ("OK " + $Dest + " " + $existingHash + " (deja present, non retelecharge)")
+            exit 0
         }
-    } else {
-        # Concatenation, not string interpolation: tested live on 2026-09-24
-        # with a Repo/RepoFile value containing "$HOME", "$(whoami)" and a
-        # backtick, through the exact ssh -> cmd.exe -> "powershell -File"
-        # path this script is invoked from, and neither form expanded
-        # anything (PowerShell -File argument binding does not re-parse the
-        # bound value as code). Concatenation removes any doubt regardless.
-        $uri = "https://huggingface.co/" + $Repo + "/resolve/main/" + $RepoFile
-        Invoke-WebRequest -Uri $uri -OutFile $Dest
     }
-    $hash = (Get-FileHash -Algorithm SHA256 $Dest).Hash.ToLower()
+
+    $stagingDir = $Dest + ".staging"
+    Remove-Item -Recurse -Force $stagingDir -ErrorAction SilentlyContinue
+    New-Item -ItemType Directory -Force -Path $stagingDir | Out-Null
+    $staged = Join-Path $stagingDir (Split-Path $Dest -Leaf)
+
+    $cli = Get-Command hf -ErrorAction SilentlyContinue
+    if (-not $cli) {
+        Remove-Item -Recurse -Force $stagingDir -ErrorAction SilentlyContinue
+        Write-Output ("ERR hf CLI missing on this station: refusing to fall back to a single-connection " +
+                       "download (see huggingface-bride-le-debit-par-connexion.md in the second brain, " +
+                       "incident of 2026-09-24). Install or provision hf on the station, or fetch this " +
+                       "file through a station that has it and copy it over the local network instead.")
+        exit 1
+    }
+    $env:HF_XET_HIGH_PERFORMANCE = "1"
+    & hf download $Repo $RepoFile --local-dir $stagingDir
+    $downloaded = Join-Path $stagingDir $RepoFile
+    if ($downloaded -ne $staged -and (Test-Path $downloaded)) {
+        Move-Item -Force $downloaded $staged
+    }
+
+    $hash = (Get-FileHash -Algorithm SHA256 $staged).Hash.ToLower()
     if ($hash -ne $Expected) {
-        Rename-Item $Dest ($Dest + ".bad")
-        Write-Output ("HASH MISMATCH got " + $hash + " expected " + $Expected)
+        Rename-Item $staged ($staged + ".bad")
+        Write-Output ("HASH MISMATCH got " + $hash + " expected " + $Expected + " (fichier corrompu isole dans " + $stagingDir + ", Dest non touche)")
         exit 1
     } else {
+        Move-Item -Force $staged $Dest
+        Remove-Item -Recurse -Force $stagingDir -ErrorAction SilentlyContinue
         Write-Output ("OK " + $Dest + " " + $hash)
     }
 } catch {
