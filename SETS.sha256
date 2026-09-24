@@ -1,1 +1,5 @@
 ded43cc46f4bfc8a09407b5c5f6abd3ba80669e966fd74a8a3932b01b3d8e492  sets/aider-subset-60.txt
+923412a2226529fdd33258d6440582b84adcb9570ea0abc52fc87584fb124476  sets/swe-rebench-subset.txt
+9333655920b8e90f35845f19cd28a3ce80075b725ecf64ca19dc7112a92ba3ed  sets/swe-rebench-outcomes.jsonl (committed replay input: instance id, accepted/rejected, reason; swe-rebench-subset.txt = draw_swe_rebench_subset.py --outcomes this manifest 31, proven byte-identical)
+8b3feb31eeaeac8e4bb2f6e2e1cb574450c76d542cede97a59163eb7d2f3923d  sets/swe-rebench-manifest.json
+eb27577c4124ea3f872c9b5c7832daa4f3d46eca6f73bbedda7d2f7d95dc6781  tasks/ (Bench-LLM, 40 total: 9 private (5 Go, 3 Ruby, 1 TypeScript, private hunt stopped per ruling AB, tarballs no longer shipped here, see .cache/tasks) + 31 SWE-rebench public sub-score (nebius/SWE-rebench-leaderboard, seeded draw, at most 3 per repo, ruling AB): find tasks -type f \( -name task.json -o -name repo.tar.gz \) | sort | xargs shasum -a 256 | shasum -a 256)
