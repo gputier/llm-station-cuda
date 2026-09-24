@@ -172,7 +172,26 @@ def generate(alias: str, rest: list[str]) -> None:
 
 
 def evaluate(alias: str, rest: list[str]) -> None:
+    from bfcl_eval.eval_checker import eval_runner
     from bfcl_eval.eval_checker.eval_runner import main as evaluation_main
+
+    # runner() (called by evaluation_main, eval_runner.py) writes every
+    # category's *_result.json/*_score.json through evaluate_task() FIRST,
+    # then always finishes with generate_leaderboard_csv(leaderboard_table,
+    # score_dir): a single-item category (mini's own --limit 1, or a small
+    # --limit generally) makes get_cost_latency_info (eval_runner_helper.py)
+    # call statistics.stdev on that one data point, which the pinned stdlib
+    # raises "requires at least two data points" for (proven live, 99/tiel/
+    # R1/bfcl, 2026-09-24). The score files this launcher actually reads
+    # (benchrun.suites.bfcl.parse_bfcl) are already on disk by the time this
+    # fires; the leaderboard CSV itself is never read by anything in this
+    # repo. Neutralized here (module attribute, not the pinned source file:
+    # eval_runner.py imports it with "from ... import *", so this name lives
+    # in eval_runner's own namespace, not eval_runner_helper's) rather than
+    # wrapped in a try/except around evaluation_main, since a real error
+    # inside evaluate_task itself (a missing result file, say) must still
+    # raise and fail the suite, not be swallowed along with this one.
+    eval_runner.generate_leaderboard_csv = lambda *args, **kwargs: None
 
     categories, extra = _parse_categories(rest)
     evaluation_main(

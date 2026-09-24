@@ -97,6 +97,24 @@ def test_build_mini_report_two_variants_get_their_own_section(tmp_path):
     assert "## 99/tiel/R1" in report and "## 99/tiel/R2" in report
 
 
+def test_build_mini_report_shows_a_failed_suite_as_erreur(tmp_path):
+    out_root = tmp_path / "mini"
+    variant_dir = out_root / "99" / "99" / "tiel" / "R1"
+    (variant_dir / "bfcl").mkdir(parents=True)
+    (variant_dir / "bfcl" / "rep1.error").write_text(
+        "StatisticsError: stdev requires at least two data points\n\nTraceback...\n", encoding="utf-8"
+    )
+    journal = tmp_path / "journal-99.jsonl"
+    journal.write_text("")
+
+    report = build_mini_report(out_root, "99", journal, seed=1, cap=2048, generated_at="2026-09-24T10:00:00")
+
+    rows = [l for l in report.splitlines() if l.startswith("| bfcl")]
+    assert len(rows) == 1
+    assert "| erreur (StatisticsError) |" in rows[0]
+    assert "0 reussites sur 1" in report
+
+
 def test_build_mini_report_empty_machine_says_so(tmp_path):
     out_root = tmp_path / "mini"
     journal = tmp_path / "journal-99.jsonl"

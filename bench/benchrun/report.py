@@ -3,6 +3,11 @@ what mini actually measured, one profile at a time, built once at the end of
 a mini launch from the results each suite already wrote to disk and the
 gateway's own journal (run_id/suite/rep, read the same way gateway.py writes
 them and watch.py already reads them back). No model call of its own.
+
+A suite that raised (Campaign.run's per-suite isolation, runner.py: no
+rep1.jsonl, a rep1.error instead) shows up as its own row, result "erreur
+(<ExceptionType>)", read from rep1.error's own first line: it still counts
+toward the profile's total, never toward its passes.
 """
 from __future__ import annotations
 
@@ -96,7 +101,20 @@ def _profile_rows(variant_dir: pathlib.Path, run_id: str, journal_lines: list[di
     for suite_dir in sorted(p for p in variant_dir.iterdir() if p.is_dir()):
         suite = suite_dir.name
         rep_file = suite_dir / "rep1.jsonl"
+        error_file = suite_dir / "rep1.error"
         if not rep_file.exists():
+            if error_file.exists():
+                total_count += 1
+                rows.append({
+                    "suite": suite,
+                    "description": _suite_description(suite, ""),
+                    "item_id": "-",
+                    "result": f"erreur ({_error_type(error_file)})",
+                    "completion_tokens": 0,
+                    "truncated": False,
+                    "duration_s": 0.0,
+                    "decode_tps": None,
+                })
             continue
         for line in rep_file.read_text(encoding="utf-8").splitlines():
             line = line.strip()
@@ -115,7 +133,7 @@ def _profile_rows(variant_dir: pathlib.Path, run_id: str, journal_lines: list[di
                 "suite": suite,
                 "description": _suite_description(suite, item_id),
                 "item_id": item_id,
-                "passed": passed,
+                "result": "reussi" if passed else "echoue",
                 "completion_tokens": agg["completion_tokens"],
                 "truncated": agg["truncated"],
                 "duration_s": agg["duration_s"],
@@ -131,11 +149,19 @@ def _profile_rows(variant_dir: pathlib.Path, run_id: str, journal_lines: list[di
     return rows, summary
 
 
+def _error_type(error_file: pathlib.Path) -> str:
+    """rep<N>.error's own first line (Campaign.run's per-suite handler):
+    "<ExceptionType>: <message>", the exception type alone is what the
+    report shows next to "erreur"."""
+    first_line = error_file.read_text(encoding="utf-8").splitlines()[0]
+    return first_line.split(":", 1)[0].strip()
+
+
 def _format_row(row: dict) -> str:
     tps = f"{row['decode_tps']:.1f}" if row["decode_tps"] else "-"
     return "| {suite} | {description} | {item_id} | {result} | {tokens} | {cut} | {duration:.1f} | {tps} |".format(
         suite=row["suite"], description=row["description"], item_id=row["item_id"],
-        result="reussi" if row["passed"] else "echoue",
+        result=row["result"],
         tokens=row["completion_tokens"], cut="oui" if row["truncated"] else "non",
         duration=row["duration_s"], tps=tps,
     )

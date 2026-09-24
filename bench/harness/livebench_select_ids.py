@@ -1,6 +1,11 @@
 """Question-id selector for LiveBench, run inside the pinned bench-livebench
-image (bind-mounted at runtime by benchrun.suites.livebench, never baked into
-the image: no Dockerfile change, no rebuild needed for this mechanism).
+image. Baked into the image at /select_ids.py (livebench.Dockerfile's own
+COPY, like every other launcher, lcb_run.py, bfcl_run.py, ...), never a
+runtime bind mount: runner-99/runner-97 call "docker run" over the mounted
+HOST docker socket, resolved by the HOST daemon against the runner
+container's own filesystem, so a -v source built from a path inside this
+repository's own container view is invalid there (exit 125, proven live on
+the 99, 2026-09-24, bench/harness/README.md orchestration section).
 
 Reuses the pinned harness's own listing functions unmodified
 (livebench.common.get_categories_tasks and load_questions, the exact
