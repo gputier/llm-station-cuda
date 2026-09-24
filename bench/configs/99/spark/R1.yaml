@@ -1,0 +1,50 @@
+machine: "99"
+model: spark
+variant: R1
+label: "T1.0/0.95/top-k -1, comme la fiche"
+exe: 'D:\LLM-Setup\llama-cpp-b10883\llama-server.exe'
+workdir: 'D:\LLM-Setup\llama-cpp-b10883'
+cudabin: 'C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.3\bin'
+args:
+  - '-m'
+  - 'D:\models\spark-x2.5-4b\Spark-X2.5-4B-Q8_0.gguf'
+  - '--n-gpu-layers'
+  - '99'
+  - '--load-mode'
+  - 'mlock'
+  - '--flash-attn'
+  - 'on'
+  - '--jinja'
+  - '--host'
+  - '0.0.0.0'
+  - '--port'
+  - '8080'
+  - '--parallel'
+  - '1'
+  - '--ctx-size'
+  - '262144'
+  - '-b'
+  - '4096'
+  - '-ub'
+  - '2048'
+  - '--cache-type-k'
+  - 'q8_0'
+  - '--cache-type-v'
+  - 'q8_0'
+  - '-cram'
+  - '24576'
+env: {}
+sampling:
+  temperature: 1.0
+  top_p: 0.95
+  top_k: -1
+  min_p: 0.0
+  max_tokens: 8192
+chat_template_kwargs: {}
+sources:
+  temperature: "https://huggingface.co/XHToken/Spark-X2.5-4B (mode thinking, lu le 2026-09-23)"
+  top_p: "https://huggingface.co/XHToken/Spark-X2.5-4B (mode thinking, lu le 2026-09-23)"
+  top_k: "https://huggingface.co/XHToken/Spark-X2.5-4B (mode thinking, lu le 2026-09-23)"
+  min_p: "https://huggingface.co/XHToken/Spark-X2.5-4B/resolve/main/generation_config.json (pas de clé min_p, lu le 2026-09-24) ; défaut transformers GenerationConfig.min_p = None, aucun filtre (configuration_utils.py, lu le 2026-09-24)"
+  max_tokens: ".superpowers/sdd/2026-09-23-banc-llm-refonte-plan/progress.md, ruling Y"
+ctx_proven: null

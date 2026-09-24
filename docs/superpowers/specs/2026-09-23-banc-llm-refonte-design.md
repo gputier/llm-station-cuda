@@ -209,8 +209,10 @@ template maison, T1.0/0.95/20).
   s'effondre sur cette carte.
 - R2 : Q5_K_M, n-max 3, template froggeric, presence 1.5 en non-thinking. Hypothèse : moins de
   boucles et de refus d'appel.
-- R3 : balayage n-max 2, 3 et 4 à contexte plein, ctx 393 216 par override. Hypothèse : combler des
-  réglages jamais prouvés pour ce modèle (non sourcé).
+- R3 : n-max 3, ctx 393 216 par override (mesure de la fenêtre pleine). Le balayage n-max 2/3/4
+  déménage dans la suite de débit (la spéculation change la vitesse, pas les réponses) : voir
+  arbitrage du 23/09/2026 ci-dessous. Hypothèse : combler un réglage jamais prouvé pour ce modèle
+  (non sourcé).
 
 **qwenf**, DavidAU TURBO FCF Q5_K_M (candidat, hors service).
 - R1 : template de l'auteur, modes `reasoning_effort`, sampling thinking de la fiche. Source :
@@ -224,8 +226,8 @@ template maison, T1.0/0.95/20).
   huggingface.co/DavidAU/Qwen3.8-27B-TWIN-TURBO-Fable-Cold-Fusion-709-L-Uncensored-NM-DAU-NEO-MTP-GGUF.
 - R2 : sans réflexion, template froggeric, T0.7/top-k 64/top-p 0.95. Source : discussion HF n°18
   (qwenf repasse devant hors réflexion : c'est ce que ce banc tranche).
-- R3 : ctx 393 216, `-ub` 2048 et 4096, avec surveillance de la VRAM (31,6 Go à vide). Mesure réclamée
-  par le README et jamais faite.
+- R3 : ctx 393 216, `-ub` 4096 seul (R1 et R2 restent à 2048 : voir arbitrage du 23/09/2026), avec
+  surveillance de la VRAM (31,6 Go à vide). Mesure réclamée par le README et jamais faite.
 
 **bonsai2**, Ternary Bonsai 2 27B PQ2_0, fork PrismML + DFlash2.
 - R1 : PTQ1_0 (5,95 Go) et drafter z-lab Q4_K_M. Source : huggingface.co/prism-ml/Ternary-Bonsai-2-27B-gguf.
@@ -243,9 +245,11 @@ template maison, T1.0/0.95/20).
 **kat**, KAT-Coder V2.5 Dev 35B-A3B, KAT-Philly MTP Q4_K_M.
 - R1 : sampling de la fiche (instruct T0.7/0.80, thinking T1.0 presence 1.5). Source :
   huggingface.co/Kwaipilot/KAT-Coder-V2.5-Dev.
-- R2 : `gbuzhf/KAT-Coder-V2.5-Dev-APEX-MTP-GGUF` (imatrix calibré sur KAT, tête MTP greffée).
-  Le gain de 2,03x annoncé n'a pas pu être lu (HTTP 401) et reste à vérifier avant téléchargement.
-  Même contrôle de fumée à quatre questions que les candidats du 08/09.
+- R2 : sur le fichier existant `KAT-Philly-MTP-Q4_K_M.gguf`, l'autre mode de la fiche Kwaipilot :
+  sampling instruct (T0.7/0.80/20, presence 1.5) contre le sampling thinking de R1 (T1.0/0.95/20,
+  presence 1.5), les deux sourcés sur la même fiche. `gbuzhf/KAT-Coder-V2.5-Dev-APEX-MTP-GGUF`
+  (imatrix calibré sur KAT, tête MTP greffée, gain de 2,03x annoncé, HTTP 401 le 23/09) est retenté à
+  la tâche 14 ; si le dépôt s'ouvre, il remplace R2. Voir arbitrage du 23/09/2026.
 - R3 : template forcé par `--chat-template-file` si la phase 0 montre que le template embarqué
   déclenche le parseur Qwen3-Coder.
 
@@ -267,7 +271,9 @@ template maison, T1.0/0.95/20).
 - R1 : T1.0/0.95/top-k 0, comme la fiche. Source : huggingface.co/XHToken/Spark-X2.5-4B.
 - R2 : drafter `XHToken/Spark-X2.5-1.7B-GGUF` (environ 1,8 Go). Annoncé à +41 % avec une acceptation
   de 0,891 (discussion HF, non rejoué).
-- R3 : T0.6, top-k 20 et grammaire GBNF sur les appels d'outils (non sourcé).
+- R3 : T0.6/top-p 0.95/top-k 0/min-p 0 (le réglage réel de la station, llm-ctl.ps1, corrigé après
+  ses premières heures à top-k 20 ; mesuré contre la fiche qui donne T1.0/top-k -1 en R1). Pas de
+  grammaire GBNF sur les appels d'outils : voir arbitrage du 23/09/2026.
 
 **ornith**, Ornith-1.5-9B Q5_K_M (Q5_K_M confirmé meilleur choix de quant par llm-bench.io et note.com).
 - R1 : T1.0 (général) ou T0.6 (code), comme la fiche. Source : huggingface.co/ornith-ai/Ornith-1.5-9B.
@@ -294,6 +300,20 @@ template maison, T1.0/0.95/20).
 - R2 : `-ot` ciblé à la place de `--n-cpu-moe`, lancé sans le flag d'origine.
 - R3 : template froggeric. Hypothèse : c'est lui qui cause la balise `</think>` parasite qui coupe
   une réponse sur deux. La requête fautive est capturée en phase 0 pour le prouver.
+
+### Arbitrage du 23/09/2026
+
+Guillaume a tranché quatre points de la tâche 15, appliqués ci-dessus :
+- **qwent R3** : `-ub` 4096 seul, R1 et R2 restent à 2048.
+- **qwenu R3** : le balayage n-max 2/3/4 part dans la suite de débit, pas dans une configuration de
+  banc de réponses (la spéculation change la vitesse, pas le texte produit) ; R3 garde n-max 3 et
+  mesure la fenêtre 393 216.
+- **spark R3** : pas de grammaire GBNF. R3 reprend le réglage réel de la station,
+  T0.6/top-p 0.95/top-k 0/min-p 0 (llm-ctl.ps1 ; top-k 20 n'était que le réglage de ses premières
+  heures, corrigé depuis), mesuré contre la fiche (T1.0/top-k -1 en R1).
+- **kat R2** : reste sur le fichier existant, avec l'autre mode de la fiche Kwaipilot (sampling
+  instruct contre le sampling thinking de R1, les deux sourcés). APEX-MTP est retenté à la tâche 14
+  et remplace R2 s'il s'ouvre.
 
 ### 5.3 Téléchargements prévus
 

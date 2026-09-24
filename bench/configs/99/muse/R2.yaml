@@ -1,0 +1,60 @@
+machine: "99"
+model: muse
+variant: R2
+label: "ctx 1M, KV q4_0, draft_n à reprouver"
+exe: 'D:\LLM-Setup\llama-cpp-upstream\build-win\bin\Release\llama-server.exe'
+workdir: 'D:\LLM-Setup\llama-cpp-upstream\build-win\bin\Release'
+cudabin: 'C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.3\bin'
+args:
+  - '-m'
+  - 'D:\models\muse-glimmer-30b\Muse-Glimmer-30B-UD-Q4_K_XL.gguf'
+  - '--mmproj'
+  - 'D:\models\muse-glimmer-30b\mmproj-kquant.gguf'
+  - '--spec-type'
+  - 'draft-dflash'
+  - '--spec-draft-model'
+  - 'D:\models\muse-glimmer-30b\dflash-kquant.gguf'
+  - '--spec-draft-ngl'
+  - '99'
+  - '--n-gpu-layers'
+  - '99'
+  - '--load-mode'
+  - 'mlock'
+  - '--flash-attn'
+  - 'on'
+  - '--jinja'
+  - '--override-kv'
+  - 'muse-glimmer.context_length=int:1048576'
+  - '--host'
+  - '0.0.0.0'
+  - '--port'
+  - '8080'
+  - '--ctx-size'
+  - '1048576'
+  - '--parallel'
+  - '1'
+  - '-b'
+  - '2048'
+  - '-ub'
+  - '512'
+  - '-cram'
+  - '24576'
+  - '--cache-type-k'
+  - 'q4_0'
+  - '--cache-type-v'
+  - 'q4_0'
+env: {}
+sampling:
+  temperature: 1.0
+  top_p: 0.95
+  top_k: 64
+  min_p: 0.0
+  max_tokens: 4096
+chat_template_kwargs: {}
+sources:
+  temperature: "https://huggingface.co/meta-models/Muse-Glimmer-30B (lu le 2026-09-23)"
+  top_p: "https://huggingface.co/meta-models/Muse-Glimmer-30B (lu le 2026-09-23)"
+  top_k: "https://huggingface.co/meta-models/Muse-Glimmer-30B (lu le 2026-09-23)"
+  min_p: "https://huggingface.co/meta-models/Muse-Glimmer-30B/resolve/main/generation_config.json (pas de clé min_p, lu le 2026-09-24) ; défaut transformers GenerationConfig.min_p = None, aucun filtre (configuration_utils.py, lu le 2026-09-24)"
+  max_tokens: ".superpowers/sdd/2026-09-23-banc-llm-refonte-plan/progress.md, ruling Y"
+ctx_proven: 556390

@@ -1,0 +1,58 @@
+machine: "99"
+model: tiel
+variant: R1
+label: "fiche éditeur, T0.6"
+exe: 'D:\LLM-Setup\llama-cpp-b10826\llama-server.exe'
+workdir: 'D:\LLM-Setup\llama-cpp-b10826'
+cudabin: null
+args:
+  - '-m'
+  - 'D:\models\tiel-coder-35b-a3b\Tiel-Coder-35B-A3B-MTP-UD-Q4_K_XL.gguf'
+  - '--mmproj'
+  - 'D:\models\tiel-coder-35b-a3b\mmproj-BF16.gguf'
+  - '--spec-type'
+  - 'draft-mtp'
+  - '--spec-draft-n-max'
+  - '2'
+  - '--n-gpu-layers'
+  - '99'
+  - '--load-mode'
+  - 'mlock'
+  - '--flash-attn'
+  - 'on'
+  - '--jinja'
+  - '--host'
+  - '0.0.0.0'
+  - '--port'
+  - '8080'
+  - '--parallel'
+  - '1'
+  - '--override-kv'
+  - 'qwen35moe.context_length=int:393216'
+  - '--ctx-size'
+  - '393216'
+  - '-b'
+  - '4096'
+  - '-ub'
+  - '2048'
+  - '--cache-type-k'
+  - 'q4_0'
+  - '--cache-type-v'
+  - 'q4_0'
+  - '-cram'
+  - '24576'
+env: {}
+sampling:
+  temperature: 0.6
+  top_p: 0.95
+  top_k: 20
+  min_p: 0.0
+  max_tokens: 16384
+chat_template_kwargs: {}
+sources:
+  temperature: "https://huggingface.co/ornith-ai/Ornith-1.5-35B-A3B (lu le 2026-09-23)"
+  top_p: "https://huggingface.co/ornith-ai/Ornith-1.5-35B-A3B (lu le 2026-09-23)"
+  top_k: "https://huggingface.co/ornith-ai/Ornith-1.5-35B-A3B (lu le 2026-09-23)"
+  min_p: "https://huggingface.co/ornith-ai/Ornith-1.5-35B-A3B (lu le 2026-09-23)"
+  max_tokens: ".superpowers/sdd/2026-09-23-banc-llm-refonte-plan/progress.md, ruling Y"
+ctx_proven: 378540
