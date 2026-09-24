@@ -1,0 +1,54 @@
+machine: "97"
+model: katapex
+variant: R3
+label: "cache K/V q4_0 (non sourcee, marge VRAM), meme sampling thinking que R1"
+exe: 'D:\LLM-Setup\llama-cpp-b11156\llama-server.exe'
+workdir: 'D:\LLM-Setup\llama-cpp-b11156'
+cudabin: null
+args:
+  - '-m'
+  - 'D:\models\katapex\KAT-Coder-V2.5-Dev.APEX-I-MiniPlus-V2.1.gguf'
+  - '--n-gpu-layers'
+  - '99'
+  - '--flash-attn'
+  - 'on'
+  - '--jinja'
+  - '--host'
+  - '0.0.0.0'
+  - '--port'
+  - '8080'
+  - '--parallel'
+  - '1'
+  - '--ctx-size'
+  - '262144'
+  - '-b'
+  - '512'
+  - '-ub'
+  - '512'
+  - '--cache-type-k'
+  - 'q4_0'
+  - '--cache-type-v'
+  - 'q4_0'
+env: {}
+sampling:
+  temperature: 1.0
+  top_p: 0.95
+  top_k: 20
+  min_p: 0.0
+  presence_penalty: 1.5
+  max_tokens: 81920
+chat_template_kwargs: {}
+sources:
+  temperature: "https://huggingface.co/Kwaipilot/KAT-Coder-V2.5-Dev, README brut, exemple de code Text-Only Input, lu le 2026-09-24 (meme sampling que R1, seul le cache change)"
+  top_p: "https://huggingface.co/Kwaipilot/KAT-Coder-V2.5-Dev, README brut, meme exemple, lu le 2026-09-24"
+  top_k: "https://huggingface.co/Kwaipilot/KAT-Coder-V2.5-Dev, README brut, meme exemple, lu le 2026-09-24"
+  min_p: "huggingface.co/Kwaipilot/KAT-Coder-V2.5-Dev ne publie pas de generation_config.json avec cle min_p (verifie 2026-09-24) ; defaut transformers GenerationConfig.min_p = None, aucun filtre"
+  presence_penalty: "https://huggingface.co/Kwaipilot/KAT-Coder-V2.5-Dev, README brut, meme exemple, lu le 2026-09-24"
+  max_tokens: "https://huggingface.co/Kwaipilot/KAT-Coder-V2.5-Dev, README brut, meme exemple (max_tokens=81920), lu le 2026-09-24 ; ruling Y"
+# Deviation NON SOURCEE : aucune source publiee ne recommande ce cache pour
+# ce modele. R1 (cache q8_0) laisse tres peu de marge sur cette carte de
+# 16 Go avec 14,06 Gio de poids deja charges ; R3 teste le cache K/V en
+# q4_0 pour gagner de la marge VRAM, meme logique que bonsai2/R3 sur cette
+# meme machine (bench/configs/97/bonsai2/R3.yaml). Fenetre et VRAM
+# reellement mesurees dans docs/phase0-2026-09.md.
+ctx_proven: null

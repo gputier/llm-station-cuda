@@ -1,0 +1,52 @@
+machine: "99"
+model: veriloop
+variant: R3
+label: "deviation NON SOURCEE : cache KV en q8_0 (au lieu de q4_0 en R1) a ctx 262144, mesuree via debordement en memoire partagee (-cram) ; aucune fiche ne valide ce point de fonctionnement, la fiche ne teste que 32768 sans MTP"
+exe: 'D:\LLM-Setup\llama-cpp-b11156\llama-server.exe'
+workdir: 'D:\LLM-Setup\llama-cpp-b11156'
+cudabin: null
+args:
+  - '-m'
+  - 'D:\models\veriloop-e2\VeriLoop-E2-Q8_0.gguf'
+  - '--n-gpu-layers'
+  - '99'
+  - '--load-mode'
+  - 'mlock'
+  - '--flash-attn'
+  - 'on'
+  - '--jinja'
+  - '--host'
+  - '0.0.0.0'
+  - '--port'
+  - '8080'
+  - '--ctx-size'
+  - '262144'
+  - '--parallel'
+  - '1'
+  - '-b'
+  - '2048'
+  - '-ub'
+  - '512'
+  - '--cache-type-k'
+  - 'q8_0'
+  - '--cache-type-v'
+  - 'q8_0'
+  - '-cram'
+  - '24576'
+env: {}
+sampling:
+  temperature: 1.0
+  top_p: 0.95
+  top_k: 20
+  min_p: 0.0
+  max_tokens: 16384
+chat_template_kwargs:
+  reasoning_effort: "xhigh"
+sources:
+  temperature: "https://huggingface.co/tsinghua-sigs-robot-lab/VeriLoop-E2/raw/main/generation_config.json, lu le 2026-09-24"
+  top_p: "https://huggingface.co/tsinghua-sigs-robot-lab/VeriLoop-E2/raw/main/generation_config.json, lu le 2026-09-24"
+  top_k: "https://huggingface.co/tsinghua-sigs-robot-lab/VeriLoop-E2/raw/main/generation_config.json, lu le 2026-09-24"
+  min_p: "absent de generation_config.json, lu le 2026-09-24 : defaut transformers.GenerationConfig.min_p=None"
+  max_tokens: ".superpowers/sdd/2026-09-23-banc-llm-refonte-plan/progress.md, ruling Y (aucun budget de jetons publie par les auteurs)"
+  reasoning_effort: "https://huggingface.co/tsinghua-sigs-robot-lab/VeriLoop-E2/raw/main/chat_template.jinja, ligne 119, lu le 2026-09-24"
+ctx_proven: null

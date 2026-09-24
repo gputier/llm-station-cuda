@@ -1,0 +1,76 @@
+machine: "97"
+model: katapex
+variant: R1
+label: "sampling thinking/agent de la fiche de base, cache q8_0"
+exe: 'D:\LLM-Setup\llama-cpp-b11156\llama-server.exe'
+workdir: 'D:\LLM-Setup\llama-cpp-b11156'
+cudabin: null
+args:
+  - '-m'
+  - 'D:\models\katapex\KAT-Coder-V2.5-Dev.APEX-I-MiniPlus-V2.1.gguf'
+  - '--n-gpu-layers'
+  - '99'
+  - '--flash-attn'
+  - 'on'
+  - '--jinja'
+  - '--host'
+  - '0.0.0.0'
+  - '--port'
+  - '8080'
+  - '--parallel'
+  - '1'
+  - '--ctx-size'
+  - '262144'
+  - '-b'
+  - '512'
+  - '-ub'
+  - '512'
+  - '--cache-type-k'
+  - 'q8_0'
+  - '--cache-type-v'
+  - 'q8_0'
+env: {}
+sampling:
+  temperature: 1.0
+  top_p: 0.95
+  top_k: 20
+  min_p: 0.0
+  presence_penalty: 1.5
+  max_tokens: 81920
+chat_template_kwargs: {}
+sources:
+  temperature: "https://huggingface.co/Kwaipilot/KAT-Coder-V2.5-Dev, README brut, exemple de code Text-Only Input (mode thinking par defaut), lu le 2026-09-24"
+  top_p: "https://huggingface.co/Kwaipilot/KAT-Coder-V2.5-Dev, README brut, meme exemple, lu le 2026-09-24"
+  top_k: "https://huggingface.co/Kwaipilot/KAT-Coder-V2.5-Dev, README brut, meme exemple (extra_body top_k=20), lu le 2026-09-24"
+  min_p: "huggingface.co/Kwaipilot/KAT-Coder-V2.5-Dev ne publie pas de generation_config.json avec cle min_p (verifie 2026-09-24, redirection 307 vers un fichier sans cette cle) ; defaut transformers GenerationConfig.min_p = None, aucun filtre"
+  presence_penalty: "https://huggingface.co/Kwaipilot/KAT-Coder-V2.5-Dev, README brut, meme exemple, lu le 2026-09-24"
+  max_tokens: "https://huggingface.co/Kwaipilot/KAT-Coder-V2.5-Dev, README brut, meme exemple (max_tokens=81920), lu le 2026-09-24 ; .superpowers/sdd/2026-09-23-banc-llm-refonte-plan/progress.md, ruling Y. Valeur identique a celle citee par le mandat pour le profil agent SWE (1.00/0.95/20, presence 1.50, max 81920) : c'est le meme exemple de la fiche."
+# Modele ajoute a la station 97, arbitrage de Guillaume du 24/09/2026,
+# meme collection que qwen36apex. Depot IsValorum/KAT-Coder-V2.5-Dev-APEX-
+# I-MiniPlus-V2.1-GGUF, fichier principal verifie 14751301024 octets
+# (identique au mandat), sha256
+# aa01217072e43435daa9159076572d2da6b866824b3ebb507ce81652c864bca7. Pas de
+# tete MTP ni de mmproj dans ce depot (liste des fichiers confirmee par
+# /api/models/<repo>?blobs=true le 2026-09-24 : seuls .gitattributes,
+# README.md et le GGUF principal). En-tete GGUF lu par requete a plage
+# d'octets : general.architecture "qwen35moe", 40 blocs,
+# full_attention_interval=4 (environ 10 blocs a attention pleine), 2 tetes
+# KV, cle/valeur 256 : meme famille hybride que qwen36apex, meme calcul de
+# cache K/V, meme raison de fixer q8_0 des R1 (14,06 Gio de poids sur une
+# carte de 16 Go).
+#
+# Base reelle : Kwaipilot/KAT-Coder-V2.5-Dev (confirmee par le README APEX
+# et par le champ base_model absent du README APEX mais cite explicitement
+# dans le texte ; le README de Kwaipilot lui-meme confirme
+# "KAT-Coder-V2.5-Dev natively supports context lengths of up to 262,144
+# tokens" et une architecture Qwen3.6-35B-A3B, luu le 2026-09-24).
+#
+# Comparaison : nos configurations kat existantes (bench/configs/99/kat)
+# servent le meme modele de base sur la 99 avec le meme sampling R1
+# (thinking) / R2 (instruct), suivi ici a l'identique pour rester comparable
+# (voir R2).
+#
+# ctx_proven reste null : /props confirme seulement la fenetre servie, pas
+# le rappel reel. VRAM et fenetre reellement tenue dans
+# docs/phase0-2026-09.md.
+ctx_proven: null
