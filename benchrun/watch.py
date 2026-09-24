@@ -26,7 +26,11 @@ td,th{border-bottom:1px solid #333;padding:4px 8px;text-align:left}
 <script>
 function row(c){return "<td>"+c.join("</td><td>")+"</td>"}
 async function tick(){
- const s=await (await fetch("state")).json(); let h="";
+ const s=await (await fetch("state")).json(); let h="<h2>Classement</h2>";
+ if(!s.ranking.length) h+="<p class=dim>aucune épreuve terminée</p>";
+ else{h+="<p class=dim>moyenne simple des taux de réussite des épreuves terminées, vitesse exclue ; une configuration n'est comparable aux autres qu'une fois toutes ses épreuves finies</p><table><tr><th>rang</th><th>configuration</th><th>moyenne</th><th>épreuves</th></tr>";
+  s.ranking.forEach((r,i)=>{h+="<tr>"+row([i+1,r.config,r.mean+" %",Object.entries(r.suites).map(([k,v])=>k+" "+v+" %").join(", ")])+"</tr>"});
+  h+="</table>";}
  for(const m of s.machines){
   h+="<h2>Station "+m.machine+"</h2>";
   if(m.current){const c=m.current;
@@ -37,7 +41,7 @@ async function tick(){
   else h+="<p class=dim>aucune requête</p>";
   h+="<table><tr><th>configuration</th><th>épreuve</th><th>passes finies</th><th>réussite</th><th>état</th></tr>";
   for(const r of m.cells) h+="<tr>"+row([r.config,r.suite,r.done,r.pass_rate,
-     r.running?"en cours":(r.error?"<span class=ko>erreur</span>":(r.spill?"<span class=ko>débordement VRAM</span>":"<span class=ok>ok</span>"))])+"</tr>";
+     r.running?"en cours":r.skipped?"<span class=dim>sautée</span>":(r.error?"<span class=ko>erreur</span>":(r.spill?"<span class=ko>débordement VRAM</span>":"<span class=ok>ok</span>"))])+"</tr>";
   h+="</table>";}
  document.getElementById("app").innerHTML=h+"<p class=dim>mis à jour "+new Date().toLocaleTimeString()+"</p>";}
 tick();setInterval(tick,5000);
@@ -75,34 +79,70 @@ def _current(records: list[dict]) -> dict | None:
     }
 
 
+def _suite_score(suite_dir: pathlib.Path) -> tuple[int, int]:
+    """Passed and graded items over the finished reps only (rep<N>.done)."""
+    passed = total = 0
+    for done in suite_dir.glob("rep*.done"):
+        rep_file = done.with_suffix(".jsonl")
+        if not rep_file.exists():
+            continue
+        for line in rep_file.read_text(encoding="utf-8").splitlines():
+            try:
+                passed += int(json.loads(line).get("passed") or 0)
+                total += 1
+            except (json.JSONDecodeError, ValueError, TypeError):
+                continue
+    return passed, total
+
+
 def _cells(machine_root: pathlib.Path) -> list[dict]:
     rows = []
-    for meta in sorted(machine_root.glob("*/*/*/meta.json")) + sorted(machine_root.glob("*/*/*/*/meta.json")):
-        cell = meta.parent
-        try:
-            info = json.loads(meta.read_text(encoding="utf-8"))
-        except json.JSONDecodeError:
-            info = {}
+    # A cell is <model>/<variant>; the runner nests it under the machine at a
+    # depth that depends on --out, so it is found by its variant directory.
+    for cell in sorted(p for p in machine_root.glob("**/R[0-9]*") if p.is_dir() and p.parent != machine_root):
+        meta = cell / "meta.json"
+        info = {}
+        if meta.exists():
+            try:
+                info = json.loads(meta.read_text(encoding="utf-8"))
+            except json.JSONDecodeError:
+                pass
         for suite_dir in sorted(p for p in cell.iterdir() if p.is_dir()):
-            done = sorted(suite_dir.glob("rep*.done"))
-            passed = total = 0
-            for rep_file in suite_dir.glob("rep*.jsonl"):
-                for line in rep_file.read_text(encoding="utf-8").splitlines():
-                    try:
-                        passed += int(json.loads(line).get("passed") or 0)
-                        total += 1
-                    except (json.JSONDecodeError, ValueError, TypeError):
-                        continue
-            # meta.json is written when a cell ends: a suite touched after it
-            # belongs to a newer run of the same cell, still going.
-            running = max(p.stat().st_mtime for p in [suite_dir, *suite_dir.rglob("*")]) > meta.stat().st_mtime
+            passed, total = _suite_score(suite_dir)
+            # meta.json is written when a cell ends: no meta, or a suite
+            # touched after it, means a run of this cell still going.
+            newest = max(p.stat().st_mtime for p in [suite_dir, *suite_dir.rglob("*")])
+            running = not meta.exists() or newest > meta.stat().st_mtime
             rows.append({
-                "config": "/".join(cell.parts[-3:]), "suite": suite_dir.name, "done": len(done),
+                "config": f"{cell.parent.name}/{cell.name}", "suite": suite_dir.name,
+                "done": len(list(suite_dir.glob("rep*.done"))),
+                "skipped": any(suite_dir.glob("rep*.skipped")),
+                "passed": passed, "total": total,
                 "pass_rate": f"{100 * passed / total:.1f} % sur {total}" if total else "-",
                 "running": running,
                 "error": bool(info.get("error")) and not running, "spill": bool(info.get("spill")),
             })
     return rows
+
+
+# speed measures throughput, not a pass rate: it never enters the ranking.
+UNRANKED_SUITES = {"speed"}
+
+
+def _ranking(cells: list[dict]) -> list[dict]:
+    """One row per configuration: the unweighted mean of its finished suites'
+    pass rates, and how many suites that mean covers so far."""
+    by_config: dict[str, dict[str, float]] = {}
+    for row in cells:
+        if row["suite"] in UNRANKED_SUITES or not row["total"]:
+            continue
+        by_config.setdefault(row["config"], {})[row["suite"]] = 100 * row["passed"] / row["total"]
+    ranked = [
+        {"config": config, "mean": round(sum(scores.values()) / len(scores), 1),
+         "suites": {name: round(rate, 1) for name, rate in sorted(scores.items())}}
+        for config, scores in by_config.items()
+    ]
+    return sorted(ranked, key=lambda r: r["mean"], reverse=True)
 
 
 def make_app(runs: pathlib.Path, campaign: str) -> web.Application:
@@ -111,13 +151,16 @@ def make_app(runs: pathlib.Path, campaign: str) -> web.Application:
 
     async def state(_request):
         machines = []
+        all_cells = []
         for machine in ("99", "97"):
+            cells = _cells(runs / campaign / machine)
+            all_cells += [{**row, "config": f"{machine}/{row['config']}"} for row in cells]
             machines.append({
                 "machine": machine,
                 "current": _current(_tail(runs / f"journal-{machine}.jsonl", TAIL_LINES)),
-                "cells": _cells(runs / campaign / machine),
+                "cells": cells,
             })
-        return web.json_response({"machines": machines})
+        return web.json_response({"machines": machines, "ranking": _ranking(all_cells)})
 
     app = web.Application()
     app.router.add_get("/", page)
