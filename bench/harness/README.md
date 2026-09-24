@@ -468,3 +468,40 @@ and grade (apply `test_patch`, never shown to the agent, then run
 `fail_to_pass` and `pass_to_pass` comes back `PASSED`, not just the test
 command's exit code, since a SWE task's `test_cmd` legitimately runs tests
 outside those two sets too.
+
+## Orchestration: compose.yaml, docker CLI and ssh (Task 16)
+
+Two real findings from the first live pilot run of `harness/compose.yaml`,
+neither of which showed up in any unit test (both need the real host/Docker
+setup):
+
+1. **Docker-outside-of-Docker path translation.** `runner-99`/`runner-97`
+   are themselves containers that call `docker run` over the mounted host
+   socket (`/var/run/docker.sock`) to start each suite's harness container.
+   That call is resolved by the HOST daemon, not by the runner's own
+   filesystem view: a `-v <path>:...` the runner builds from `ctx.out_dir`
+   must already be a real HOST path, or the daemon either cannot find it or
+   resolves it against something else entirely (a container-only mount
+   point named `/private` collided with macOS's own real `/private`
+   directory, `mkdir: permission denied`). Fixed by mounting `BENCH_PRIVATE`
+   at the identical path on both sides (`${BENCH_PRIVATE}:${BENCH_PRIVATE}`)
+   instead of a container-only alias, so every suite's bind-mount argument
+   is valid from wherever it is issued. `bench/` itself stays mounted at the
+   virtual `/bench` since no suite ever passes a `/bench`-rooted path to a
+   nested `docker run`.
+2. **SSH to the stations needs the host's own ssh-agent.** Neither station's
+   key authenticates as a bare file under `~/.ssh` (measured live: `ssh -vvv`
+   inside a throwaway container tried every default identity name and got
+   `Permission denied`); the real key material is Keychain/agent-backed.
+   `compose.yaml` forwards the host's `SSH_AUTH_SOCK` into both runners
+   (`${SSH_AUTH_SOCK}:/ssh-agent.sock`, `SSH_AUTH_SOCK=/ssh-agent.sock` in
+   the container's own environment) so the container's `ssh`/`scp` calls
+   ask the host agent to sign, exactly as an interactive shell on this Mac
+   does; the private key itself never leaves the host. `docker compose`
+   must be invoked from a shell where `$SSH_AUTH_SOCK` is set (any normal
+   login shell on this Mac already has it).
+
+`benchrun.Dockerfile` also now carries a docker CLI (client binary only, no
+dockerd/containerd/runc: official static tarball, pinned by URL and sha256
+in `pins.env`), needed for finding (1) above to be possible at all from
+inside a runner container.

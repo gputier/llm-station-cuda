@@ -36,9 +36,11 @@ def test_run_reads_the_file_the_harness_writes(tmp_path, monkeypatch):
     cfg = dataclasses.replace(CFG, model="spark")
     ctx = SuiteContext("http://gw:8081", cfg, 1, tmp_path, tmp_path)
     calls = []
+    seen_timeouts = []
 
-    def fake_run(cmd, check):
+    def fake_run(cmd, check, **kwargs):
         calls.append(cmd)
+        seen_timeouts.append(kwargs.get("timeout"))
         # Path observed in the real run: nested under the harness's own
         # inner livebench/livebench package directory, not the repo root.
         target = (
@@ -56,6 +58,8 @@ def test_run_reads_the_file_the_harness_writes(tmp_path, monkeypatch):
     assert cmd[cmd.index("--api-base") + 1] == "http://gw:8081/v1"
     assert cmd[cmd.index("--livebench-release-option") + 1] == "2026-06-25"
     assert f"{livebench.HF_CACHE_VOLUME}:/root/.cache/huggingface" in cmd
+    assert seen_timeouts[0] is not None and seen_timeouts[0] > 0
+    assert seen_timeouts[0] == livebench.subprocess_timeout_s(("reasoning",), cfg.sampling.get("max_tokens", 0))
 
 
 def test_run_fails_when_a_category_grades_nothing(tmp_path, monkeypatch):
@@ -64,7 +68,7 @@ def test_run_fails_when_a_category_grades_nothing(tmp_path, monkeypatch):
     cfg = dataclasses.replace(CFG, model="spark")
     ctx = SuiteContext("http://gw:8081", cfg, 1, tmp_path, tmp_path)
 
-    def fake_run(cmd, check):
+    def fake_run(cmd, check, **kwargs):
         target = (
             tmp_path / "rep1-livebench" / "data"
             / "live_bench" / "reasoning" / "zebra_puzzle" / "model_judgment"

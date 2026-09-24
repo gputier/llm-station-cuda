@@ -24,12 +24,32 @@ import pathlib
 import subprocess
 
 from benchrun.config import served_alias
-from benchrun.suites import HF_CACHE_VOLUME, NETWORK
+from benchrun.suites import HF_CACHE_VOLUME, NETWORK, SAFETY_FACTOR, per_request_seconds
 
 IMAGE = "bench-livebench"
 # Newest release in LIVE_BENCH_RELEASES at LIVEBENCH_SHA (pins.env), read
 # from livebench/common.py: LIVE_BENCH_RELEASES literal set.
 RELEASE = "2026-06-25"
+# Question counts at RELEASE, measured with the harness's own load_questions
+# (module docstring): reasoning 100 (spatial 50, zebra_puzzle 50), math 182
+# (AMPS_Hard 100, math_comp 46, olympiad 36). A category not in this table
+# (none exist today beyond these two) falls back to the larger of the two
+# measured counts, kept as an explicit margin rather than guessed low.
+ITEMS_PER_CATEGORY = {"reasoning": 100, "math": 182}
+DEFAULT_ITEMS_PER_CATEGORY = max(ITEMS_PER_CATEGORY.values())
+# LiveBench math/reasoning prompts run long (full problem statements, some
+# with figures described in text); kept generous.
+PROMPT_TOKENS_ESTIMATE = 3000
+# Local ground-truth judging per question (no model call), plus the
+# harness's own retry on a malformed answer.
+JUDGE_OVERHEAD_S = 10
+STARTUP_OVERHEAD_S = 60
+
+
+def subprocess_timeout_s(categories: tuple[str, ...], max_tokens: int) -> int:
+    per_request_s = per_request_seconds(PROMPT_TOKENS_ESTIMATE, max_tokens)
+    n_items = sum(ITEMS_PER_CATEGORY.get(c, DEFAULT_ITEMS_PER_CATEGORY) for c in categories)
+    return int(max(n_items, 1) * (per_request_s * SAFETY_FACTOR + JUDGE_OVERHEAD_S) + STARTUP_OVERHEAD_S)
 
 
 def parse_livebench(judgment_jsonl: pathlib.Path) -> list[dict]:
@@ -68,6 +88,7 @@ class LiveBenchSuite:
         result_name = f"rep{ctx.rep}-livebench"
         data_dir = ctx.out_dir / result_name / "data"
         data_dir.mkdir(parents=True, exist_ok=True)
+        max_tokens = ctx.cfg.sampling.get("max_tokens", 0)
         subprocess.run(
             [
                 "docker", "run", "--rm",
@@ -86,6 +107,7 @@ class LiveBenchSuite:
                 "--livebench-release-option", self.release,
             ],
             check=True,
+            timeout=subprocess_timeout_s(self.categories, max_tokens),
         )
         rows: list[dict] = []
         for category in self.categories:

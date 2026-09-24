@@ -35,9 +35,11 @@ def test_run_reads_the_file_the_harness_writes(tmp_path, monkeypatch):
     cfg = dataclasses.replace(CFG, model="spark")
     ctx = SuiteContext("http://gw:8081", cfg, 1, tmp_path, tmp_path)
     calls = []
+    seen_timeouts = []
 
-    def fake_run(cmd, check):
+    def fake_run(cmd, check, **kwargs):
         calls.append(cmd)
+        seen_timeouts.append(kwargs.get("timeout"))
         # Name observed in the real run: the pinned harness formats the
         # Scenario enum member, hence the "Scenario." prefix.
         target = tmp_path / "rep1-output" / "bench-spark-R1" / "Scenario.codegeneration_1_0.6_eval_all.json"
@@ -51,3 +53,5 @@ def test_run_reads_the_file_the_harness_writes(tmp_path, monkeypatch):
     assert f"{lcb.HF_CACHE_VOLUME}:/root/.cache/huggingface" in cmd
     assert cmd[cmd.index("--start_date") + 1] == "2025-04-05"
     assert "OPENAI_BASE_URL=http://gw:8081/v1" in cmd
+    assert seen_timeouts[0] is not None and seen_timeouts[0] > 0
+    assert seen_timeouts[0] == lcb.subprocess_timeout_s(100, cfg.sampling.get("max_tokens", 0))

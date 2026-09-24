@@ -23,7 +23,7 @@ import json
 import subprocess
 
 from benchrun.config import served_alias
-from benchrun.suites import HF_CACHE_VOLUME, NETWORK
+from benchrun.suites import HF_CACHE_VOLUME, NETWORK, SAFETY_FACTOR, per_request_seconds
 
 IMAGE = "bench-lcb"
 SCENARIO = "codegeneration"
@@ -32,6 +32,27 @@ SCENARIO = "codegeneration"
 N_SAMPLES = 1
 PLACEHOLDER_TEMPERATURE = 0.6
 PLACEHOLDER_TOP_P = 0.95
+# LiveCodeBench problem statements plus a solution skeleton, a generous
+# margin over what real passes have sent (Task 9's real 12-problem pass, no
+# statement seen over a few hundred tokens). No timing/tokenizer to measure
+# this from directly, unlike RULER's cl100k ratio: kept generous on purpose.
+PROMPT_TOKENS_ESTIMATE = 2000
+# Sandboxed test execution per problem (the pinned harness's own --evaluate
+# step), which the request/decode floors above do not cover at all.
+EVAL_OVERHEAD_S = 30
+# Container start plus the HF-cached dataset filter (bench-hf-cache volume,
+# already warm after the first run); measured well under this in every real
+# pass so far (Task 9, Ruling AA).
+STARTUP_OVERHEAD_S = 120
+
+
+def subprocess_timeout_s(n_problems: int, max_tokens: int) -> int:
+    """Timeout for the one docker run call this suite makes (--multiprocess 1,
+    strictly sequential across problems): n_problems times one request's
+    prefill+decode cost (the shared per_request_seconds floors) plus its own
+    evaluation overhead, plus a fixed startup margin."""
+    per_request_s = per_request_seconds(PROMPT_TOKENS_ESTIMATE, max_tokens)
+    return int(max(n_problems, 1) * (per_request_s * SAFETY_FACTOR + EVAL_OVERHEAD_S) + STARTUP_OVERHEAD_S)
 
 
 def parse_lcb(eval_all: list[dict]) -> list[dict]:
@@ -64,6 +85,7 @@ class LiveCodeBenchSuite:
         model_alias = served_alias(ctx.cfg)
         result_name = f"rep{ctx.rep}-output"
         output_dir = ctx.out_dir / result_name
+        max_tokens = ctx.cfg.sampling.get("max_tokens", 0)
         subprocess.run(
             [
                 "docker", "run", "--rm",
@@ -84,6 +106,7 @@ class LiveCodeBenchSuite:
                 "--multiprocess", "1",
             ],
             check=True,
+            timeout=subprocess_timeout_s(self.n_problems, max_tokens),
         )
         # The pinned get_output_path() formats the Scenario enum member itself,
         # which renders as "Scenario.codegeneration" (seen in the real run).

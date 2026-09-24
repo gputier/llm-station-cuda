@@ -1,0 +1,134 @@
+# Orchestration for the campaign (Task 16, ruling Z of the ledger). Two
+# gateways (one per station) and two runners (one per station), all attached
+# to the external network bench-net so a runner, its gateway, and the harness
+# containers a runner spawns via the docker socket can all reach each other
+# by service name: gateway_url is http://gateway-<machine>:8081 either way.
+#
+# bench-net is external: created once, outside this file, the same network
+# the harness containers themselves join ("docker network create bench-net",
+# ignore "already exists"; benchrun.suites.NETWORK names it on the harness
+# side).
+#
+# Variables (${...} below) come from an env file that is NOT committed (this
+# repository's write hook refuses .env*, and the values are private
+# addresses regardless): copy bench/stations.example, fill it in, then run
+# every command below with "docker compose --env-file <your file> ...".
+#
+# BENCH_PRIVATE is mounted at the SAME path inside the container as on the
+# host (found live, Task 16 pilot): a runner is itself a container, and the
+# docker socket it uses to start harness containers talks to the HOST
+# daemon, which resolves every "-v <path>:..." it is given against the HOST
+# filesystem, not the runner's own. A container-only path (the earlier
+# "/private") cannot be bind-mounted by that daemon at all (it either does
+# not exist on the host, or resolves to something else entirely, e.g. macOS's
+# own real /private); an identical path on both sides is what makes a mount
+# built from ctx.out_dir inside the runner land on the right bytes when the
+# host daemon actually creates it.
+services:
+  gateway-99:
+    image: benchrun:dev
+    networks:
+      - bench-net
+    working_dir: /bench
+    ports:
+      - "127.0.0.1:8081:8081"
+    volumes:
+      # Same source mount as the runners (Ruling J): the image's own
+      # editable install points at a stub, the real benchrun package only
+      # exists once /bench is bound in.
+      - ../:/bench
+      - ${BENCH_PRIVATE}/runs:${BENCH_PRIVATE}/runs
+    command:
+      - python
+      - -m
+      - benchrun.gateway
+      - --upstream
+      - ${STATION_99_URL}
+      - --journal
+      - ${BENCH_PRIVATE}/runs/journal-99.jsonl
+      - --port
+      - "8081"
+
+  gateway-97:
+    image: benchrun:dev
+    networks:
+      - bench-net
+    working_dir: /bench
+    ports:
+      - "127.0.0.1:8082:8081"
+    volumes:
+      - ../:/bench
+      - ${BENCH_PRIVATE}/runs:${BENCH_PRIVATE}/runs
+    command:
+      - python
+      - -m
+      - benchrun.gateway
+      - --upstream
+      - ${STATION_97_URL}
+      - --journal
+      - ${BENCH_PRIVATE}/runs/journal-97.jsonl
+      - --port
+      - "8081"
+
+  runner-99:
+    image: benchrun:dev
+    networks:
+      - bench-net
+    working_dir: /bench
+    environment:
+      STATION_99_SSH: ${STATION_99_SSH}
+      STATION_99_URL: ${STATION_99_URL}
+      STATION_97_SSH: ${STATION_97_SSH}
+      STATION_97_URL: ${STATION_97_URL}
+      BENCH_PRIVATE: ${BENCH_PRIVATE}
+      BENCH_REPOS_ROOT: ${BENCH_REPOS_ROOT:-}
+      # The stations' keys are Keychain/agent-backed on this Mac (found live,
+      # Task 16): no bare key file under ~/.ssh authenticates on its own, the
+      # host's own ssh-agent must sign. SSH_AUTH_SOCK below forwards it.
+      SSH_AUTH_SOCK: /ssh-agent.sock
+    volumes:
+      # Repo source, bind-mounted at /bench like every other harness
+      # container (Ruling J): the image never bakes its own copy.
+      - ../:/bench
+      # Private run output, task tarball cache and any suite's own scratch
+      # (aider's exercise list, agentic's tasks dir): all outside git. Same
+      # path on both sides (see the note above the services list).
+      - ${BENCH_PRIVATE}:${BENCH_PRIVATE}
+      # known_hosts and any ssh config, read-only: the runner never needs to
+      # write to it. The private key material itself never leaves the host
+      # (see SSH_AUTH_SOCK above).
+      - ${HOME}/.ssh:/root/.ssh:ro
+      - ${SSH_AUTH_SOCK}:/ssh-agent.sock
+      # Docker socket: suites start their own harness containers
+      # ("docker run --network bench-net ..."), so the runner needs a client
+      # talking to the SAME daemon as the host (benchrun.Dockerfile now
+      # carries one, Task 16).
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      - gateway-99
+
+  runner-97:
+    image: benchrun:dev
+    networks:
+      - bench-net
+    working_dir: /bench
+    environment:
+      STATION_99_SSH: ${STATION_99_SSH}
+      STATION_99_URL: ${STATION_99_URL}
+      STATION_97_SSH: ${STATION_97_SSH}
+      STATION_97_URL: ${STATION_97_URL}
+      BENCH_PRIVATE: ${BENCH_PRIVATE}
+      BENCH_REPOS_ROOT: ${BENCH_REPOS_ROOT:-}
+      SSH_AUTH_SOCK: /ssh-agent.sock
+    volumes:
+      - ../:/bench
+      - ${BENCH_PRIVATE}:${BENCH_PRIVATE}
+      - ${HOME}/.ssh:/root/.ssh:ro
+      - ${SSH_AUTH_SOCK}:/ssh-agent.sock
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      - gateway-97
+
+networks:
+  bench-net:
+    external: true
