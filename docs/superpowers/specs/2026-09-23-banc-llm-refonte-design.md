@@ -251,7 +251,9 @@ template maison, T1.0/0.95/20).
   (imatrix calibré sur KAT, tête MTP greffée, gain de 2,03x annoncé, HTTP 401 le 23/09) est retenté à
   la tâche 14 ; si le dépôt s'ouvre, il remplace R2. Voir arbitrage du 23/09/2026.
 - R3 : template forcé par `--chat-template-file` si la phase 0 montre que le template embarqué
-  déclenche le parseur Qwen3-Coder.
+  déclenche le parseur Qwen3-Coder. Le contrôle de la tâche 14 est négatif (aucun template forcé).
+  Arbitrage du 24/09/2026 : R3 devient KV cache q8_0 sur le fichier existant, tout le reste comme
+  R1, non sourcé.
 
 **nex**, Nex-N2.5-mini i1-Q4_K_M (sans spéculation, tête MTP absente des tenseurs).
 - R1 : config actuelle, déjà conforme à la fiche (T0.7/0.95/40), avec `reasoning_effort` medium.
@@ -284,7 +286,10 @@ template maison, T1.0/0.95/20).
 - R1 : T0.7/0.95/20, la seule valeur de la fiche GGUF, qui prime sur le `generation_config` hérité.
   Source : huggingface.co/prism-ml/Ternary-Bonsai-27B-gguf.
 - R2 : drafter DFlash entraîné sur Qwen3.6-27B (`spiritbuun/Qwen3.6-27B-DFlash-GGUF`). Risque de rejet
-  massif par la cible ternaire.
+  massif par la cible ternaire. Rejeté à la tâche 15 sur b10883 (architecture `dflash-draft`
+  inconnue), toujours rejeté à la tâche 14 sur le nouveau build b11156. Arbitrage du 24/09/2026 :
+  R2 passe sur le moteur `prism-dflash2` déjà présent pour bonsai2 (`$exeDflash2`/`$workDirDflash2`
+  dans `llm-ctl.ps1`), seule configuration de `bonsai` sur un autre moteur que R1 et R3.
 - R3 : KV q4_0 et ctx 393 216, avec le rappel à prouver.
 
 ### 5.2 Machine 97

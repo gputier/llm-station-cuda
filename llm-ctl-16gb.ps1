@@ -42,6 +42,17 @@ param(
 $RootDir   = 'D:\LLM-Setup'
 $ModelsDir = 'D:\models'
 
+# Official release b11156 (2026-09-24), the CUDA 13.4 Windows zip plus its own
+# flat cudart, laid down at $RootDir\llama-cpp-b11156, beside beellama-v0.4.6,
+# for phase 0 of the bench (task 14). No BeeLlama release newer than
+# 2026-09-22 was found (checked by repository search and by the binary's own
+# --version, no canonical BeeLlama repository with releases was located):
+# this is the upstream build, not a BeeLlama update. Not wired into $builds:
+# BeeLlama's KVarN cache stays the one that fits tiel and qwen36 on this
+# 16 GB card, the bench configs reference this path directly for what the
+# spec asks the new build for, so no $exeB11156/$workDirB11156 pair is
+# declared here.
+
 $instDir    = "$RootDir\instances"
 $logDir     = "$RootDir\logs"
 $serverPort = 8080

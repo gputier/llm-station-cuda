@@ -42,7 +42,15 @@ MANIFEST=(
     "prism-ml/Ternary-Bonsai-2-27B-gguf|Ternary-Bonsai-2-27B-PTQ1_0.gguf|D:\\models\\ternary-bonsai-2-27b\\Ternary-Bonsai-2-27B-PTQ1_0.gguf|53107f530aa52eb00912263ab1ee29bd199261c87cd7b4ad4ca1318c1fe33ee3"
     "JonathanColetti/Qwen3.8-27B-Uncensored-GGUF|Qwen3.8-27B-Uncensored-Q6_K.gguf|D:\\models\\qwen3.8-27b-uncensored\\Qwen3.8-27B-Uncensored-Q6_K.gguf|a50aa1478295b58ee3d93eabe02c17f6d5fcf6cb787fd8a0ab07ac629a46cae6"
     "froggeric/Qwen-Fixed-Chat-Templates|chat_template.jinja|D:\\models\\shared\\froggeric-chat-template.jinja|e57684bae4156211a55473c5a63be976a405a37ab5be5ae0e5abf1df5349c4b2"
+    "unsloth/Muse-Glimmer-30B-GGUF|mmproj-Muse-Glimmer-30B-BF16.gguf|D:\\models\\muse-glimmer-30b\\mmproj-BF16.gguf|d08cdcfa0b41d8e20554b52df404ba4f7b440d0bc502a90038508b6407df8ee1"
 )
+# The muse entry is the mmproj muse/R3 needs and R3 never had: the file names
+# already on disk for this profile (Muse-Glimmer-30B-UD-Q4_K_XL.gguf,
+# mmproj-kquant.gguf, dflash-kquant.gguf) match unsloth/Muse-Glimmer-30B-GGUF
+# byte for byte (checked via /api/models?blobs=true on 2026-09-24), which is
+# what identifies it as the real source repository; the sha256 above is the
+# one that API publishes for mmproj-Muse-Glimmer-30B-BF16.gguf, renamed on
+# the way down to match the path muse/R3.yaml already expects.
 # The froggeric entry is not LFS-tracked (28234 bytes, plain git blob): the
 # Hugging Face API has no published sha256 for it, only a git blob sha1.
 # The sha256 above was computed locally on 2026-09-23 from the live content

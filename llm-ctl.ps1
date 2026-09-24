@@ -122,6 +122,13 @@ $workDirB10883 = "$RootDir\llama-cpp-b10883"
 $exeDflash2     = "$RootDir\llama-cpp-prism-dflash2\llama\build-win\bin\llama-server.exe"
 $workDirDflash2 = "$RootDir\llama-cpp-prism-dflash2\llama\build-win\bin"
 
+# Official release b11156 (2026-09-24), the CUDA 13.4 Windows zip plus its own
+# flat cudart, laid down at $RootDir\llama-cpp-b11156 for phase 0 of the bench
+# (task 14): ancestor of bfd73a876 checked ahead/identical via the GitHub
+# compare API before the download. Not wired into $builds: no production
+# profile moves here today, the bench configs reference this path directly,
+# so no $exeB11156/$workDirB11156 pair is declared here.
+
 $instDir   = "$RootDir\instances"
 New-Item -ItemType Directory -Force -Path $instDir | Out-Null
 

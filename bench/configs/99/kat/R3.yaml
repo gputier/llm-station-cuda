@@ -1,7 +1,7 @@
 machine: "99"
 model: kat
 variant: R3
-label: "provisoire, remplacé à la tâche 14 selon le contrôle du parseur (spec : template forcé si le template embarqué déclenche le parseur Qwen3-Coder ; aucun fichier de template KAT trouvé cette session, recherche HF infructueuse)"
+label: "KV cache q8_0, non sourcé, arbitrage du 24/09/2026 (le contrôle du parseur en tâche 14 est négatif, kat ne déclenche pas le parseur Qwen3-Coder : pas de template forcé)"
 exe: 'D:\LLM-Setup\llama-cpp-b10826\llama-server.exe'
 workdir: 'D:\LLM-Setup\llama-cpp-b10826'
 cudabin: null
@@ -34,9 +34,9 @@ args:
   - '-ub'
   - '2048'
   - '--cache-type-k'
-  - 'q4_0'
+  - 'q8_0'
   - '--cache-type-v'
-  - 'q4_0'
+  - 'q8_0'
   - '-cram'
   - '24576'
 env: {}

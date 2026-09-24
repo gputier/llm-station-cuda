@@ -1,9 +1,9 @@
 machine: "99"
 model: bonsai
 variant: R2
-label: "drafter DFlash Qwen3.6-27B, risque de rejet massif par la cible ternaire"
-exe: 'D:\LLM-Setup\llama-cpp-b10883\llama-server.exe'
-workdir: 'D:\LLM-Setup\llama-cpp-b10883'
+label: "drafter DFlash Qwen3.6-27B, sur le moteur prism-dflash2 (autre moteur que R1 et R3, arbitrage du 24/09/2026 : b10883 ne connaît pas l'architecture 'dflash-draft'), risque de rejet massif par la cible ternaire"
+exe: 'D:\LLM-Setup\llama-cpp-prism-dflash2\llama\build-win\bin\llama-server.exe'
+workdir: 'D:\LLM-Setup\llama-cpp-prism-dflash2\llama\build-win\bin'
 cudabin: 'C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.3\bin'
 args:
   - '-m'
