@@ -11,9 +11,30 @@ import pathlib
 import subprocess
 
 from benchrun.config import served_alias
-from benchrun.suites import NETWORK
+from benchrun.suites import NETWORK, SAFETY_FACTOR, per_request_seconds
 
 IMAGE = "bench-bfcl"
+# BFCL prompts (tool schema plus turn history) stay modest; kept generous.
+PROMPT_TOKENS_ESTIMATE = 1500
+# Conservative upper bound on items in any one category (categories vary;
+# no fixed count published at BFCL_SHA), so the timeout never undercounts a
+# category larger than the ones already run live (Task 10: simple_python 8,
+# multiple 8, multi_turn_base 2).
+MAX_ITEMS_PER_CATEGORY = 400
+STARTUP_OVERHEAD_S = 60
+# evaluate() makes no model call at all (pure local grading against the
+# generate phase's own result files), a flat per-category budget is enough.
+EVALUATE_OVERHEAD_PER_CATEGORY_S = 60
+
+
+def generate_timeout_s(n_categories: int, max_tokens: int) -> int:
+    per_request_s = per_request_seconds(PROMPT_TOKENS_ESTIMATE, max_tokens)
+    return int(max(n_categories, 1) * MAX_ITEMS_PER_CATEGORY * per_request_s * SAFETY_FACTOR
+               + STARTUP_OVERHEAD_S)
+
+
+def evaluate_timeout_s(n_categories: int) -> int:
+    return int(max(n_categories, 1) * EVALUATE_OVERHEAD_PER_CATEGORY_S + STARTUP_OVERHEAD_S)
 
 
 def parse_bfcl(score_dir: pathlib.Path) -> list[dict]:
@@ -75,6 +96,8 @@ class BfclSuite:
             "-e", f"OPENAI_BASE_URL={ctx.base_url}/v1",
             "-e", "OPENAI_API_KEY=x",
         ]
+        max_tokens = ctx.cfg.sampling.get("max_tokens", 0)
+        n_categories = len(self.categories)
         subprocess.run(
             [
                 "docker", "run", "--rm",
@@ -88,6 +111,7 @@ class BfclSuite:
                 "--allow-overwrite",
             ],
             check=True,
+            timeout=generate_timeout_s(n_categories, max_tokens),
         )
         subprocess.run(
             [
@@ -102,6 +126,7 @@ class BfclSuite:
                 "--score-dir", "/out/score",
             ],
             check=True,
+            timeout=evaluate_timeout_s(n_categories),
         )
         # Score files list failures only: a category the harness skipped
         # would otherwise count every one of its items as passed.

@@ -37,9 +37,11 @@ def _ctx(tmp_path):
     return SuiteContext("http://gw:8081", dataclasses.replace(CFG, model="spark"), 1, tmp_path, tmp_path)
 
 
-def _fake_harness(tmp_path, calls, drop=None):
-    def fake_run(cmd, check):
+def _fake_harness(tmp_path, calls, drop=None, timeouts=None):
+    def fake_run(cmd, check, **kwargs):
         calls.append(cmd)
+        if timeouts is not None:
+            timeouts.append(kwargs.get("timeout"))
         rep_dir = tmp_path / "rep1-bfcl"
         if "generate" in cmd:
             shutil.copytree(FIX / "result", rep_dir / "result")
@@ -53,7 +55,8 @@ def _fake_harness(tmp_path, calls, drop=None):
 def test_run_reads_the_files_the_harness_writes(tmp_path, monkeypatch):
     ctx = _ctx(tmp_path)
     calls = []
-    monkeypatch.setattr(bfcl.subprocess, "run", _fake_harness(tmp_path, calls))
+    timeouts = []
+    monkeypatch.setattr(bfcl.subprocess, "run", _fake_harness(tmp_path, calls, timeouts=timeouts))
     rows = BfclSuite().run(ctx)
     # 18 items across the three categories (the result files' own universe),
     # one failed (in the multiple score file), 17 passed.
@@ -63,6 +66,7 @@ def test_run_reads_the_files_the_harness_writes(tmp_path, monkeypatch):
     assert len(calls) == 2
     assert "OPENAI_BASE_URL=http://gw:8081/v1" in calls[0]
     assert "OPENAI_API_KEY=x" in calls[0]
+    assert all(t is not None and t > 0 for t in timeouts)
 
 
 def test_run_fails_when_a_category_has_no_score_file(tmp_path, monkeypatch):

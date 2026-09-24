@@ -141,6 +141,14 @@ SIDECAR_READY_INTERVAL_S = 1
 # Sized with margin over that, not shared with the agent/grade budget so a
 # slow cold-cache install cannot masquerade as a hung agent or vice versa.
 PREPARE_TIMEOUT_S = 7200
+# Every other subprocess.run this suite starts is a short docker/git admin
+# call (network create/rm/inspect, container rm/cp, "docker run -d ... sleep
+# infinity" to start a long-lived container, a git plumbing command): none of
+# these talk to a model, so a flat, generous ceiling is enough. Without one a
+# stuck docker daemon or git process would hang this cell (and, since
+# Campaign.run is sequential, the whole rest of the campaign) forever
+# (Task 16 memo, due 2026-09-30: give every suite subprocess a timeout).
+DOCKER_ADMIN_TIMEOUT_S = 120
 
 
 class GatewayUnreachableError(Exception):
@@ -200,22 +208,22 @@ def _start_sidecars(task_id: str, rep: int, sidecars: list[dict]) -> tuple[str |
     if not sidecars:
         return None, []
     network = _task_network_name(task_id, rep)
-    subprocess.run(["docker", "network", "rm", network], capture_output=True)
+    subprocess.run(["docker", "network", "rm", network], capture_output=True, timeout=DOCKER_ADMIN_TIMEOUT_S)
     create = subprocess.run(["docker", "network", "create", "--internal", network],
-                             capture_output=True, text=True)
+                             capture_output=True, text=True, timeout=DOCKER_ADMIN_TIMEOUT_S)
     if create.returncode != 0:
         raise SidecarError(f"could not create {network}: {create.stderr}")
     names = []
     try:
         for sidecar in sidecars:
             name = f"task-{task_id}-r{rep}-{sidecar['name']}"
-            subprocess.run(["docker", "rm", "-f", name], capture_output=True)
+            subprocess.run(["docker", "rm", "-f", name], capture_output=True, timeout=DOCKER_ADMIN_TIMEOUT_S)
             cmd = ["docker", "run", "-d", "--name", name, "--network", network,
                    "--network-alias", sidecar["name"]]
             for key, value in (sidecar.get("env") or {}).items():
                 cmd += ["-e", f"{key}={value}"]
             cmd.append(sidecar["image"])
-            started = subprocess.run(cmd, capture_output=True, text=True)
+            started = subprocess.run(cmd, capture_output=True, text=True, timeout=DOCKER_ADMIN_TIMEOUT_S)
             if started.returncode != 0:
                 raise SidecarError(f"could not start sidecar {name}: {started.stderr}")
             names.append(name)
@@ -223,7 +231,7 @@ def _start_sidecars(task_id: str, rep: int, sidecars: list[dict]) -> tuple[str |
             if ready_cmd:
                 for _ in range(SIDECAR_READY_RETRIES):
                     probe = subprocess.run(["docker", "exec", name, *shlex.split(ready_cmd)],
-                                            capture_output=True)
+                                            capture_output=True, timeout=DOCKER_ADMIN_TIMEOUT_S)
                     if probe.returncode == 0:
                         break
                     time.sleep(SIDECAR_READY_INTERVAL_S)
@@ -231,17 +239,17 @@ def _start_sidecars(task_id: str, rep: int, sidecars: list[dict]) -> tuple[str |
                     raise SidecarError(f"sidecar {name} never became ready ({ready_cmd})")
     except SidecarError:
         for name in names:
-            subprocess.run(["docker", "rm", "-f", name], capture_output=True)
-        subprocess.run(["docker", "network", "rm", network], capture_output=True)
+            subprocess.run(["docker", "rm", "-f", name], capture_output=True, timeout=DOCKER_ADMIN_TIMEOUT_S)
+        subprocess.run(["docker", "network", "rm", network], capture_output=True, timeout=DOCKER_ADMIN_TIMEOUT_S)
         raise
     return network, names
 
 
 def _stop_sidecars(network: str | None, names: list[str]) -> None:
     for name in names:
-        subprocess.run(["docker", "rm", "-f", name], capture_output=True)
+        subprocess.run(["docker", "rm", "-f", name], capture_output=True, timeout=DOCKER_ADMIN_TIMEOUT_S)
     if network:
-        subprocess.run(["docker", "network", "rm", network], capture_output=True)
+        subprocess.run(["docker", "network", "rm", network], capture_output=True, timeout=DOCKER_ADMIN_TIMEOUT_S)
 
 
 def parse_claude_json(stdout: str) -> dict:
@@ -266,23 +274,22 @@ def _ensure_isolated_network(network: str) -> None:
     # real internet access: this is the isolation guarantee, not a
     # formality. `network` is per task and rep (see _isolated_network_name):
     # two concurrent AgenticSuite runs never share one.
-    subprocess.run(["docker", "network", "rm", network], capture_output=True)
+    subprocess.run(["docker", "network", "rm", network], capture_output=True, timeout=DOCKER_ADMIN_TIMEOUT_S)
     create = subprocess.run(["docker", "network", "create", "--internal", network],
-                             capture_output=True, text=True)
+                             capture_output=True, text=True, timeout=DOCKER_ADMIN_TIMEOUT_S)
     if create.returncode != 0:
         raise IsolationError(f"could not create {network}: {create.stderr}")
     inspect = subprocess.run(
         ["docker", "network", "inspect", network, "--format", "{{.Internal}}"],
-        capture_output=True, text=True,
-    )
+        capture_output=True, text=True, timeout=DOCKER_ADMIN_TIMEOUT_S)
     if inspect.stdout.strip() != "true":
         raise IsolationError(
             f"{network} exists but is not internal: refusing to use it for the agent phase")
 
 
 def _remove_isolated_network(network: str, gw_host: str) -> None:
-    subprocess.run(["docker", "network", "disconnect", network, gw_host], capture_output=True)
-    subprocess.run(["docker", "network", "rm", network], capture_output=True)
+    subprocess.run(["docker", "network", "disconnect", network, gw_host], capture_output=True, timeout=DOCKER_ADMIN_TIMEOUT_S)
+    subprocess.run(["docker", "network", "rm", network], capture_output=True, timeout=DOCKER_ADMIN_TIMEOUT_S)
 
 
 def _check_gateway_reachable(container: str, base_url: str, network: str) -> None:
@@ -291,8 +298,7 @@ def _check_gateway_reachable(container: str, base_url: str, network: str) -> Non
         probe = subprocess.run(
             ["docker", "exec", container, "curl", "-s", "-m", "5", "-o", "/dev/null",
              "-w", "%{http_code}", base_url],
-            capture_output=True, text=True,
-        )
+            capture_output=True, text=True, timeout=DOCKER_ADMIN_TIMEOUT_S)
         if probe.returncode == 0:
             return
         last_error = probe.stderr.strip()
@@ -307,13 +313,12 @@ def _apply_diff(container: str, diff_text: str, dest: str) -> subprocess.Complet
         diff_path = fh.name
     try:
         subprocess.run(["docker", "cp", diff_path, f"{container}:{dest}"],
-                        check=True, capture_output=True)
+                        check=True, capture_output=True, timeout=DOCKER_ADMIN_TIMEOUT_S)
     finally:
         pathlib.Path(diff_path).unlink(missing_ok=True)
     return subprocess.run(
         ["docker", "exec", container, "bash", "-c", f"cd /testbed && git apply --whitespace=nowarn {dest}"],
-        capture_output=True, text=True,
-    )
+        capture_output=True, text=True, timeout=DOCKER_ADMIN_TIMEOUT_S)
 
 
 def _swe_grade_passed(outcomes: dict[str, str], fail_to_pass: list[str], pass_to_pass: list[str],
@@ -431,8 +436,7 @@ def _git_priv(git_dir: pathlib.Path, work: pathlib.Path, *args, check: bool = Tr
     return subprocess.run(
         ["git", f"--git-dir={git_dir}", f"--work-tree={work}",
          "-c", "core.hooksPath=/dev/null", "-c", "core.fsmonitor=false", *args],
-        cwd=str(work), capture_output=True, text=True, check=check,
-    )
+        cwd=str(work), capture_output=True, text=True, check=check, timeout=DOCKER_ADMIN_TIMEOUT_S)
 
 
 def _discard_stray_git(work: pathlib.Path) -> None:
@@ -467,7 +471,7 @@ def _snapshot_base_commit(work: pathlib.Path, private_git_dir: pathlib.Path) -> 
     else:
         private_git_dir.mkdir(parents=True, exist_ok=True)
         env = dict(os.environ, GIT_DIR=str(private_git_dir), GIT_WORK_TREE=str(work))
-        subprocess.run(["git", "init", "-q", "-b", "bench-base"], cwd=str(work), env=env, check=True)
+        subprocess.run(["git", "init", "-q", "-b", "bench-base"], cwd=str(work), env=env, check=True, timeout=DOCKER_ADMIN_TIMEOUT_S)
         _git_priv(private_git_dir, work, "config", "core.autocrlf", "false")
         _git_priv(private_git_dir, work, "-c", "core.excludesFile=", "add", "-A")
         _git_priv(private_git_dir, work, *GIT_IDENTITY_ARGS, "commit", "-q", "--allow-empty", "-m", "base")
@@ -559,10 +563,10 @@ class AgenticSuite:
             is_swe = source == "swe"
             isolated_network = _isolated_network_name(task["id"], ctx.rep)
             container = f"agent-{ctx.rep}-{task['id']}"
-            subprocess.run(["docker", "rm", "-f", container], capture_output=True)
+            subprocess.run(["docker", "rm", "-f", container], capture_output=True, timeout=DOCKER_ADMIN_TIMEOUT_S)
             swe_container = f"swe-env-{ctx.rep}-{task['id']}" if is_swe else None
             if swe_container:
-                subprocess.run(["docker", "rm", "-f", swe_container], capture_output=True)
+                subprocess.run(["docker", "rm", "-f", swe_container], capture_output=True, timeout=DOCKER_ADMIN_TIMEOUT_S)
 
             work = ctx.out_dir / f"rep{ctx.rep}-{task['id']}"
             work.mkdir(parents=True)
@@ -582,10 +586,9 @@ class AgenticSuite:
                 subprocess.run(
                     ["docker", "run", "-d", "--name", swe_container, "--platform", SWE_PLATFORM,
                      "--network", "bridge", "--entrypoint", "sleep", task["docker_image"], "infinity"],
-                    check=True, capture_output=True,
-                )
+                    check=True, capture_output=True, timeout=DOCKER_ADMIN_TIMEOUT_S)
                 subprocess.run(["docker", "cp", f"{swe_container}:/testbed/.", str(work)],
-                                check=True, capture_output=True)
+                                check=True, capture_output=True, timeout=DOCKER_ADMIN_TIMEOUT_S)
                 base_sha = _snapshot_base_commit(work, private_git_dir)
                 task_network, sidecar_names = None, []
                 subprocess.run(
@@ -593,8 +596,7 @@ class AgenticSuite:
                      "--user", "agent", "-e", "HOME=/home/agent",
                      "-v", f"{work}:/repo", "-w", "/repo",
                      "--entrypoint", "sleep", IMAGE, "infinity"],
-                    check=True, capture_output=True,
-                )
+                    check=True, capture_output=True, timeout=DOCKER_ADMIN_TIMEOUT_S)
             else:
                 tar_path = self._resolve_private_tarball(task)
                 with tarfile.open(tar_path, "r:*") as tf:
@@ -610,11 +612,10 @@ class AgenticSuite:
                      "--user", "agent", "-e", "HOME=/home/agent", *sidecar_env,
                      "-v", f"{work}:/repo", "-w", "/repo",
                      "--entrypoint", "sleep", IMAGE, "infinity"],
-                    check=True, capture_output=True,
-                )
+                    check=True, capture_output=True, timeout=DOCKER_ADMIN_TIMEOUT_S)
                 if task_network:
                     subprocess.run(["docker", "network", "connect", task_network, container],
-                                    check=True, capture_output=True)
+                                    check=True, capture_output=True, timeout=DOCKER_ADMIN_TIMEOUT_S)
             try:
                 # prepare: infrastructure phase. A failure here means the
                 # environment cannot even attempt this task and is not a
@@ -657,18 +658,18 @@ class AgenticSuite:
 
                 _ensure_isolated_network(isolated_network)
                 subprocess.run(["docker", "network", "connect", isolated_network, gw_host],
-                                capture_output=True)
+                                capture_output=True, timeout=DOCKER_ADMIN_TIMEOUT_S)
                 subprocess.run(["docker", "network", "disconnect", "bridge", container],
-                                check=True, capture_output=True)
+                                check=True, capture_output=True, timeout=DOCKER_ADMIN_TIMEOUT_S)
                 if task_network:
                     # Sidecars never give the agent phase egress either: the
                     # main container leaves the task's own network too,
                     # exactly like it leaves the internet, and only rejoins
                     # it for grading.
                     subprocess.run(["docker", "network", "disconnect", task_network, container],
-                                    check=True, capture_output=True)
+                                    check=True, capture_output=True, timeout=DOCKER_ADMIN_TIMEOUT_S)
                 subprocess.run(["docker", "network", "connect", isolated_network, container],
-                                check=True, capture_output=True)
+                                check=True, capture_output=True, timeout=DOCKER_ADMIN_TIMEOUT_S)
                 # The gateway must answer before the agent call: claude -p
                 # hangs silently for 120+ s otherwise, which would look
                 # identical to a slow but working model instead of an
@@ -714,7 +715,7 @@ class AgenticSuite:
                     reason = None
 
                 subprocess.run(["docker", "network", "disconnect", isolated_network, container],
-                                check=True, capture_output=True)
+                                check=True, capture_output=True, timeout=DOCKER_ADMIN_TIMEOUT_S)
                 _remove_isolated_network(isolated_network, gw_host)
                 if task_network:
                     # Grading gets the sidecars back (a real database/cache
@@ -722,7 +723,7 @@ class AgenticSuite:
                     # the internet: only task_network is reconnected, not
                     # bridge.
                     subprocess.run(["docker", "network", "connect", task_network, container],
-                                    check=True, capture_output=True)
+                                    check=True, capture_output=True, timeout=DOCKER_ADMIN_TIMEOUT_S)
 
                 # Grading integrity: the agent had write access to the whole
                 # tree (private: could delete/gut the failing test; swe/:
@@ -757,7 +758,7 @@ class AgenticSuite:
                 grade_timed_out = False
                 if is_swe:
                     subprocess.run(["docker", "cp", f"{work}/.", f"{swe_container}:/testbed/"],
-                                    check=True, capture_output=True)
+                                    check=True, capture_output=True, timeout=DOCKER_ADMIN_TIMEOUT_S)
                     patch_applied = _apply_diff(swe_container, task["test_patch"], "/tmp/test_patch.diff")
                     test_cmd = task["test_cmd"]
                     try:
@@ -781,9 +782,9 @@ class AgenticSuite:
                     except subprocess.TimeoutExpired:
                         grade_timed_out = True
             finally:
-                subprocess.run(["docker", "rm", "-f", container], capture_output=True)
+                subprocess.run(["docker", "rm", "-f", container], capture_output=True, timeout=DOCKER_ADMIN_TIMEOUT_S)
                 if swe_container:
-                    subprocess.run(["docker", "rm", "-f", swe_container], capture_output=True)
+                    subprocess.run(["docker", "rm", "-f", swe_container], capture_output=True, timeout=DOCKER_ADMIN_TIMEOUT_S)
                 _stop_sidecars(task_network, sidecar_names)
                 shutil.rmtree(base_git_scratch, ignore_errors=True)
 

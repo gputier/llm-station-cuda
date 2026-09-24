@@ -12,9 +12,25 @@ import pathlib
 import subprocess
 
 from benchrun.config import served_alias
-from benchrun.suites import NETWORK
+from benchrun.suites import NETWORK, SAFETY_FACTOR, per_request_seconds
 
 IMAGE = "bench-aider"
+# An aider exercise prompt carries the whole file under edit plus
+# instructions, larger than a bare LiveCodeBench statement; kept generous,
+# no real-pass measurement to size this from more precisely yet.
+PROMPT_TOKENS_ESTIMATE = 4000
+# Up to two tries per exercise (whole edit format, aider's own retry on a
+# malformed edit) plus running the exercise's own test suite.
+EDIT_OVERHEAD_S = 60
+# Container start plus the polyglot tree copytree into the results dir.
+STARTUP_OVERHEAD_S = 60
+
+
+def subprocess_timeout_s(n_exercises: int, max_tokens: int) -> int:
+    """Timeout for the one docker run call this suite makes (--threads 1,
+    strictly sequential across exercises)."""
+    per_request_s = per_request_seconds(PROMPT_TOKENS_ESTIMATE, max_tokens)
+    return int(max(n_exercises, 1) * (per_request_s * SAFETY_FACTOR + EDIT_OVERHEAD_S) + STARTUP_OVERHEAD_S)
 
 
 def parse_aider(results_dir: pathlib.Path) -> list[dict]:
@@ -60,6 +76,8 @@ class AiderSuite:
         # branch and populate it.
         result_name = f"rep{ctx.rep}-results"
         results_dir = ctx.out_dir / result_name
+        n_exercises = len([k for k in keywords.split(",") if k])
+        max_tokens = ctx.cfg.sampling.get("max_tokens", 0)
         subprocess.run(
             [
                 "docker", "run", "--rm",
@@ -78,5 +96,6 @@ class AiderSuite:
                 "--threads", "1",
             ],
             check=True,
+            timeout=subprocess_timeout_s(n_exercises, max_tokens),
         )
         return parse_aider(results_dir)
