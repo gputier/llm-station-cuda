@@ -94,6 +94,16 @@ def test_every_sampling_key_the_server_defaults_is_required(tmp_path, key):
         load_config(p)
 
 
+def test_hugging_face_sampling_name_is_rejected(tmp_path):
+    data = yaml.safe_load((FIX / "config_ok.yaml").read_text())
+    data["sampling"]["repetition_penalty"] = 1.0
+    data["sources"]["repetition_penalty"] = "card"
+    p = tmp_path / "c.yaml"
+    p.write_text(yaml.safe_dump(data))
+    with pytest.raises(ConfigError, match="repeat_penalty"):
+        load_config(p)
+
+
 def test_model_with_underscore_is_rejected(tmp_path):
     data = yaml.safe_load((FIX / "config_ok.yaml").read_text())
     data["model"] = "ti_el"
