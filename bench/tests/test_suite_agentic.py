@@ -16,6 +16,8 @@ from benchrun.suites.agentic import (
     IsolationError,
     ReposRootNotConfiguredError,
     SidecarError,
+    _connect_gateway_to_isolated_network,
+    _container_id_for_alias,
     parse_claude_json,
 )
 from benchrun.tasks.builder import build_task
@@ -35,6 +37,53 @@ def test_parse_claude_json_reads_the_real_output():
     assert parsed["is_error"] is False
     assert parsed["num_turns"] == 6
     assert parsed["total_cost_usd"] > 0
+
+
+def test_container_id_for_alias_resolves_the_real_container_not_the_alias(monkeypatch):
+    # Proven live, 2026-09-24: "docker network connect <net> gateway-99"
+    # silently found no such container (network connect/disconnect only
+    # ever accept a container name or id, never a network alias) and did
+    # nothing at all, capture_output swallowing the failure, which is what
+    # left the gateway unreachable from inside the isolated network with no
+    # error message worth reading.
+    calls = []
+
+    def fake_run(cmd, **kwargs):
+        calls.append(cmd)
+        if cmd[:3] == ["docker", "network", "inspect"]:
+            return FakeCompleted(stdout="real-container-id\n")
+        if cmd[:2] == ["docker", "inspect"]:
+            return FakeCompleted(stdout=json.dumps(["harness-gateway-99-1", "gateway-99"]))
+        return FakeCompleted()
+
+    monkeypatch.setattr(agentic.subprocess, "run", fake_run)
+    container_id = _container_id_for_alias("bench-net", "gateway-99")
+    assert container_id == "real-container-id"
+
+
+def test_container_id_for_alias_raises_when_no_container_advertises_it(monkeypatch):
+    def fake_run(cmd, **kwargs):
+        if cmd[:3] == ["docker", "network", "inspect"]:
+            return FakeCompleted(stdout="some-other-container\n")
+        if cmd[:2] == ["docker", "inspect"]:
+            return FakeCompleted(stdout=json.dumps(["not-the-gateway"]))
+        return FakeCompleted()
+
+    monkeypatch.setattr(agentic.subprocess, "run", fake_run)
+    with pytest.raises(GatewayUnreachableError, match="gateway-99"):
+        _container_id_for_alias("bench-net", "gateway-99")
+
+
+def test_connect_gateway_to_isolated_network_passes_the_alias_flag(monkeypatch):
+    # Without --alias, the new network would only ever know the gateway
+    # container by its real name/id, never by "gateway-99": ctx.base_url
+    # (and every curl this suite makes) uses the alias, not the id.
+    calls = []
+    monkeypatch.setattr(agentic.subprocess, "run", lambda cmd, **kw: calls.append(cmd) or FakeCompleted())
+    _connect_gateway_to_isolated_network("bench-agent-isolated-t1-r1", "real-container-id", "gateway-99")
+    cmd = calls[0]
+    assert cmd == ["docker", "network", "connect", "--alias", "gateway-99",
+                    "bench-agent-isolated-t1-r1", "real-container-id"]
 
 
 class FakeCompleted:
@@ -93,7 +142,18 @@ def _default_fake_run(cmd, **kwargs):
     if cmd[0] != "docker":
         return _REAL_SUBPROCESS_RUN(cmd, **kwargs)
     if cmd[:3] == ["docker", "network", "inspect"]:
+        fmt = cmd[cmd.index("--format") + 1] if "--format" in cmd else ""
+        if "Containers" in fmt:
+            # _container_id_for_alias's first call: one fake container id
+            # "on" the network, resolved by the next branch below.
+            return FakeCompleted(stdout="fake-gateway-container-id\n")
         return FakeCompleted(stdout="true\n")
+    if cmd[:2] == ["docker", "inspect"]:
+        # _container_id_for_alias's second call: the fake container
+        # advertises exactly the alias every test's own ctx.base_url uses
+        # ("gw-t12", SuiteContext above), so the real lookup logic runs
+        # unmodified in every test that reaches the isolation phase.
+        return FakeCompleted(stdout=json.dumps(["gw-t12"]))
     return FakeCompleted()
 
 
@@ -142,7 +202,8 @@ def test_run_installs_then_isolates_then_grades(tmp_path, monkeypatch):
     isolated_network = agentic._isolated_network_name("toy1", 1)
     assert ["docker", "network", "create", "--internal", isolated_network] in calls
     assert ["docker", "network", "inspect", isolated_network, "--format", "{{.Internal}}"] in calls
-    assert ["docker", "network", "connect", isolated_network, "gw-t12"] in calls
+    assert ["docker", "network", "connect", "--alias", "gw-t12", isolated_network,
+            "fake-gateway-container-id"] in calls
 
     # Same container for all three phases: the one docker run -d call, then
     # exec calls against that same name.
@@ -341,7 +402,12 @@ def test_run_raises_when_the_isolated_network_is_not_internal(tmp_path, monkeypa
         if cmd[0] != "docker":
             return _REAL_SUBPROCESS_RUN(cmd, **kwargs)
         if cmd[:3] == ["docker", "network", "inspect"]:
-            return FakeCompleted(stdout="false\n")
+            fmt = cmd[cmd.index("--format") + 1] if "--format" in cmd else ""
+            if "Containers" in fmt:
+                return FakeCompleted(stdout="fake-gateway-container-id\n")
+            return FakeCompleted(stdout="false\n")  # the .Internal check itself
+        if cmd[:2] == ["docker", "inspect"]:
+            return FakeCompleted(stdout=json.dumps(["gw-t12"]))
         return FakeCompleted()
 
     monkeypatch.setattr(agentic.subprocess, "run", fake_run)

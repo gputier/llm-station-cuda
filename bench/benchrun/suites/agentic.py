@@ -98,7 +98,7 @@ import time
 from urllib.parse import urlparse
 
 from benchrun.runner import SuiteSkipped
-from benchrun.suites import max_ctx, request_timeout_s
+from benchrun.suites import NETWORK, max_ctx, request_timeout_s
 from benchrun.suites.corpus import CHARS_PER_TOKEN
 from benchrun.tasks import GIT_IDENTITY_ARGS, needs_uv, parse_outcomes
 from benchrun.tasks.builder import rebuild_task
@@ -303,8 +303,50 @@ def _ensure_isolated_network(network: str) -> None:
             f"{network} exists but is not internal: refusing to use it for the agent phase")
 
 
-def _remove_isolated_network(network: str, gw_host: str) -> None:
-    subprocess.run(["docker", "network", "disconnect", network, gw_host], capture_output=True, timeout=DOCKER_ADMIN_TIMEOUT_S)
+def _container_id_for_alias(network: str, alias: str) -> str:
+    """Resolves a network alias (e.g. "gateway-99", the name compose.yaml,
+    every suite adapter and gateway_url() all use to reach the gateway,
+    Ruling Z) to the real container id "docker network connect"/"disconnect"
+    need: neither accepts a network alias, only a container name or id
+    (proven live, 2026-09-24: connecting "gateway-99" itself silently found
+    no such container and did nothing, capture_output swallowed the error,
+    so the isolated network never actually carried the gateway at all,
+    which is what made _check_gateway_reachable's own curl fail with no
+    useful message). The gateway's real container name depends on how it
+    was started (docker compose's own "harness-<project>-gateway-99-1" here,
+    but nothing this launcher should assume): read back from `network`'s own
+    Containers map and each container's own advertised aliases instead of
+    guessing a naming scheme.
+    """
+    ids = subprocess.run(
+        ["docker", "network", "inspect", network, "--format", "{{range $id, $_ := .Containers}}{{$id}} {{end}}"],
+        capture_output=True, text=True, timeout=DOCKER_ADMIN_TIMEOUT_S)
+    for container_id in ids.stdout.split():
+        info = subprocess.run(
+            ["docker", "inspect", container_id, "--format",
+             "{{json (index .NetworkSettings.Networks \"" + network + "\").Aliases}}"],
+            capture_output=True, text=True, timeout=DOCKER_ADMIN_TIMEOUT_S)
+        try:
+            aliases = json.loads(info.stdout.strip() or "null") or []
+        except json.JSONDecodeError:
+            continue
+        if alias in aliases:
+            return container_id
+    raise GatewayUnreachableError(f"no container on {network} advertises the network alias {alias!r}")
+
+
+def _connect_gateway_to_isolated_network(network: str, gw_container: str, gw_alias: str) -> None:
+    # --alias is what makes gw_alias (the hostname ctx.base_url already
+    # uses, e.g. "gateway-99") resolve from inside this NEW network:
+    # "docker network connect" only carries over the container's own
+    # name/id by default, never an alias from a different network, unless
+    # one is given here explicitly.
+    subprocess.run(["docker", "network", "connect", "--alias", gw_alias, network, gw_container],
+                    capture_output=True, timeout=DOCKER_ADMIN_TIMEOUT_S)
+
+
+def _remove_isolated_network(network: str, gw_container: str) -> None:
+    subprocess.run(["docker", "network", "disconnect", network, gw_container], capture_output=True, timeout=DOCKER_ADMIN_TIMEOUT_S)
     subprocess.run(["docker", "network", "rm", network], capture_output=True, timeout=DOCKER_ADMIN_TIMEOUT_S)
 
 
@@ -571,7 +613,12 @@ class AgenticSuite:
                 "task in this run"
             )
 
-        gw_host = urlparse(ctx.base_url).hostname
+        # ctx.base_url's own hostname (e.g. "gateway-99") is a network
+        # ALIAS on NETWORK ("bench-net"), never a container name or id: the
+        # real container docker network connect/disconnect need is resolved
+        # once here, not the alias itself (see _container_id_for_alias).
+        gw_alias = urlparse(ctx.base_url).hostname
+        gw_container = _container_id_for_alias(NETWORK, gw_alias)
 
         rows = []
         for _task_dir, task in fits:
@@ -673,8 +720,7 @@ class AgenticSuite:
                     ) from None
 
                 _ensure_isolated_network(isolated_network)
-                subprocess.run(["docker", "network", "connect", isolated_network, gw_host],
-                                capture_output=True, timeout=DOCKER_ADMIN_TIMEOUT_S)
+                _connect_gateway_to_isolated_network(isolated_network, gw_container, gw_alias)
                 subprocess.run(["docker", "network", "disconnect", "bridge", container],
                                 check=True, capture_output=True, timeout=DOCKER_ADMIN_TIMEOUT_S)
                 if task_network:
@@ -750,7 +796,7 @@ class AgenticSuite:
 
                 subprocess.run(["docker", "network", "disconnect", isolated_network, container],
                                 check=True, capture_output=True, timeout=DOCKER_ADMIN_TIMEOUT_S)
-                _remove_isolated_network(isolated_network, gw_host)
+                _remove_isolated_network(isolated_network, gw_container)
                 if task_network:
                     # Grading gets the sidecars back (a real database/cache
                     # is what makes the test suite meaningful), but never

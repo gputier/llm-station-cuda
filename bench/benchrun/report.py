@@ -8,6 +8,10 @@ A suite that raised (Campaign.run's per-suite isolation, runner.py: no
 rep1.jsonl, a rep1.error instead) shows up as its own row, result "erreur
 (<ExceptionType>)", read from rep1.error's own first line: it still counts
 toward the profile's total, never toward its passes.
+
+Text is French, for Guillaume, written with its own accents (proper UTF-8,
+never the ASCII-stripped placeholders an early draft of this file shipped
+with, 2026-09-24 second real mini run).
 """
 from __future__ import annotations
 
@@ -17,23 +21,23 @@ import pathlib
 # One short phrase per suite: what it actually grades, shown verbatim in the
 # report's per-test rows (bfcl and ruler append the category/task name).
 SUITE_DESCRIPTIONS = {
-    "lcb": "resout un probleme de programmation, code juge par execution de tests",
-    "aider": "edite un fichier existant pour satisfaire un exercice, juge par sa suite de tests",
+    "lcb": "résout un problème de programmation, code jugé par exécution de tests",
+    "aider": "édite un fichier existant pour satisfaire un exercice, jugé par sa suite de tests",
     "bfcl": "appelle la bonne fonction avec les bons arguments",
-    "livebench": "repond a une question, comparee a une reponse de reference",
-    "ruler": "retrouve une information inseree dans un contexte long",
-    "longbench_v2": "choisit la bonne reponse a choix multiple sur un contexte long",
-    "agentic": "realise une tache de developpement avec Claude Code, jugee par les tests du depot",
-    "speed": "mesure le debit de decodage, ce n'est pas une reussite",
+    "livebench": "répond à une question, comparée à une réponse de référence",
+    "ruler": "retrouve une information insérée dans un contexte long",
+    "longbench_v2": "choisit la bonne réponse à choix multiple sur un contexte long",
+    "agentic": "réalise une tâche de développement avec Claude Code, jugée par les tests du dépôt",
+    "speed": "mesure le débit de décodage, ce n'est pas une réussite",
 }
 
 
 def _suite_description(suite: str, item_id: str) -> str:
     base = SUITE_DESCRIPTIONS.get(suite, suite)
     if suite == "bfcl" and "_" in item_id:
-        return f"{base} (categorie {item_id.rsplit('_', 1)[0]})"
+        return f"{base} (catégorie {item_id.rsplit('_', 1)[0]})"
     if suite == "ruler" and "@" in item_id:
-        return f"{base} (tache {item_id.split('@', 1)[0].split('#', 1)[0]})"
+        return f"{base} (tâche {item_id.split('@', 1)[0].split('#', 1)[0]})"
     return base
 
 
@@ -91,6 +95,14 @@ def _aggregate(rows: list[dict], cap: int) -> dict:
     }
 
 
+def _error_type(error_file: pathlib.Path) -> str:
+    """rep<N>.error's own first line (Campaign.run's per-suite handler):
+    "<ExceptionType>: <message>", the exception type alone is what the
+    report shows next to "erreur"."""
+    first_line = error_file.read_text(encoding="utf-8").splitlines()[0]
+    return first_line.split(":", 1)[0].strip()
+
+
 def _profile_rows(variant_dir: pathlib.Path, run_id: str, journal_lines: list[dict], cap: int) -> tuple[list[dict], dict]:
     rows = []
     passed_count = 0
@@ -133,7 +145,7 @@ def _profile_rows(variant_dir: pathlib.Path, run_id: str, journal_lines: list[di
                 "suite": suite,
                 "description": _suite_description(suite, item_id),
                 "item_id": item_id,
-                "result": "reussi" if passed else "echoue",
+                "result": "réussi" if passed else "échoué",
                 "completion_tokens": agg["completion_tokens"],
                 "truncated": agg["truncated"],
                 "duration_s": agg["duration_s"],
@@ -149,14 +161,6 @@ def _profile_rows(variant_dir: pathlib.Path, run_id: str, journal_lines: list[di
     return rows, summary
 
 
-def _error_type(error_file: pathlib.Path) -> str:
-    """rep<N>.error's own first line (Campaign.run's per-suite handler):
-    "<ExceptionType>: <message>", the exception type alone is what the
-    report shows next to "erreur"."""
-    first_line = error_file.read_text(encoding="utf-8").splitlines()[0]
-    return first_line.split(":", 1)[0].strip()
-
-
 def _format_row(row: dict) -> str:
     tps = f"{row['decode_tps']:.1f}" if row["decode_tps"] else "-"
     return "| {suite} | {description} | {item_id} | {result} | {tokens} | {cut} | {duration:.1f} | {tps} |".format(
@@ -169,24 +173,28 @@ def _format_row(row: dict) -> str:
 
 def build_mini_report(out_root: pathlib.Path, machine: str, journal_path: pathlib.Path,
                        seed: int, cap: int, generated_at: str) -> str:
-    """out_root is DIR/mini (the mini preset's own --out), one level above
-    the machine directory: mirrors Campaign._cell's own machine/model/variant
-    nesting, so the result tree on disk already says which profiles this
-    launch touched, nothing extra to track."""
-    machine_root = out_root / machine / machine
+    """out_root is DIR/mini (the mini preset's own --out): Campaign._cell
+    nests exactly machine/model/variant under it (run_bench passes
+    out_root=DIR/mini straight to Campaign, which appends cfg.machine
+    itself, ONCE, not DIR/mini/<machine> again), so the profile tree to
+    read is out_root/machine/model/variant, not a doubled machine level (a
+    real second mini run on 2026-09-24 proved this: rapport.md said "Aucun
+    profil trouvé" over an existing out_root/97/tiel/R1/.../rep1.jsonl tree,
+    because this function used to look one level too deep)."""
+    machine_root = out_root / machine
     journal_lines = _read_journal(journal_path)
     lines = [
         f"# Rapport Mini, machine {machine}",
         "",
-        f"Genere le {generated_at}. Graine de tirage : {seed}. Plafond de reponse : {cap} tokens.",
+        f"Généré le {generated_at}. Graine de tirage : {seed}. Plafond de réponse : {cap} tokens.",
         "",
-        "Ces notes mesurent le modele sous une contrainte de reponse a 2048 tokens, pas ses "
-        "capacites completes : elles ne se comparent pas a une campagne Full. Avec une seule "
-        "question par epreuve, chaque note vaut 0 % ou 100 %, jamais une valeur intermediaire.",
+        "Ces notes mesurent le modèle sous une contrainte de réponse à 2048 tokens, pas ses "
+        "capacités complètes : elles ne se comparent pas à une campagne Full. Avec une seule "
+        "question par épreuve, chaque note vaut 0 % ou 100 %, jamais une valeur intermédiaire.",
         "",
     ]
     if not machine_root.exists() or not any(machine_root.iterdir()):
-        lines.append("Aucun profil trouve pour cette machine.")
+        lines.append("Aucun profil trouvé pour cette machine.")
         return "\n".join(lines) + "\n"
     for model_dir in sorted(p for p in machine_root.iterdir() if p.is_dir()):
         for variant_dir in sorted(p for p in model_dir.iterdir() if p.is_dir()):
@@ -194,13 +202,13 @@ def build_mini_report(out_root: pathlib.Path, machine: str, journal_path: pathli
             rows, summary = _profile_rows(variant_dir, run_id, journal_lines, cap)
             lines.append(f"## {run_id}")
             lines.append("")
-            lines.append("| epreuve | juge | question | resultat | tokens | coupee | duree (s) | decode (tok/s) |")
+            lines.append("| épreuve | juge | question | résultat | tokens | coupée | durée (s) | décodage (tok/s) |")
             lines.append("| --- | --- | --- | --- | --- | --- | --- | --- |")
             lines.extend(_format_row(row) for row in rows)
             lines.append("")
             lines.append(
-                "Synthese : {passed} reussites sur {total}, {tokens:.0f} tokens en moyenne, "
-                "{truncated} reponses coupees, duree totale {duration:.1f} s.".format(
+                "Synthèse : {passed} réussites sur {total}, {tokens:.0f} tokens en moyenne, "
+                "{truncated} réponses coupées, durée totale {duration:.1f} s.".format(
                     passed=summary["passed"], total=summary["total"], tokens=summary["mean_tokens"],
                     truncated=summary["truncated"], duration=summary["duration_s"],
                 )
