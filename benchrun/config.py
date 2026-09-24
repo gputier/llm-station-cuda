@@ -37,6 +37,9 @@ SAMPLING_FLAGS = {
 # own default (min_p 0.05, top_k 40, common/common.h), not to the model card's,
 # and max_tokens to the harness's (ruling Y).
 REQUIRED_SAMPLING = ("temperature", "top_p", "top_k", "min_p", "max_tokens")
+# Model cards use Hugging Face names; llama-server silently ignores them and
+# keeps its own default (tools/server/server-task.cpp at b11156).
+SERVER_SAMPLING_NAMES = {"repetition_penalty": "repeat_penalty"}
 REQUIRED = ("machine", "model", "variant", "label", "exe", "workdir", "args", "sampling", "sources")
 
 
@@ -81,6 +84,9 @@ def load_config(path) -> BenchConfig:
     missing_sampling = [k for k in REQUIRED_SAMPLING if k not in data["sampling"]]
     if missing_sampling:
         raise ConfigError(f"{path}: sampling must set {missing_sampling}, or llama-server applies its own defaults")
+    for key in data["sampling"]:
+        if key in SERVER_SAMPLING_NAMES:
+            raise ConfigError(f"{path}: llama-server ignores '{key}', use '{SERVER_SAMPLING_NAMES[key]}'")
     for key in list(data["sampling"]) + list(data.get("chat_template_kwargs") or {}):
         if not data["sources"].get(key):
             raise ConfigError(f"{path}: setting '{key}' has no source")
