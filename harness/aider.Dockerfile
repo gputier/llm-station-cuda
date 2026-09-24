@@ -20,4 +20,8 @@ RUN mkdir -p /npm-install && cd /npm-install && npm init -y && npm install \
     eslint@8.49.0
 RUN git clone https://github.com/Aider-AI/aider /aider && cd /aider && git checkout ${AIDER_SHA} && pip install --no-cache-dir -e . -r requirements/requirements-dev.txt
 RUN git clone https://github.com/Aider-AI/polyglot-benchmark /polyglot && cd /polyglot && git checkout ${POLYGLOT_SHA}
+# Client-side timeout/retry fix (bench/harness/README.md, no fork of the
+# pinned repo): auto-imported by the interpreter at every process start.
+COPY aider_sitecustomize /aider_sitecustomize
+ENV PYTHONPATH=/aider_sitecustomize
 WORKDIR /aider

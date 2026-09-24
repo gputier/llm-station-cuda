@@ -244,6 +244,46 @@ def test_run_records_a_model_failure_and_continues_the_loop(tmp_path, monkeypatc
         assert row["detail"]["test_exit_code"] == 1
 
 
+def test_run_sizes_the_agent_timeout_and_passes_the_model_client_env(tmp_path, monkeypatch):
+    cfg = dataclasses.replace(CFG, model="qwen")
+    tasks_dir = _make_task_dir(tmp_path, "toyTimeoutSizing", "prepare-the-deps", "node --test")
+    seen_timeouts = {}
+
+    def fake_run(cmd, **kwargs):
+        if cmd[:2] == ["docker", "exec"] and "claude" in cmd:
+            seen_timeouts["agent"] = kwargs.get("timeout")
+            return FakeCompleted(stdout=FIX.read_text(encoding="utf-8"))
+        if cmd[:2] == ["docker", "exec"] and "prepare-the-deps" in cmd:
+            return FakeCompleted()
+        if cmd[:2] == ["docker", "exec"] and "node --test" in cmd:
+            return FakeCompleted(returncode=0)
+        return _default_fake_run(cmd, **kwargs)
+
+    calls = []
+
+    def recording_fake_run(cmd, **kwargs):
+        calls.append(cmd)
+        return fake_run(cmd, **kwargs)
+
+    monkeypatch.setattr(agentic.subprocess, "run", recording_fake_run)
+    ctx = SuiteContext("http://gw-t12:8081", cfg, 1, tmp_path / "out", tmp_path)
+
+    suite = AgenticSuite(tasks_dir, max_turns=40, timeout_s=1)
+    suite.run(ctx)
+
+    claude_cmd = next(c for c in calls if "claude" in c)
+    max_tokens = cfg.sampling.get("max_tokens", 0)
+    window = cfg.ctx_proven or agentic.max_ctx(cfg)
+    per_turn = agentic.request_timeout_s(max_tokens, window)
+    assert f"API_TIMEOUT_MS={per_turn * 1000}" in claude_cmd
+    assert "CLAUDE_CODE_MAX_RETRIES=0" in claude_cmd
+    # The constructor's own timeout_s (1 s) is far below what a 40-turn task
+    # against this config legitimately needs: the sized value must win.
+    expected_agent_timeout = 40 * (per_turn + agentic.AGENT_TURN_OVERHEAD_S)
+    assert seen_timeouts["agent"] == expected_agent_timeout
+    assert expected_agent_timeout > 1
+
+
 def test_run_records_a_timeout_as_a_model_result(tmp_path, monkeypatch):
     cfg = dataclasses.replace(CFG, model="qwen")
     tasks_dir = _make_task_dir(tmp_path, "toyTimeout", "prepare-the-deps", "node --test")

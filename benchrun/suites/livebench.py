@@ -24,7 +24,7 @@ import pathlib
 import subprocess
 
 from benchrun.config import served_alias
-from benchrun.suites import HF_CACHE_VOLUME, NETWORK, SAFETY_FACTOR, per_request_seconds
+from benchrun.suites import HF_CACHE_VOLUME, NETWORK, SAFETY_FACTOR, per_request_seconds, request_timeout_s
 
 IMAGE = "bench-livebench"
 # Newest release in LIVE_BENCH_RELEASES at LIVEBENCH_SHA (pins.env), read
@@ -94,6 +94,13 @@ class LiveBenchSuite:
                 "docker", "run", "--rm",
                 "--network", NETWORK,
                 "-w", "/livebench/livebench",
+                # Read by the image's sitecustomize.py (bench/harness/livebench_sitecustomize),
+                # which sizes livebench.model.completions.TIMEOUT from it and
+                # forces the OpenAI SDK's own max_retries to 0
+                # (bench/harness/README.md): the pinned TIMEOUT=1800 constant
+                # and the SDK's default 2 retries both outlive an abandoned
+                # request the way LiveCodeBench's did (proven live, 2026-09-24).
+                "-e", f"BENCH_REQUEST_TIMEOUT_S={request_timeout_s(max_tokens, PROMPT_TOKENS_ESTIMATE)}",
                 "-v", f"{data_dir}:/livebench/livebench/data",
                 "-v", f"{HF_CACHE_VOLUME}:/root/.cache/huggingface",
                 IMAGE,

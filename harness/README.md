@@ -505,3 +505,57 @@ setup):
 dockerd/containerd/runc: official static tarball, pinned by URL and sha256
 in `pins.env`), needed for finding (1) above to be possible at all from
 inside a runner container.
+
+## Client-side timeout and zero retries (2026-09-24)
+
+Proven live on LiveCodeBench, 2026-09-24: the model server runs
+`--parallel 1` and one answer can legitimately take up the full
+prefill+decode budget. Every harness's OWN client-side timeout (well under
+that budget) fired first, the client resent the request, and the abandoned
+first attempt kept occupying the single server slot while the resend queued
+up behind it: the real answer was lost, not late. The fix is the same shape
+across every suite:
+
+1. One function, `benchrun.suites.request_timeout_s(max_tokens,
+   prompt_tokens)`, is the only place that computes a client-side timeout
+   (`per_request_seconds(...) * SAFETY_FACTOR`, the same floor rates and
+   margin `subprocess_timeout_s` already used per suite).
+2. Every suite adapter passes that value to its container as a single env
+   var, `BENCH_REQUEST_TIMEOUT_S`, via `-e` on the `docker run`/`docker
+   exec` call that talks to the model (never on a call that does not, like
+   BFCL's local-only `evaluate` phase).
+3. A pinned harness that already takes a CLI flag for this
+   (`lcb_run.py`'s `--openai_timeout`) reads `BENCH_REQUEST_TIMEOUT_S` as
+   its default instead of the adapter passing the flag twice. A pinned
+   harness with no such flag, and whose model client is built inside
+   already-owned launcher code (`bfcl_run.py`, `ruler_run.py`,
+   `longbench_run.py`), gets the timeout (and `max_retries=0`) patched in
+   there. A pinned harness with NO launcher of ours at all (`aider`,
+   `livebench`: `python benchmark/benchmark.py` / `python run_livebench.py`
+   run the pinned entrypoint directly) gets a `sitecustomize.py` added to
+   the image and put on `PYTHONPATH`: Python auto-imports any module named
+   `sitecustomize` on its path before running the target script, so the
+   patch lands before the pinned code ever builds its own client. No pinned
+   file is edited in place, in the Dockerfile or otherwise (rule 3 above).
+4. Every harness's own retry-on-failure is bounded to zero: a request that
+   times out or disconnects is recorded as a failed item (or, for `lcb`,
+   `aider`, and the BFCL rate-limit backoff, simply not retried) instead of
+   resent. Where a pinned retry-forever loop cannot be edited directly
+   (RULER's `pred/call_api.py::get_output`, a closure defined inside its own
+   `main()`), the patched client call itself is made to never raise on a
+   real API/network failure, so the pinned loop's `try` always succeeds on
+   the first and only attempt.
+5. `agentic` (Claude Code): `API_TIMEOUT_MS` (milliseconds) and
+   `CLAUDE_CODE_MAX_RETRIES=0` are passed to the `docker exec` that runs
+   `claude -p`. The whole-task timeout is now sized from `max_turns`
+   (already the explicit, named bound on how many turns one task may take)
+   times one worst-case turn's own request budget plus a fixed
+   between-turns overhead, replacing a flat default that undercounted a
+   real multi-turn task against a model that thinks.
+6. `speed` talks to the gateway in-process (no `docker run`/`exec`, so no
+   `BENCH_REQUEST_TIMEOUT_S` to pass): its own `urllib.request.urlopen`
+   timeout is derived from `request_timeout_s` directly.
+7. The gateway's own `aiohttp.ClientTimeout(sock_read=...)` is disabled
+   (`None`): every client now carries its own correctly-sized timeout, and
+   the gateway must never cut a slow-but-progressing relay out from under a
+   client that is still legitimately waiting for it.

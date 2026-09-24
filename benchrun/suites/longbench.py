@@ -38,6 +38,7 @@ from benchrun.suites import (
     max_ctx,
     passed_unless_truncated,
     per_request_seconds,
+    request_timeout_s,
     write_skip_report,
 )
 
@@ -46,13 +47,13 @@ IMAGE = "bench-longbench"
 # prose than to RULER's needle-dense synthetic text under cl100k_base vs the
 # served model's own tokenizer. Kept at 1.05 with margin.
 MEASURED_TOKEN_RATIO = 1.05
-# longbench_run.py's own per-item bounded retry: MAX_ATTEMPTS attempts with
-# a 2 x attempt second backoff between them (2 s then 4 s for 3 attempts).
-# Kept in sync with bench/harness/longbench_run.py's own MAX_ATTEMPTS
-# (container-side, cannot import benchrun): bench/tests/test_longbench_run.py
-# asserts the two agree.
-MAX_ATTEMPTS = 3
-RETRY_BACKOFF_S = 2 + 4
+# longbench_run.py makes exactly one request per item: a timeout or a
+# disconnection is recorded as a failed item, never resent (proven live on
+# LiveCodeBench, 2026-09-24, a resend abandons the first attempt in place
+# and queues up behind it, losing the real answer). Kept in sync with
+# bench/harness/longbench_run.py's own MAX_ATTEMPTS (container-side, cannot
+# import benchrun): bench/tests/test_longbench_run.py asserts the two agree.
+MAX_ATTEMPTS = 1
 # Container start/stop plus loading the 465 MB baked dataset once per run;
 # measured well under 10 s in every real and stub pass.
 STARTUP_OVERHEAD_S = 60
@@ -62,15 +63,14 @@ def subprocess_timeout_s(samples_per_length: int, max_tokens: int, context_lengt
     """Timeout for one LongBenchV2Suite docker run call at the given
     context_length bucket, sized from the measured floor rates
     (benchrun.suites): longbench_run.py processes samples sequentially (one
-    item, one request, no concurrency), so the total is samples_per_length
-    times one item's worst case (MAX_ATTEMPTS full prefill+decode attempts
-    plus backoff between them), not divided into concurrent waves the way
-    RULER's is. Prefill cost scales with context_length (the band's own
-    ceiling, close to the real prompt size selected items must fit under).
+    item, one request, no concurrency, no retry), so the total is
+    samples_per_length times one item's single request cost, not divided
+    into concurrent waves the way RULER's is. Prefill cost scales with
+    context_length (the band's own ceiling, close to the real prompt size
+    selected items must fit under).
     """
     per_request_s = per_request_seconds(context_length * MEASURED_TOKEN_RATIO, max_tokens)
-    per_item_worst_s = MAX_ATTEMPTS * per_request_s + (MAX_ATTEMPTS - 1) * RETRY_BACKOFF_S
-    return int(max(samples_per_length, 1) * per_item_worst_s * SAFETY_FACTOR + STARTUP_OVERHEAD_S)
+    return int(max(samples_per_length, 1) * per_request_s * SAFETY_FACTOR + STARTUP_OVERHEAD_S)
 
 
 def parse_longbench_v2(pred_jsonl_path) -> list[dict]:
@@ -138,6 +138,7 @@ class LongBenchV2Suite:
                     "docker", "run", "--rm",
                     "--network", NETWORK,
                     "-v", f"{cell_dir}:/out",
+                    "-e", f"BENCH_REQUEST_TIMEOUT_S={request_timeout_s(max_tokens, length * MEASURED_TOKEN_RATIO)}",
                     IMAGE,
                     "python", "/longbench_run.py", model_alias,
                     "--base-url", f"{ctx.base_url}/v1",

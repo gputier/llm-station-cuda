@@ -98,7 +98,7 @@ import time
 from urllib.parse import urlparse
 
 from benchrun.runner import SuiteSkipped
-from benchrun.suites import max_ctx
+from benchrun.suites import max_ctx, request_timeout_s
 from benchrun.suites.corpus import CHARS_PER_TOKEN
 from benchrun.tasks import GIT_IDENTITY_ARGS, needs_uv, parse_outcomes
 from benchrun.tasks.builder import rebuild_task
@@ -131,6 +131,22 @@ BENCH_REPOS_ROOT_ENV = "BENCH_REPOS_ROOT"
 # BEFORE the agent call, not as a substitute for a timeout.
 GATEWAY_HEALTH_RETRIES = 5
 GATEWAY_HEALTH_INTERVAL_S = 2
+# Claude Code's own bound on the model side (proven live on LiveCodeBench,
+# 2026-09-24, for a served, single-slot llama-server): API_TIMEOUT_MS
+# defaults to 600000 (10 min) and CLAUDE_CODE_MAX_RETRIES defaults to 10,
+# neither read from BENCH_REQUEST_TIMEOUT_S, so a slow-but-progressing turn
+# past 10 minutes gets abandoned and resent while the server is still
+# decoding it, the same defect the other suites had. Both are passed to the
+# docker exec below from the shared benchrun.suites.request_timeout_s.
+#
+# --max-turns (self.max_turns, already the explicit, named bound on how many
+# model turns one task may take, read from claude -p's own CLI flag at the
+# call site below) is what the whole-task timeout is now sized from, in
+# place of the flat 1800 s default that undercounted a multi-turn task
+# against a model that thinks: AGENT_TURN_OVERHEAD_S is the non-model time
+# between two turns (tool calls, file io, bash execution) a worst-case turn
+# also has to fit in.
+AGENT_TURN_OVERHEAD_S = 30
 # Bounded retry for a sidecar's own ready_cmd (e.g. pg_isready, redis-cli
 # ping): a task must never race a cold database.
 SIDECAR_READY_RETRIES = 30
@@ -679,6 +695,22 @@ class AgenticSuite:
                 # agent: model phase. A timeout, a non-zero exit or hitting
                 # max_turns is a result to record, not a reason to abort the
                 # rest of the task set.
+                #
+                # per_turn_timeout_s: one model turn's own request budget
+                # (window used as the prompt-token estimate: agentic context
+                # grows every turn, up to the served window, so this is the
+                # worst case any single turn's prefill can reach). Passed to
+                # the container as API_TIMEOUT_MS/CLAUDE_CODE_MAX_RETRIES
+                # (module docstring, GATEWAY_HEALTH_RETRIES comment above).
+                # agent_timeout_s: the whole task's own budget, sized from
+                # max_turns (already the explicit bound on how many turns
+                # one task may take) times one worst-case turn, replacing
+                # the flat self.timeout_s default when that default is too
+                # short for a real multi-turn task; never shorter than
+                # self.timeout_s, so an explicit override still holds.
+                max_tokens = ctx.cfg.sampling.get("max_tokens", 0)
+                per_turn_timeout_s = request_timeout_s(max_tokens, window)
+                agent_timeout_s = max(self.timeout_s, self.max_turns * (per_turn_timeout_s + AGENT_TURN_OVERHEAD_S))
                 agent_exit_code = None
                 agent_timed_out = False
                 parsed: dict = {}
@@ -689,10 +721,12 @@ class AgenticSuite:
                          "-e", f"ANTHROPIC_BASE_URL={ctx.base_url}",
                          "-e", "ANTHROPIC_API_KEY=dummy",
                          "-e", "CLAUDE_CODE_ATTRIBUTION_HEADER=0",
+                         "-e", f"API_TIMEOUT_MS={per_turn_timeout_s * 1000}",
+                         "-e", "CLAUDE_CODE_MAX_RETRIES=0",
                          container, "claude", "-p", task["prompt"],
                          "--output-format", "json", "--max-turns", str(self.max_turns),
                          "--permission-mode", "bypassPermissions"],
-                        self.timeout_s)
+                        agent_timeout_s)
                     agent_exit_code = agent_proc.returncode
                     try:
                         parsed = parse_claude_json(agent_proc.stdout)

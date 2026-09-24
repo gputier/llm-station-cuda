@@ -27,6 +27,7 @@ from benchrun.suites import (
     max_ctx,
     passed_unless_truncated,
     per_request_seconds,
+    request_timeout_s,
     write_skip_report,
 )
 
@@ -192,6 +193,7 @@ class RulerSuite:
                         "docker", "run", "--rm",
                         "--network", NETWORK,
                         "-v", f"{cell_dir}:/out",
+                        "-e", f"BENCH_REQUEST_TIMEOUT_S={request_timeout_s(max_tokens, length * MEASURED_TOKEN_RATIO)}",
                         IMAGE,
                         "python", "/ruler_run.py", model_alias,
                         "--task", task,

@@ -19,7 +19,7 @@ import pathlib
 
 import pytest
 
-from benchrun.suites.longbench import MAX_ATTEMPTS as SUITE_MAX_ATTEMPTS, RETRY_BACKOFF_S
+from benchrun.suites.longbench import MAX_ATTEMPTS as SUITE_MAX_ATTEMPTS
 
 _SPEC = importlib.util.spec_from_file_location(
     "longbench_run", pathlib.Path(__file__).parents[1] / "harness" / "longbench_run.py",
@@ -28,14 +28,35 @@ longbench_run = importlib.util.module_from_spec(_SPEC)
 _SPEC.loader.exec_module(longbench_run)
 
 
-def test_max_attempts_and_backoff_agree_with_the_suite_adapter():
-    """longbench_run.py sizes its own retry loop; benchrun.suites.longbench
-    sizes subprocess_timeout_s from the same numbers. The two files cannot
-    import each other (this script runs container-side, without benchrun on
-    its path), so this test is what keeps them from drifting apart."""
-    assert longbench_run.MAX_ATTEMPTS == SUITE_MAX_ATTEMPTS
-    backoff_total = sum(2 * attempt for attempt in range(1, longbench_run.MAX_ATTEMPTS))
-    assert backoff_total == RETRY_BACKOFF_S
+def test_max_attempts_agree_with_the_suite_adapter_and_allow_no_retry():
+    """longbench_run.py sizes its own single-attempt request loop;
+    benchrun.suites.longbench sizes subprocess_timeout_s from the same
+    number. The two files cannot import each other (this script runs
+    container-side, without benchrun on its path), so this test is what
+    keeps them from drifting apart. MAX_ATTEMPTS == 1 is itself the
+    contract: no retry on a timeout or a disconnection (bench/harness/README.md)."""
+    assert longbench_run.MAX_ATTEMPTS == SUITE_MAX_ATTEMPTS == 1
+
+
+def test_give_up_reason_fires_before_any_success():
+    """A failure before this run has ever recorded a real success means the
+    endpoint itself looks unreachable: give up rather than spend the whole
+    sample budget on empty answers silently scored as real zeros."""
+    assert longbench_run._give_up_reason(ever_succeeded=False, consecutive_failures=1) is not None
+
+
+def test_give_up_reason_tolerates_an_isolated_failure_after_a_success():
+    reason = longbench_run._give_up_reason(ever_succeeded=True, consecutive_failures=1)
+    assert reason is None
+    reason = longbench_run._give_up_reason(
+        ever_succeeded=True, consecutive_failures=longbench_run.MAX_CONSECUTIVE_FAILURES - 1)
+    assert reason is None
+
+
+def test_give_up_reason_fires_at_max_consecutive_failures():
+    reason = longbench_run._give_up_reason(
+        ever_succeeded=True, consecutive_failures=longbench_run.MAX_CONSECUTIVE_FAILURES)
+    assert reason is not None
 
 
 class FakeEncoding:

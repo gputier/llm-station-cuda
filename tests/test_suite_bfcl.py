@@ -6,7 +6,7 @@ import pytest
 
 from benchrun.config import load_config
 from benchrun.runner import SuiteContext
-from benchrun.suites import bfcl
+from benchrun.suites import bfcl, request_timeout_s
 from benchrun.suites.bfcl import BfclSuite, parse_bfcl
 
 # Cut from a real BFCL pass (spark on the 99, 2026-09-23, --run-ids: 8
@@ -67,6 +67,10 @@ def test_run_reads_the_files_the_harness_writes(tmp_path, monkeypatch):
     assert "OPENAI_BASE_URL=http://gw:8081/v1" in calls[0]
     assert "OPENAI_API_KEY=x" in calls[0]
     assert all(t is not None and t > 0 for t in timeouts)
+    expected_timeout = request_timeout_s(CFG.sampling.get("max_tokens", 0), bfcl.PROMPT_TOKENS_ESTIMATE)
+    assert f"BENCH_REQUEST_TIMEOUT_S={expected_timeout}" in calls[0]
+    # evaluate() makes no model call: no client timeout to size for it.
+    assert not any(a.startswith("BENCH_REQUEST_TIMEOUT_S=") for a in calls[1])
 
 
 def test_run_fails_when_a_category_has_no_score_file(tmp_path, monkeypatch):

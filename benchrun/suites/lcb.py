@@ -23,7 +23,7 @@ import json
 import subprocess
 
 from benchrun.config import served_alias
-from benchrun.suites import HF_CACHE_VOLUME, NETWORK, SAFETY_FACTOR, per_request_seconds
+from benchrun.suites import HF_CACHE_VOLUME, NETWORK, SAFETY_FACTOR, per_request_seconds, request_timeout_s
 
 IMAGE = "bench-lcb"
 SCENARIO = "codegeneration"
@@ -92,6 +92,13 @@ class LiveCodeBenchSuite:
                 "--network", NETWORK,
                 "-e", f"OPENAI_BASE_URL={ctx.base_url}/v1",
                 "-e", "OPENAI_KEY=x",
+                # The pinned client default is 90 s, then up to 10 resends
+                # 30 s apart: a longer answer is dropped and resent while the
+                # server still decodes it (seen live on the 99, 2026-09-24).
+                # lcb_run.py reads this to set the pinned CLI's own
+                # --openai_timeout and to remove the pinned harness's resend
+                # loop entirely (bench/harness/README.md).
+                "-e", f"BENCH_REQUEST_TIMEOUT_S={request_timeout_s(max_tokens, PROMPT_TOKENS_ESTIMATE)}",
                 "-v", f"{output_dir}:/lcb/output",
                 "-v", f"{HF_CACHE_VOLUME}:/root/.cache/huggingface",
                 IMAGE,

@@ -1,22 +1,34 @@
-"""Direct unit tests for bench/harness/ruler_run.py's failure-budget logic
-(adversarial review, round 4, 2026-09-24): _consecutive_failures was a plain
-int mutated from up to RULER_THREADS concurrent threads with no lock, and
-reset by any success, so a flaky endpoint that fails one request in two
-never accumulated 3 CONSECUTIVE failures and the pinned retry-forever loop
-was never stopped.
+"""Direct unit tests for bench/harness/ruler_run.py's client-side timeout and
+zero-retry fix (proven live on LiveCodeBench, 2026-09-24): a client whose own
+timeout is shorter than the server's real per-request budget abandons the
+request in place and its resend queues up behind it, losing the real answer.
+
+_patched_call catches every real SDK error and returns an empty, recorded
+prediction on the first and only attempt (no resend), so call_api.py's own
+pinned `while True: try: process_batch() except Exception: continue` never
+retries a batch (its try always succeeds). Two conditions still make it
+raise instead of recording a failed item (the coordinator's correction,
+2026-09-24: a bad question must not crash the whole run for every OTHER
+question, but a dead endpoint must not silently score a full run of empty
+answers as real zeros either): a failure before this process has ever
+received a real response, and MAX_CONSECUTIVE_FAILURES failures in a row.
+_bounded_process_batch is a thin passthrough that only ever sees a
+genuinely unexpected exception (a bug, not a request failure: those are
+handled by _patched_call itself) and gives up immediately instead of
+retrying that either.
 
 Imported by file path (importlib), the same posture as test_longbench_run.py:
 ruler_run.py's own module-level code only touches sys.path and stdlib, the
-heavy import (client_wrappers, from the pinned repo, container-only) happens
-lazily inside _bounded_process_batch, so it is faked here via sys.modules
-rather than requiring the container.
+heavy imports (client_wrappers, openai: the pinned repo and the real SDK,
+container-only) happen lazily inside the patched functions, so both are
+faked here via sys.modules rather than requiring the container.
 """
 from __future__ import annotations
 
 import importlib.util
+import json
 import pathlib
 import sys
-import threading
 import types
 
 import pytest
@@ -38,13 +50,209 @@ class _Exit(BaseException):
 
 @pytest.fixture(autouse=True)
 def _reset_module_state(monkeypatch):
-    # Module globals mutated by _bounded_process_batch; reset before every
-    # test so one test's failures cannot leak into the next.
-    monkeypatch.setattr(ruler_run, "_consecutive_failures", 0)
-    monkeypatch.setattr(ruler_run, "_total_failures", 0)
-    monkeypatch.setattr(ruler_run, "_max_total_failures", ruler_run.MIN_TOTAL_FAILURES)
     monkeypatch.setattr(ruler_run.os, "_exit", lambda code: (_ for _ in ()).throw(_Exit(code)))
+    monkeypatch.setattr(ruler_run, "_ever_succeeded", False)
+    monkeypatch.setattr(ruler_run, "_consecutive_failures", 0)
     yield
+
+
+class _FakeOpenAIError(Exception):
+    pass
+
+
+def _install_fake_openai_errors():
+    fake_module = types.SimpleNamespace(OpenAIError=_FakeOpenAIError)
+    sys.modules["openai"] = fake_module
+    return fake_module
+
+
+class _FakeChoice:
+    def __init__(self, content, finish_reason):
+        self.finish_reason = finish_reason
+        self.message = types.SimpleNamespace(content=content)
+
+
+class _FakeUsage:
+    def __init__(self, completion_tokens):
+        self.completion_tokens = completion_tokens
+
+
+class _FakeResponse:
+    def __init__(self, content="hello", finish_reason="stop", completion_tokens=3):
+        self.choices = [_FakeChoice(content, finish_reason)]
+        self.usage = _FakeUsage(completion_tokens)
+
+
+class _FakeCompletions:
+    def __init__(self, fn):
+        self._fn = fn
+
+    def create(self, **kwargs):
+        return self._fn(**kwargs)
+
+
+class _FakeChat:
+    def __init__(self, fn):
+        self.completions = _FakeCompletions(fn)
+
+
+class _FakeClient:
+    def __init__(self, fn):
+        self.chat = _FakeChat(fn)
+
+
+def _self_with_client(fn, tokens_to_generate=100):
+    self = types.SimpleNamespace()
+    self.client = _FakeClient(fn)
+    self.model_name = "bench-model"
+    self.max_length = ruler_run.MAX_LENGTH
+    self.generation_kwargs = {
+        "tokens_to_generate": tokens_to_generate,
+        "temperature": 0.0,
+        "random_seed": 0,
+        "top_p": 1.0,
+        "stop": [],
+    }
+    self._count_tokens = lambda msgs: 10
+    return self
+
+
+def test_patched_call_returns_the_real_response_on_success(tmp_path, monkeypatch):
+    _install_fake_openai_errors()
+    monkeypatch.setattr(ruler_run, "_META_PATH", tmp_path / "task.meta.jsonl")
+
+    def fake_create(**kwargs):
+        return _FakeResponse(content="42", finish_reason="stop", completion_tokens=7)
+
+    self = _self_with_client(fake_create)
+    result = ruler_run._patched_call(self, "some prompt")
+    assert result == {"text": ["42"]}
+    meta = json.loads(ruler_run._META_PATH.read_text().strip())
+    assert meta["finish_reason"] == "stop"
+    assert meta["completion_tokens"] == 7
+    assert ruler_run._ever_succeeded is True
+    assert ruler_run._consecutive_failures == 0
+
+
+def test_patched_call_fails_fast_when_no_response_received_yet(tmp_path, monkeypatch):
+    """The first exception, before this process has ever received a real
+    response, means the endpoint itself looks unreachable: the whole run
+    must give up, not spend the rest of its sample budget on empty answers
+    silently scored as real zeros."""
+    _install_fake_openai_errors()
+    monkeypatch.setattr(ruler_run, "_META_PATH", tmp_path / "task.meta.jsonl")
+
+    def fake_create(**kwargs):
+        raise sys.modules["openai"].OpenAIError("connection refused")
+
+    self = _self_with_client(fake_create)
+    with pytest.raises(_Exit) as exc_info:
+        ruler_run._patched_call(self, "some prompt")
+    assert exc_info.value.code == 1
+
+
+def test_patched_call_records_a_single_failure_after_a_real_success(tmp_path, monkeypatch):
+    """Once the endpoint has proven it works, one isolated failure (well
+    under the consecutive budget) is recorded as one failed item, not a
+    reason to abort the run: exactly one attempt, no resend."""
+    _install_fake_openai_errors()
+    monkeypatch.setattr(ruler_run, "_META_PATH", tmp_path / "task.meta.jsonl")
+    calls = {"n": 0}
+
+    def fake_create(**kwargs):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return _FakeResponse(content="ok", finish_reason="stop", completion_tokens=1)
+        raise sys.modules["openai"].OpenAIError("timed out")
+
+    self = _self_with_client(fake_create)
+    ruler_run._patched_call(self, "warm-up prompt")  # establishes _ever_succeeded
+
+    result = ruler_run._patched_call(self, "some prompt")
+    assert result == {"text": [""]}
+    assert calls["n"] == 2  # exactly one attempt for the failing call, no retry
+    meta_lines = ruler_run._META_PATH.read_text().strip().splitlines()
+    assert json.loads(meta_lines[-1])["finish_reason"] == "error"
+    assert json.loads(meta_lines[-1])["completion_tokens"] is None
+
+
+def test_patched_call_fails_fast_after_max_consecutive_failures(tmp_path, monkeypatch):
+    """A server that answered once, then goes dead, must not be allowed to
+    silently turn every remaining sample into a scored 0: MAX_CONSECUTIVE_FAILURES
+    failures in a row aborts the whole run instead."""
+    _install_fake_openai_errors()
+    monkeypatch.setattr(ruler_run, "_META_PATH", tmp_path / "task.meta.jsonl")
+    calls = {"n": 0}
+
+    def fake_create(**kwargs):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return _FakeResponse(content="ok", finish_reason="stop", completion_tokens=1)
+        raise sys.modules["openai"].OpenAIError("connection reset")
+
+    self = _self_with_client(fake_create)
+    ruler_run._patched_call(self, "warm-up prompt")  # establishes _ever_succeeded
+
+    for _ in range(ruler_run.MAX_CONSECUTIVE_FAILURES - 1):
+        result = ruler_run._patched_call(self, "some prompt")
+        assert result == {"text": [""]}  # recorded, not yet fatal
+
+    with pytest.raises(_Exit) as exc_info:
+        ruler_run._patched_call(self, "some prompt")
+    assert exc_info.value.code == 1
+
+
+def test_patched_call_success_resets_the_consecutive_counter(tmp_path, monkeypatch):
+    """A flaky-but-working endpoint (fails, then succeeds again) must never
+    trip the circuit breaker just from accumulated non-consecutive failures."""
+    _install_fake_openai_errors()
+    monkeypatch.setattr(ruler_run, "_META_PATH", tmp_path / "task.meta.jsonl")
+    calls = {"n": 0}
+
+    def fake_create(**kwargs):
+        calls["n"] += 1
+        # succeed, fail, succeed, fail, succeed, fail, succeed: never two
+        # failures in a row, well past MAX_CONSECUTIVE_FAILURES total fails.
+        if calls["n"] % 2 == 1:
+            return _FakeResponse(content="ok", finish_reason="stop", completion_tokens=1)
+        raise sys.modules["openai"].OpenAIError("flaky")
+
+    self = _self_with_client(fake_create)
+    for _ in range(6):
+        ruler_run._patched_call(self, "some prompt")  # must never raise
+    assert calls["n"] == 6
+
+
+def test_patched_create_client_sets_timeout_and_zero_retries(monkeypatch):
+    seen = {}
+
+    class _FakeOpenAI:
+        def __init__(self, **kwargs):
+            seen.update(kwargs)
+
+    sys.modules["openai"] = types.SimpleNamespace(OpenAI=_FakeOpenAI)
+    monkeypatch.setenv("BENCH_REQUEST_TIMEOUT_S", "222")
+
+    self = types.SimpleNamespace(openai_api_key="x")
+    ruler_run._patched_create_client(self)
+    assert seen["max_retries"] == 0
+    assert seen["timeout"] == 222.0
+
+
+def test_patched_create_client_omits_timeout_when_env_is_unset(monkeypatch):
+    seen = {}
+
+    class _FakeOpenAI:
+        def __init__(self, **kwargs):
+            seen.update(kwargs)
+
+    sys.modules["openai"] = types.SimpleNamespace(OpenAI=_FakeOpenAI)
+    monkeypatch.delenv("BENCH_REQUEST_TIMEOUT_S", raising=False)
+
+    self = types.SimpleNamespace(openai_api_key="x")
+    ruler_run._patched_create_client(self)
+    assert seen["max_retries"] == 0
+    assert "timeout" not in seen
 
 
 def _install_fake_client_wrappers(process_batch_fn):
@@ -57,128 +265,23 @@ def _install_fake_client_wrappers(process_batch_fn):
     return fake_module
 
 
-def _call_like_get_output(n_calls):
-    """Mimics call_api.py's own get_output() (unmodified, pinned): a plain
-    `while True: try: process_batch(...) except Exception: retry` loop with
-    no cap of its own. _bounded_process_batch is the only thing that can
-    stop it (by calling os._exit, faked here as _Exit). Runs n_calls
-    successful-or-retried logical batches, or stops early on _Exit."""
-    done = 0
-    while done < n_calls:
-        try:
-            ruler_run._bounded_process_batch(object(), ["prompt"])
-        except _Exit:
-            raise
-        except Exception:
-            continue  # the pinned loop retries the same batch forever
-        done += 1
+def test_bounded_process_batch_passes_through_on_success():
+    _install_fake_client_wrappers(lambda self, prompts, **kwargs: ["ok"])
+    assert ruler_run._bounded_process_batch(object(), ["prompt"]) == ["ok"]
 
 
-def test_consecutive_failures_trip_the_breaker(monkeypatch):
-    """A persistent failure (every call fails) trips on the CONSECUTIVE
-    budget well before the total one, unchanged behavior from round 3."""
-    def always_fails(self, prompts, **kwargs):
-        raise RuntimeError("stub always fails")
+def test_bounded_process_batch_gives_up_immediately_with_zero_retries():
+    """An unexpected exception (not a real API failure: _patched_call never
+    lets one of those propagate any more) is not retried even once: the
+    pinned get_output() loop must never get a chance to resend."""
+    calls = {"n": 0}
 
-    _install_fake_client_wrappers(always_fails)
-    monkeypatch.setattr(ruler_run, "_max_total_failures", 100)  # never reached first
+    def always_raises(self, prompts, **kwargs):
+        calls["n"] += 1
+        raise RuntimeError("unexpected bug, not a request failure")
 
+    _install_fake_client_wrappers(always_raises)
     with pytest.raises(_Exit) as exc_info:
-        _call_like_get_output(1)
+        ruler_run._bounded_process_batch(object(), ["prompt"])
     assert exc_info.value.code == 1
-    assert ruler_run._consecutive_failures == ruler_run.MAX_CONSECUTIVE_FAILURES
-
-
-def test_flaky_endpoint_never_reaches_three_consecutive_still_trips_total(monkeypatch):
-    """The real bug: a stub that fails exactly one request in two (fail,
-    succeed, fail, succeed, ...) never accumulates MAX_CONSECUTIVE_FAILURES
-    (3) consecutive failures, since every other call resets the counter to
-    0. Before the fix, this endpoint was never stopped: the pinned
-    retry-forever loop kept calling it, one retry per flaky sample, for the
-    whole run. The TOTAL failure budget must trip independently of the
-    consecutive one."""
-    call_count = {"n": 0}
-
-    def fails_one_in_two(self, prompts, **kwargs):
-        call_count["n"] += 1
-        if call_count["n"] % 2 == 0:
-            raise RuntimeError("stub flaky failure")
-        return ["ok"]
-
-    _install_fake_client_wrappers(fails_one_in_two)
-    monkeypatch.setattr(ruler_run, "_max_total_failures", 4)
-
-    # call_api.py's own get_output() (unmodified) retries the SAME logical
-    # batch immediately on failure, so with a global counter incrementing on
-    # every raw attempt (retries included), the raw call sequence strictly
-    # alternates success/failure: consecutive can never exceed 1. The total
-    # budget (4) must still fire, well before 20 logical batches complete.
-    with pytest.raises(_Exit) as exc_info:
-        _call_like_get_output(20)
-    assert exc_info.value.code == 1
-    assert ruler_run._consecutive_failures < ruler_run.MAX_CONSECUTIVE_FAILURES
-    assert ruler_run._total_failures >= 4
-
-
-def test_success_resets_consecutive_but_not_total(monkeypatch):
-    def fails_then_succeeds(self, prompts, **kwargs):
-        fails_then_succeeds.calls += 1
-        if fails_then_succeeds.calls <= 2:
-            raise RuntimeError("stub fails twice")
-        return ["ok"]
-
-    fails_then_succeeds.calls = 0
-    _install_fake_client_wrappers(fails_then_succeeds)
-    monkeypatch.setattr(ruler_run, "_max_total_failures", 100)
-
-    for _ in range(2):
-        with pytest.raises(RuntimeError):
-            ruler_run._bounded_process_batch(object(), ["prompt"])
-    assert ruler_run._consecutive_failures == 2
-    assert ruler_run._total_failures == 2
-
-    ruler_run._bounded_process_batch(object(), ["prompt"])  # succeeds
-    assert ruler_run._consecutive_failures == 0
-    assert ruler_run._total_failures == 2  # total is never reset
-
-
-def test_failure_counters_are_thread_safe_under_the_lock(monkeypatch):
-    """Round 4 review: an unlocked int mutated from up to RULER_THREADS (4)
-    concurrent threads can lose an increment (read-increment-write race).
-    Every real caller in call_api.py's get_output() runs on its own worker
-    thread; simulate that with N threads all hitting a failing endpoint at
-    once and assert every failure is counted, none lost."""
-    def always_fails(self, prompts, **kwargs):
-        raise RuntimeError("stub always fails")
-
-    _install_fake_client_wrappers(always_fails)
-    # A high consecutive budget too: this test is about the LOCK (no lost
-    # increments under concurrent access), not about which budget trips
-    # first. With every call failing, the real os._exit would fire the
-    # first time either budget is reached; the fake _Exit only unwinds the
-    # thread that raised it here, so several threads may independently
-    # observe a trip, which does not affect the counter this test checks.
-    monkeypatch.setattr(ruler_run, "_max_total_failures", 10_000)
-    monkeypatch.setattr(ruler_run, "MAX_CONSECUTIVE_FAILURES", 10_000)
-
-    n_threads = 20
-    barrier = threading.Barrier(n_threads)
-    exits = []
-
-    def worker():
-        barrier.wait()
-        try:
-            ruler_run._bounded_process_batch(object(), ["prompt"])
-        except _Exit as exc:
-            exits.append(exc)
-        except Exception:
-            pass  # expected: re-raised by _bounded_process_batch when not tripped
-
-    threads = [threading.Thread(target=worker) for _ in range(n_threads)]
-    for thread in threads:
-        thread.start()
-    for thread in threads:
-        thread.join()
-
-    assert not exits  # budget of 10_000 must not trip for 20 failures
-    assert ruler_run._total_failures == n_threads
+    assert calls["n"] == 1  # zero retries
