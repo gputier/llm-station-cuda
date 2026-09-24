@@ -47,12 +47,12 @@ sampling:
   top_p: 0.95
   top_k: 20
   min_p: 0.0
-  max_tokens: 8192
+  max_tokens: 81920
 chat_template_kwargs: {}
 sources:
   temperature: "https://huggingface.co/ornith-ai/Ornith-1.5-9B (usage général, lu le 2026-09-23)"
   top_p: "https://huggingface.co/ornith-ai/Ornith-1.5-9B (usage général, lu le 2026-09-23)"
   top_k: "https://huggingface.co/ornith-ai/Ornith-1.5-9B (usage général, lu le 2026-09-23)"
   min_p: "https://huggingface.co/ornith-ai/Ornith-1.5-9B (usage général, lu le 2026-09-23)"
-  max_tokens: ".superpowers/sdd/2026-09-23-banc-llm-refonte-plan/progress.md, ruling Y"
+  max_tokens: "https://huggingface.co/ornith-ai/Ornith-1.5-9B, section Benchmarks, \"### Terminal-Bench 2.1 (Claude Code)\" : Claude Code 2.1.126, max_new_tokens=131072, lu le 2026-09-24 ; capped a 81920 (131072 x 1.3 depasse la fenetre 262144, regle budget de sortie du 24/09, bench/benchrun/suites/ruler.py)"
 ctx_proven: null

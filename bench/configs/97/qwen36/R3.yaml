@@ -57,7 +57,7 @@ sampling:
   top_k: 20
   min_p: 0.0
   presence_penalty: 1.5
-  max_tokens: 16384
+  max_tokens: 81920
 chat_template_kwargs: {}
 sources:
   temperature: "https://huggingface.co/Qwen/Qwen3.6-35B-A3B (mode thinking, lu le 2026-09-23)"
@@ -65,5 +65,5 @@ sources:
   top_k: "https://huggingface.co/Qwen/Qwen3.6-35B-A3B (mode thinking, lu le 2026-09-23)"
   min_p: "https://huggingface.co/Qwen/Qwen3.6-35B-A3B (mode thinking, lu le 2026-09-23)"
   presence_penalty: "https://huggingface.co/Qwen/Qwen3.6-35B-A3B (mode thinking, lu le 2026-09-23)"
-  max_tokens: ".superpowers/sdd/2026-09-23-banc-llm-refonte-plan/progress.md, ruling Y"
+  max_tokens: "https://huggingface.co/Qwen/Qwen3.6-35B-A3B, section Best Practices, 81920 pour le benchmarking, lu le 2026-09-24 ; meme regle que R1, meme valeur"
 ctx_proven: null

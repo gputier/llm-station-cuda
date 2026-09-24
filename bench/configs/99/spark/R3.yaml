@@ -39,12 +39,12 @@ sampling:
   top_p: 0.95
   top_k: 0
   min_p: 0
-  max_tokens: 8192
+  max_tokens: 81920
 chat_template_kwargs: {}
 sources:
   temperature: "llm-ctl.ps1, profil spark, ligne '--temp','0.6','--top-p','0.95','--top-k','0','--min-p','0' (réglage réel de la station, corrigé après ses premières heures à top-k 20 ; arbitrage du 23/09/2026, contre huggingface.co/XHToken/Spark-X2.5-4B qui donne T1.0/top-k -1 en R1)"
   top_p: "llm-ctl.ps1, profil spark, même ligne (réglage réel de la station)"
   top_k: "llm-ctl.ps1, profil spark, même ligne : top-k 0, le filtre est coupé (pas 20, valeur de ses premières heures, corrigée depuis)"
   min_p: "llm-ctl.ps1, profil spark, même ligne : min-p 0"
-  max_tokens: ".superpowers/sdd/2026-09-23-banc-llm-refonte-plan/progress.md, ruling Y"
+  max_tokens: "https://huggingface.co/XHToken/Spark-X2.5-4B, exemple client SGLang (max_tokens=131072), lu le 2026-09-24 ; capped a 81920 (fenetre 262144, meme regle que R1)"
 ctx_proven: null
