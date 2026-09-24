@@ -1,0 +1,64 @@
+machine: "99"
+model: qwenu
+variant: R1
+label: "Q6_K, template embarqué, sampling non-thinking de la fiche"
+exe: 'D:\LLM-Setup\llama-cpp-upstream\build-win\bin\Release\llama-server.exe'
+workdir: 'D:\LLM-Setup\llama-cpp-upstream\build-win\bin\Release'
+cudabin: 'C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.3\bin'
+args:
+  - '-m'
+  - 'D:\models\qwen3.8-27b-uncensored\Qwen3.8-27B-Uncensored-Q6_K.gguf'
+  # Fichier réel confirmé via l'API HF le 23/09/2026 (blobs=true) : dépôt
+  # JonathanColetti/Qwen3.8-27B-Uncensored-GGUF, sha256
+  # a50aa1478295b58ee3d93eabe02c17f6d5fcf6cb787fd8a0ab07ac629a46cae6. Le
+  # dépôt est identifié par comparaison exacte du sha256 du Q5_K_M déjà
+  # installé (24780644a95f759a9aeeb228c3d852028f2fd40ce0b74d68134246ec4a959547),
+  # qui correspond bit à bit au fichier du même nom sur ce dépôt.
+  - '--mmproj'
+  - 'D:\models\qwen3.8-27b-uncensored\mmproj-Qwen3.8-27B-Uncensored-F16.gguf'
+  - '--spec-type'
+  - 'draft-mtp'
+  - '--spec-draft-n-max'
+  - '3'
+  - '--n-gpu-layers'
+  - '99'
+  - '--load-mode'
+  - 'mlock'
+  - '--flash-attn'
+  - 'on'
+  - '--jinja'
+  - '--host'
+  - '0.0.0.0'
+  - '--port'
+  - '8080'
+  - '--ctx-size'
+  - '262144'
+  - '--parallel'
+  - '1'
+  - '-b'
+  - '4096'
+  - '-ub'
+  - '2048'
+  - '--cache-type-k'
+  - 'q4_0'
+  - '--cache-type-v'
+  - 'q4_0'
+  - '-cram'
+  - '24576'
+env: {}
+sampling:
+  temperature: 0.7
+  top_p: 0.80
+  top_k: 20
+  min_p: 0.0
+  presence_penalty: 1.5
+  max_tokens: 8192
+chat_template_kwargs: {}
+sources:
+  temperature: "https://huggingface.co/Qwen/Qwen3.8-27B (mode non-thinking, lu le 2026-09-23)"
+  top_p: "https://huggingface.co/Qwen/Qwen3.8-27B (mode non-thinking, lu le 2026-09-23)"
+  top_k: "https://huggingface.co/Qwen/Qwen3.8-27B (mode non-thinking, lu le 2026-09-23)"
+  min_p: "https://huggingface.co/Qwen/Qwen3.8-27B (mode non-thinking, lu le 2026-09-23)"
+  presence_penalty: "https://huggingface.co/Qwen/Qwen3.8-27B (mode non-thinking, lu le 2026-09-23)"
+  max_tokens: ".superpowers/sdd/2026-09-23-banc-llm-refonte-plan/progress.md, ruling Y (modèle non-thinking)"
+ctx_proven: null

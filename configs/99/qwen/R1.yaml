@@ -1,0 +1,62 @@
+machine: "99"
+model: qwen
+variant: R1
+label: "palier MEDIUM, spec-draft-n-max 6, ctx natif, KV q8_0"
+exe: 'D:\LLM-Setup\llama-cpp-20260827\build-win\bin\Release\llama-server.exe'
+workdir: 'D:\LLM-Setup\llama-cpp-20260827\build-win\bin\Release'
+cudabin: 'C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.3\bin'
+args:
+  - '-m'
+  - 'D:\models\qwen3.8-27b-nvfp4\Qwen3.8-27B-NVFP4-MTP-MEDIUM.gguf'
+  - '--mmproj'
+  - 'D:\models\qwen3.8-27b-nvfp4\mmproj-BF16.gguf'
+  - '--image-min-tokens'
+  - '1024'
+  - '--spec-type'
+  - 'draft-mtp'
+  - '--spec-draft-n-max'
+  - '6'
+  - '--spec-draft-p-min'
+  - '0.75'
+  - '--n-gpu-layers'
+  - '99'
+  - '--load-mode'
+  - 'mlock'
+  - '--flash-attn'
+  - 'on'
+  - '--jinja'
+  - '--host'
+  - '0.0.0.0'
+  - '--port'
+  - '8080'
+  - '--ctx-size'
+  - '262144'
+  - '--parallel'
+  - '1'
+  - '-b'
+  - '4096'
+  - '-ub'
+  - '2048'
+  - '--cache-type-k'
+  - 'q8_0'
+  - '--cache-type-v'
+  - 'q8_0'
+  - '-cram'
+  - '24576'
+env: {}
+sampling:
+  temperature: 1.0
+  top_p: 0.95
+  top_k: 20
+  min_p: 0.0
+  presence_penalty: 0.0
+  max_tokens: 16384
+chat_template_kwargs: {}
+sources:
+  temperature: "https://huggingface.co/Qwen/Qwen3.8-27B (mode thinking, lu le 2026-09-23)"
+  top_p: "https://huggingface.co/Qwen/Qwen3.8-27B (mode thinking, lu le 2026-09-23)"
+  top_k: "https://huggingface.co/Qwen/Qwen3.8-27B (mode thinking, lu le 2026-09-23)"
+  min_p: "https://huggingface.co/Qwen/Qwen3.8-27B (mode thinking, lu le 2026-09-23)"
+  presence_penalty: "https://huggingface.co/Qwen/Qwen3.8-27B (mode thinking, lu le 2026-09-23)"
+  max_tokens: ".superpowers/sdd/2026-09-23-banc-llm-refonte-plan/progress.md, ruling Y (modèle thinking)"
+ctx_proven: null

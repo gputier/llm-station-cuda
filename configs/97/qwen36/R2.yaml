@@ -1,0 +1,61 @@
+machine: "97"
+model: qwen36
+variant: R2
+label: "-ot ciblé à la place de --n-cpu-moe, lancé sans le flag d'origine"
+exe: 'D:\LLM-Setup\beellama-v0.4.6\llama-server.exe'
+workdir: 'D:\LLM-Setup\beellama-v0.4.6'
+cudabin: null
+args:
+  - '-m'
+  - 'D:\models\qwen3.6-35b-a3b-mtp\Qwen3.6-35B-A3B-UD-IQ3_XXS.gguf'
+  - '-ot'
+  - 'blk\.(3[0-9])\.ffn_.*_exps\.=CPU'
+  - '--n-gpu-layers'
+  - '99'
+  - '--flash-attn'
+  - 'on'
+  - '--jinja'
+  - '--spec-type'
+  - 'draft-mtp'
+  - '--spec-draft-n-max'
+  - '2'
+  - '--spec-draft-type-k'
+  - 'kvarn3'
+  - '--spec-draft-type-v'
+  - 'kvarn3'
+  - '--host'
+  - '0.0.0.0'
+  - '--port'
+  - '8080'
+  - '--parallel'
+  - '1'
+  - '--ctx-size'
+  - '262144'
+  - '-b'
+  - '512'
+  - '-ub'
+  - '512'
+  - '--cache-type-k'
+  - 'kvarn3'
+  - '--cache-type-v'
+  - 'kvarn3'
+  - '-cram'
+  - '12288'
+env:
+  GGML_KVARN_WINDOW_CHUNK: "16384"
+sampling:
+  temperature: 1.0
+  top_p: 0.95
+  top_k: 20
+  min_p: 0.0
+  presence_penalty: 1.5
+  max_tokens: 16384
+chat_template_kwargs: {}
+sources:
+  temperature: "https://huggingface.co/Qwen/Qwen3.6-35B-A3B (mode thinking, lu le 2026-09-23)"
+  top_p: "https://huggingface.co/Qwen/Qwen3.6-35B-A3B (mode thinking, lu le 2026-09-23)"
+  top_k: "https://huggingface.co/Qwen/Qwen3.6-35B-A3B (mode thinking, lu le 2026-09-23)"
+  min_p: "https://huggingface.co/Qwen/Qwen3.6-35B-A3B (mode thinking, lu le 2026-09-23)"
+  presence_penalty: "https://huggingface.co/Qwen/Qwen3.6-35B-A3B (mode thinking, lu le 2026-09-23)"
+  max_tokens: ".superpowers/sdd/2026-09-23-banc-llm-refonte-plan/progress.md, ruling Y"
+ctx_proven: null

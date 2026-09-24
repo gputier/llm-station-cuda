@@ -1,0 +1,58 @@
+machine: "99"
+model: kat
+variant: R3
+label: "provisoire, remplacé à la tâche 14 selon le contrôle du parseur (spec : template forcé si le template embarqué déclenche le parseur Qwen3-Coder ; aucun fichier de template KAT trouvé cette session, recherche HF infructueuse)"
+exe: 'D:\LLM-Setup\llama-cpp-b10826\llama-server.exe'
+workdir: 'D:\LLM-Setup\llama-cpp-b10826'
+cudabin: null
+args:
+  - '-m'
+  - 'D:\models\kat-coder-v25-35b-a3b-mtp\KAT-Philly-MTP-Q4_K_M.gguf'
+  - '--spec-type'
+  - 'draft-mtp'
+  - '--spec-draft-n-max'
+  - '2'
+  - '--n-gpu-layers'
+  - '99'
+  - '--load-mode'
+  - 'mlock'
+  - '--flash-attn'
+  - 'on'
+  - '--jinja'
+  - '--host'
+  - '0.0.0.0'
+  - '--port'
+  - '8080'
+  - '--parallel'
+  - '1'
+  - '--override-kv'
+  - 'qwen35moe.context_length=int:393216'
+  - '--ctx-size'
+  - '393216'
+  - '-b'
+  - '4096'
+  - '-ub'
+  - '2048'
+  - '--cache-type-k'
+  - 'q4_0'
+  - '--cache-type-v'
+  - 'q4_0'
+  - '-cram'
+  - '24576'
+env: {}
+sampling:
+  temperature: 1.0
+  top_p: 0.95
+  top_k: 20
+  min_p: 0.0
+  presence_penalty: 1.5
+  max_tokens: 16384
+chat_template_kwargs: {}
+sources:
+  temperature: "https://huggingface.co/Kwaipilot/KAT-Coder-V2.5-Dev (mode thinking, lu le 2026-09-23)"
+  top_p: "https://huggingface.co/Kwaipilot/KAT-Coder-V2.5-Dev (mode thinking, lu le 2026-09-23)"
+  top_k: "https://huggingface.co/Kwaipilot/KAT-Coder-V2.5-Dev (mode thinking, lu le 2026-09-23)"
+  min_p: "https://huggingface.co/Kwaipilot/KAT-Coder-V2.5-Dev/resolve/main/generation_config.json (pas de clé min_p, lu le 2026-09-24) ; défaut transformers GenerationConfig.min_p = None, aucun filtre (configuration_utils.py, lu le 2026-09-24)"
+  presence_penalty: "https://huggingface.co/Kwaipilot/KAT-Coder-V2.5-Dev (mode thinking, lu le 2026-09-23)"
+  max_tokens: ".superpowers/sdd/2026-09-23-banc-llm-refonte-plan/progress.md, ruling Y (modèle thinking par défaut)"
+ctx_proven: null

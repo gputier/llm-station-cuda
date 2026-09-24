@@ -1,0 +1,54 @@
+machine: "99"
+model: bonsai
+variant: R1
+label: "T0.7/0.95/20, seule valeur de la fiche GGUF"
+exe: 'D:\LLM-Setup\llama-cpp-b10883\llama-server.exe'
+workdir: 'D:\LLM-Setup\llama-cpp-b10883'
+cudabin: 'C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.3\bin'
+args:
+  - '-m'
+  - 'D:\models\ternary-bonsai-27b\Ternary-Bonsai-27B-Q2_g64.gguf'
+  - '--mmproj'
+  - 'D:\models\ternary-bonsai-27b\Ternary-Bonsai-27B-mmproj-BF16.gguf'
+  - '--n-gpu-layers'
+  - '99'
+  - '--load-mode'
+  - 'mlock'
+  - '--flash-attn'
+  - 'on'
+  - '--jinja'
+  - '--chat-template-file'
+  - 'D:\models\ternary-bonsai-27b\chat-template-system-anywhere.jinja'
+  - '--host'
+  - '0.0.0.0'
+  - '--port'
+  - '8080'
+  - '--parallel'
+  - '1'
+  - '--ctx-size'
+  - '262144'
+  - '-b'
+  - '4096'
+  - '-ub'
+  - '2048'
+  - '--cache-type-k'
+  - 'q8_0'
+  - '--cache-type-v'
+  - 'q8_0'
+  - '-cram'
+  - '24576'
+env: {}
+sampling:
+  temperature: 0.7
+  top_p: 0.95
+  top_k: 20
+  min_p: 0.0
+  max_tokens: 8192
+chat_template_kwargs: {}
+sources:
+  temperature: "https://huggingface.co/prism-ml/Ternary-Bonsai-27B-gguf (lu le 2026-09-23)"
+  top_p: "https://huggingface.co/prism-ml/Ternary-Bonsai-27B-gguf (lu le 2026-09-23)"
+  top_k: "https://huggingface.co/prism-ml/Ternary-Bonsai-27B-gguf (lu le 2026-09-23)"
+  min_p: "huggingface.co/prism-ml/Ternary-Bonsai-27B-gguf ne publie pas de generation_config.json (404 le 2026-09-24, dépôt GGUF seul) ; défaut transformers GenerationConfig.min_p = None, aucun filtre (configuration_utils.py, lu le 2026-09-24)"
+  max_tokens: ".superpowers/sdd/2026-09-23-banc-llm-refonte-plan/progress.md, ruling Y"
+ctx_proven: null

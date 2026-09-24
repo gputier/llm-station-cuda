@@ -1,0 +1,56 @@
+machine: "99"
+model: nex
+variant: R2
+label: "-ot ciblé sur les experts de fin de réseau"
+exe: 'D:\LLM-Setup\llama-cpp-b10883\llama-server.exe'
+workdir: 'D:\LLM-Setup\llama-cpp-b10883'
+cudabin: 'C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.3\bin'
+args:
+  - '-m'
+  - 'D:\models\nex-n2.5-mini\Nex-N2.5-mini.i1-Q4_K_M.gguf'
+  - '--mmproj'
+  - 'D:\models\nex-n2.5-mini\mmproj-Nex-N2.5-mini-F16.gguf'
+  - '-ot'
+  - 'blk\.(3[0-9])\.ffn_.*_exps\.=CPU'
+  - '--n-gpu-layers'
+  - '99'
+  - '--load-mode'
+  - 'mlock'
+  - '--flash-attn'
+  - 'on'
+  - '--jinja'
+  - '--host'
+  - '0.0.0.0'
+  - '--port'
+  - '8080'
+  - '--parallel'
+  - '1'
+  - '--ctx-size'
+  - '262144'
+  - '-b'
+  - '4096'
+  - '-ub'
+  - '2048'
+  - '--cache-type-k'
+  - 'q8_0'
+  - '--cache-type-v'
+  - 'q8_0'
+  - '-cram'
+  - '24576'
+env: {}
+sampling:
+  temperature: 0.7
+  top_p: 0.95
+  top_k: 40
+  min_p: 0.0
+  max_tokens: 16384
+chat_template_kwargs:
+  reasoning_effort: "medium"
+sources:
+  temperature: "https://huggingface.co/nex-agi/Nex-N2.5-mini (lu le 2026-09-23)"
+  top_p: "https://huggingface.co/nex-agi/Nex-N2.5-mini (lu le 2026-09-23)"
+  top_k: "https://huggingface.co/nex-agi/Nex-N2.5-mini (lu le 2026-09-23)"
+  min_p: "huggingface.co/nex-agi/Nex-N2.5-mini ne publie pas de generation_config.json (404 le 2026-09-24) ; défaut transformers GenerationConfig.min_p = None, aucun filtre (configuration_utils.py, lu le 2026-09-24)"
+  max_tokens: ".superpowers/sdd/2026-09-23-banc-llm-refonte-plan/progress.md, ruling Y (adaptive thinking)"
+  reasoning_effort: "https://huggingface.co/nex-agi/Nex-N2.5-mini (lu le 2026-09-23)"
+ctx_proven: null

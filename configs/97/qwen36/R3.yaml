@@ -1,0 +1,69 @@
+machine: "97"
+model: qwen36
+variant: R3
+label: "template froggeric, hypothèse balise </think> parasite (fichier non fourni : la 97 est hors de portée de cette session)"
+exe: 'D:\LLM-Setup\beellama-v0.4.6\llama-server.exe'
+workdir: 'D:\LLM-Setup\beellama-v0.4.6'
+cudabin: null
+args:
+  - '-m'
+  - 'D:\models\qwen3.6-35b-a3b-mtp\Qwen3.6-35B-A3B-UD-IQ3_XXS.gguf'
+  - '--n-cpu-moe'
+  - '2'
+  - '--load-mode'
+  - 'none'
+  # Même fichier réel que sur la 99 (froggeric/Qwen-Fixed-Chat-Templates,
+  # chat_template.jinja), mais la 97 est hors périmètre de cette session
+  # (parallel-rules.md interdit tout ssh vers elle) : chemin non vérifié sur
+  # cette machine, à provisionner séparément avant le premier lancement réel.
+  - '--chat-template-file'
+  - 'D:\models\shared\froggeric-chat-template.jinja'
+  - '--n-gpu-layers'
+  - '99'
+  - '--flash-attn'
+  - 'on'
+  - '--jinja'
+  - '--spec-type'
+  - 'draft-mtp'
+  - '--spec-draft-n-max'
+  - '2'
+  - '--spec-draft-type-k'
+  - 'kvarn3'
+  - '--spec-draft-type-v'
+  - 'kvarn3'
+  - '--host'
+  - '0.0.0.0'
+  - '--port'
+  - '8080'
+  - '--parallel'
+  - '1'
+  - '--ctx-size'
+  - '262144'
+  - '-b'
+  - '512'
+  - '-ub'
+  - '512'
+  - '--cache-type-k'
+  - 'kvarn3'
+  - '--cache-type-v'
+  - 'kvarn3'
+  - '-cram'
+  - '12288'
+env:
+  GGML_KVARN_WINDOW_CHUNK: "16384"
+sampling:
+  temperature: 1.0
+  top_p: 0.95
+  top_k: 20
+  min_p: 0.0
+  presence_penalty: 1.5
+  max_tokens: 16384
+chat_template_kwargs: {}
+sources:
+  temperature: "https://huggingface.co/Qwen/Qwen3.6-35B-A3B (mode thinking, lu le 2026-09-23)"
+  top_p: "https://huggingface.co/Qwen/Qwen3.6-35B-A3B (mode thinking, lu le 2026-09-23)"
+  top_k: "https://huggingface.co/Qwen/Qwen3.6-35B-A3B (mode thinking, lu le 2026-09-23)"
+  min_p: "https://huggingface.co/Qwen/Qwen3.6-35B-A3B (mode thinking, lu le 2026-09-23)"
+  presence_penalty: "https://huggingface.co/Qwen/Qwen3.6-35B-A3B (mode thinking, lu le 2026-09-23)"
+  max_tokens: ".superpowers/sdd/2026-09-23-banc-llm-refonte-plan/progress.md, ruling Y"
+ctx_proven: null
