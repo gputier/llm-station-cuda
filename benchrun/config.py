@@ -33,6 +33,10 @@ SAMPLING_FLAGS = {
     "--grammar", "--grammar-file", "-j", "--json-schema", "-jf", "--json-schema-file",
     "-bs", "--backend-sampling",
 }
+# Every key the gateway must send: an absent one falls back to llama-server's
+# own default (min_p 0.05, top_k 40, common/common.h), not to the model card's,
+# and max_tokens to the harness's (ruling Y).
+REQUIRED_SAMPLING = ("temperature", "top_p", "top_k", "min_p", "max_tokens")
 REQUIRED = ("machine", "model", "variant", "label", "exe", "workdir", "args", "sampling", "sources")
 
 
@@ -74,6 +78,9 @@ def load_config(path) -> BenchConfig:
     for flag in data["args"]:
         if flag in SAMPLING_FLAGS:
             raise ConfigError(f"{path}: {flag} belongs in 'sampling', not in 'args'")
+    missing_sampling = [k for k in REQUIRED_SAMPLING if k not in data["sampling"]]
+    if missing_sampling:
+        raise ConfigError(f"{path}: sampling must set {missing_sampling}, or llama-server applies its own defaults")
     for key in list(data["sampling"]) + list(data.get("chat_template_kwargs") or {}):
         if not data["sources"].get(key):
             raise ConfigError(f"{path}: setting '{key}' has no source")

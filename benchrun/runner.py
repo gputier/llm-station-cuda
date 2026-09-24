@@ -32,6 +32,13 @@ class CampaignError(Exception):
     """
 
 
+class SuiteSkipped(Exception):
+    """Raised by a suite that does not apply to this configuration (every
+    requested context length above the served window, for example). The rep
+    is recorded as skipped with the reason, never as an empty success nor as
+    a failure of the whole configuration."""
+
+
 @dataclass
 class SuiteContext:
     base_url: str
@@ -75,9 +82,12 @@ class Campaign:
                     todo.append((suite, rep))
         return todo
 
-    def _set_context(self, cfg: BenchConfig, suite_name: str, rep: int) -> None:
-        body = json.dumps({"run_id": f"{cfg.machine}/{cfg.model}/{cfg.variant}", "suite": suite_name,
-                           "rep": rep, "sampling": cfg.sampling,
+    def _set_context(self, cfg: BenchConfig, suite, rep: int) -> None:
+        # A suite may pin sampling keys its measure depends on (the speed
+        # suite pins max_tokens), laid over the configuration's own values.
+        sampling = {**cfg.sampling, **getattr(suite, "sampling_override", {})}
+        body = json.dumps({"run_id": f"{cfg.machine}/{cfg.model}/{cfg.variant}", "suite": suite.name,
+                           "rep": rep, "sampling": sampling,
                            "chat_template_kwargs": cfg.chat_template_kwargs}).encode()
         req = urllib.request.Request(self.gateway_url + "/_bench/context", data=body,
                                      headers={"Content-Type": "application/json"}, method="POST")
@@ -136,9 +146,14 @@ class Campaign:
                     for suite, rep in todo:
                         out = cell / suite.name
                         out.mkdir(parents=True, exist_ok=True)
-                        self._set_context(cfg, suite.name, rep)
+                        self._set_context(cfg, suite, rep)
                         ctx = SuiteContext(self.gateway_url, cfg, rep, out, self.private_root)
-                        results = suite.run(ctx)
+                        try:
+                            results = suite.run(ctx)
+                        except SuiteSkipped as skip:
+                            (out / f"rep{rep}.skipped").write_text(str(skip), encoding="utf-8")
+                            (out / f"rep{rep}.done").write_text("")
+                            continue
                         if not results:
                             raise RuntimeError(f"suite {suite.name} graded no item (rep {rep})")
                         with open(out / f"rep{rep}.jsonl", "w", encoding="utf-8") as fh:
