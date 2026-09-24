@@ -1,0 +1,5 @@
+{
+  "note": "Real 500 bodies captured 2026-09-23 from the embed profile on the 99 (batch/ubatch 2048): both 8192-token and 32768-token filler documents were refused, so max_ctx_ok is proven to be 0 for this launch spec.",
+  "status": 500,
+  "body": {"error": {"code": 500, "message": "input (7597 tokens) is too large to process. increase the physical batch size (current batch size: 2048)", "type": "server_error"}}
+}

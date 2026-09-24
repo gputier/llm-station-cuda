@@ -6,7 +6,7 @@
 
 **Architecture:** Un orchestrateur Python (`benchrun`) tourne en conteneur sur le Mac. Il pilote chaque station par SSH via une nouvelle action `bench` de `llm-ctl.ps1`, qui lance llama-server depuis une spec JSON complète. Toutes les requêtes des harnais passent par une passerelle de mesure (`gateway`) qui impose le sampling de la configuration testée et journalise chaque échange. Les harnais publics tournent chacun dans leur conteneur épinglé ; les jeux privés et les journaux vivent dans le dépôt privé `Bench-LLM`.
 
-**Tech Stack:** Python 3.12, aiohttp, PyYAML, pytest ; Docker Compose ; PowerShell 7 (stations Windows) ; llama.cpp llama-server ; harnais LiveCodeBench, Aider, bfcl-eval, LiveBench, RULER, NoLiMa ; Claude Code en mode `-p`.
+**Tech Stack:** Python 3.12, aiohttp, PyYAML, pytest ; Docker Compose ; PowerShell 7 (stations Windows) ; llama.cpp llama-server ; harnais LiveCodeBench, Aider, bfcl-eval, LiveBench, RULER, LongBench v2 ; Claude Code en mode `-p`.
 
 **Spec:** `/private/tmp/claude-501/-Users-gputier-git-projects-Tools-LLM/38fc6ad7-18df-488c-88c0-1945de9c3a25/scratchpad/2026-09-23-banc-llm-refonte-design.md` (à copier dans `llm-station-cuda/docs/superpowers/specs/` à la tâche 1).
 
@@ -1448,15 +1448,16 @@ git add bench/harness/bfcl.Dockerfile bench/harness/livebench.Dockerfile bench/h
 git commit -m "feat(bench): épreuves BFCL v4 et LiveBench"
 ```
 
-### Task 11: Long contexte, RULER et NoLiMa
+### Task 11: Long contexte, RULER et LongBench v2
 
+Arbitrage du 24/09/2026 : NoLiMa (licence Adobe, recherche non commerciale seulement) est remplacé par LongBench v2 (`zai-org/LongBench-v2`, Apache-2.0).
 **Files:**
-- Create: `bench/harness/ruler.Dockerfile`, `bench/harness/nolima.Dockerfile`
-- Create: `bench/benchrun/suites/ruler.py`, `bench/benchrun/suites/nolima.py`
-- Create: fixtures réelles, `bench/tests/test_suite_ruler.py`, `bench/tests/test_suite_nolima.py`
+- Create: `bench/harness/ruler.Dockerfile`, `bench/harness/longbench.Dockerfile`
+- Create: `bench/benchrun/suites/ruler.py`, `bench/benchrun/suites/longbench.py`
+- Create: fixtures réelles, `bench/tests/test_suite_ruler.py`, `bench/tests/test_suite_longbench.py`
 
 **Interfaces:**
-- Produces: `RulerSuite(lengths: list[int], tasks: list[str] | None = None, per_task: int = 20)`, `NolimaSuite(lengths=(32768, 131072), per_length: int = 50)`, avec `name` = `"ruler"` et `"nolima"`. Les longueurs supérieures à `cfg.ctx_proven or max_ctx(cfg)` sont sautées et journalisées `skipped`. `max_ctx(cfg: BenchConfig) -> int` lit la valeur de `--ctx-size` dans `cfg.args`.
+- Produces: `RulerSuite(lengths: list[int], tasks: list[str] | None = None, per_task: int = 20)`, `LongBenchV2Suite(lengths: list[int] | None = None, samples_per_length: int = 20)`, avec `name` = `"ruler"` et `"longbench_v2"`. Les longueurs supérieures à `cfg.ctx_proven or max_ctx(cfg)` sont sautées et journalisées `skipped`. `max_ctx(cfg: BenchConfig) -> int` lit la valeur de `--ctx-size` dans `cfg.args`.
 
 - [ ] **Step 1: Vérifier que RULER parle à un endpoint OpenAI**
 
@@ -1487,12 +1488,12 @@ Même méthode qu'aux tâches 9 et 10 : passe réelle à 32k sur 2 tâches × 2 
 
 - [ ] **Step 4: Faire passer et committer**
 
-Run: `bench/scripts/test.sh tests/test_suite_ruler.py tests/test_suite_nolima.py`
+Run: `bench/scripts/test.sh tests/test_suite_ruler.py tests/test_suite_longbench.py`
 Expected: PASS
 
 ```bash
-git add bench/harness/ruler.Dockerfile bench/harness/nolima.Dockerfile bench/harness/README.md bench/harness/pins.env bench/benchrun/suites/ruler.py bench/benchrun/suites/nolima.py bench/tests/test_suite_ruler.py bench/tests/test_suite_nolima.py bench/tests/fixtures/ruler_* bench/tests/fixtures/nolima_*
-git commit -m "feat(bench): épreuves long contexte RULER et NoLiMa"
+git add bench/harness/ruler.Dockerfile bench/harness/longbench.Dockerfile bench/harness/README.md bench/harness/pins.env bench/benchrun/suites/ruler.py bench/benchrun/suites/longbench.py bench/tests/test_suite_ruler.py bench/tests/test_suite_longbench.py bench/tests/fixtures/ruler_* bench/tests/fixtures/longbench_*
+git commit -m "feat(bench): épreuves long contexte RULER et LongBench v2"
 ```
 
 ### Task 12: Épreuve maison agentique
@@ -1854,7 +1855,7 @@ git commit -m "feat(bench): trois configurations par modèle"
 - Create: `docs/pilote-2026-09.md`
 
 **Interfaces:**
-- Produces: `python -m benchrun run --machine 99|97 --configs <glob> --suites lcb,aider,bfcl,livebench,ruler,nolima,agentic,speed --reps 3 --out $BENCH_PRIVATE/runs/<campagne>` ; `python -m benchrun pilot --machine 99|97`.
+- Produces: `python -m benchrun run --machine 99|97 --configs <glob> --suites lcb,aider,bfcl,livebench,ruler,longbench_v2,agentic,speed --reps 3 --out $BENCH_PRIVATE/runs/<campagne>` ; `python -m benchrun pilot --machine 99|97`.
 
 - [ ] **Step 1: `.env.example` et compose**
 
@@ -1912,8 +1913,8 @@ Expected : sortie vide. Noter le commit dans `Bench-LLM/runs/2026-09-campagne/TR
 
 ```bash
 cd bench/harness
-docker compose run -d --name camp-99 runner-99 python -m benchrun run --machine 99 --configs 'configs/99/*/*.yaml' --suites lcb,aider,bfcl,livebench,ruler,nolima,agentic,speed --reps 3 --out /private/runs/2026-09-campagne
-docker compose run -d --name camp-97 runner-97 python -m benchrun run --machine 97 --configs 'configs/97/*/*.yaml' --suites lcb,aider,bfcl,livebench,ruler,nolima,agentic,speed --reps 3 --out /private/runs/2026-09-campagne
+docker compose run -d --name camp-99 runner-99 python -m benchrun run --machine 99 --configs 'configs/99/*/*.yaml' --suites lcb,aider,bfcl,livebench,ruler,longbench_v2,agentic,speed --reps 3 --out /private/runs/2026-09-campagne
+docker compose run -d --name camp-97 runner-97 python -m benchrun run --machine 97 --configs 'configs/97/*/*.yaml' --suites lcb,aider,bfcl,livebench,ruler,longbench_v2,agentic,speed --reps 3 --out /private/runs/2026-09-campagne
 ```
 
 Surveiller avec Monitor sur la fin des deux conteneurs, sans sonder en boucle. En cas de coupure, relancer la même commande : la reprise saute ce qui est marqué `.done`.

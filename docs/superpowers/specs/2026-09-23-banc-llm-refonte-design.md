@@ -116,7 +116,7 @@ poste. Les versions des harnais et des jeux sont épinglées (commit ou tag) dan
 | Agentique, outils | BFCL v4, appel natif (FC) | `bfcl-eval`, `--skip-server-setup`, `REMOTE_OPENAI_BASE_URL` | catégories simple, multiple, multi-tours |
 | Raisonnement | LiveBench, dernière livraison au jour du pilote | `livebench/livebench`, `--api-base` | catégories raisonnement et maths |
 | Long contexte, rappel | RULER, 13 tâches | `NVIDIA/RULER` ou `inspect_evals` | 32k, 128k, maximum servi |
-| Long contexte, raisonnement | NoLiMa | jeu HF arXiv 2502.05167 | 32k et 128k |
+| Long contexte, raisonnement | LongBench v2 (arbitrage du 24/09/2026 : remplace NoLiMa, dont la licence Adobe exclut tout usage commercial) | `zai-org/LongBench-v2`, Apache-2.0, notation de `THUDM/LongBench` | 32k et 128k |
 | Maison, agentique réelle | Correction de bugs réels de nos dépôts par Claude Code | `claude -p --output-format json --max-turns N`, dépôt figé, tests = juge | 40 tâches |
 | Débit | `vitesse.ps1` repris | llama-server `timings` | 3 passes, médiane |
 
