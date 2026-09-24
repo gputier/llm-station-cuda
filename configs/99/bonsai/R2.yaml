@@ -53,12 +53,12 @@ sampling:
   top_p: 0.95
   top_k: 20
   min_p: 0.0
-  max_tokens: 8192
+  max_tokens: 65536
 chat_template_kwargs: {}
 sources:
   temperature: "https://huggingface.co/prism-ml/Ternary-Bonsai-27B-gguf (lu le 2026-09-23)"
   top_p: "https://huggingface.co/prism-ml/Ternary-Bonsai-27B-gguf (lu le 2026-09-23)"
   top_k: "https://huggingface.co/prism-ml/Ternary-Bonsai-27B-gguf (lu le 2026-09-23)"
   min_p: "huggingface.co/prism-ml/Ternary-Bonsai-27B-gguf ne publie pas de generation_config.json (404 le 2026-09-24, dépôt GGUF seul) ; défaut transformers GenerationConfig.min_p = None, aucun filtre (configuration_utils.py, lu le 2026-09-24)"
-  max_tokens: ".superpowers/sdd/2026-09-23-banc-llm-refonte-plan/progress.md, ruling Y"
+  max_tokens: "https://huggingface.co/prism-ml/Ternary-Bonsai-27B-gguf, README complet et arborescence du depot (pas de KNOWN_ISSUES.md, pas de section reasoning/output ; seul exemple -n 256, illustratif), lu le 2026-09-24 : aucun budget de jetons publie par les auteurs ; 65536 garde les cellules long-contexte a 128K actives (docs/phase0-2026-09.md, section Budget de sortie, 24/09)"
 ctx_proven: null

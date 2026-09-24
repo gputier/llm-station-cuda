@@ -46,7 +46,7 @@ sampling:
   top_k: 20
   min_p: 0.0
   presence_penalty: 1.5
-  max_tokens: 8192
+  max_tokens: 32768
 chat_template_kwargs:
   enable_thinking: false
 sources:
@@ -55,6 +55,6 @@ sources:
   top_k: "https://huggingface.co/Kwaipilot/KAT-Coder-V2.5-Dev (mode instruct, lu le 2026-09-23)"
   min_p: "https://huggingface.co/Kwaipilot/KAT-Coder-V2.5-Dev/resolve/main/generation_config.json (pas de clé min_p, lu le 2026-09-24) ; défaut transformers GenerationConfig.min_p = None, aucun filtre (configuration_utils.py, lu le 2026-09-24)"
   presence_penalty: "https://huggingface.co/Kwaipilot/KAT-Coder-V2.5-Dev (mode instruct, lu le 2026-09-23)"
-  max_tokens: ".superpowers/sdd/2026-09-23-banc-llm-refonte-plan/progress.md, ruling Y (modèle non-thinking) ; 8192 déjà taillé pour une réponse sans réflexion (moitié des 16384 des variantes thinking R1/R3)"
+  max_tokens: "https://huggingface.co/Kwaipilot/KAT-Coder-V2.5-Dev, section \"Instruct (or Non-Thinking) Mode\", exemple max_tokens=32768, lu le 2026-09-24 (regle budget de sortie du 24/09 : config non-thinking, la fiche publie un budget propre au mode non-thinking, on l'emploie au lieu du plancher 8192)"
   enable_thinking: "https://huggingface.co/Kwaipilot/KAT-Coder-V2.5-Dev, section \"Instruct (or Non-Thinking) Mode\" : chat_template_kwargs={\"enable_thinking\": False} (lu le 2026-09-24) ; le levier réel est dans le gabarit embarqué du gguf, qui lit la même variable enable_thinking (voir la ligne 6 de D:\\models\\shared\\froggeric-chat-template.jinja pour la variante de ce gabarit servie ailleurs sur la station), confirmé par le smoke test"
 ctx_proven: null
