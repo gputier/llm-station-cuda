@@ -8,7 +8,7 @@ import pytest
 
 from benchrun.config import load_config
 from benchrun.runner import SuiteContext, SuiteSkipped
-from benchrun.suites import ruler
+from benchrun.suites import ruler, request_timeout_s
 from benchrun.suites.ruler import (
     RulerSuite,
     max_ctx,
@@ -186,6 +186,8 @@ def test_run_reads_the_files_the_harness_writes(tmp_path, monkeypatch):
     assert len(calls) == 2
     assert "--base-url" in calls[0]
     assert calls[0][calls[0].index("--base-url") + 1] == "http://gw:8081/v1"
+    expected_timeout = request_timeout_s(CFG.sampling.get("max_tokens", 0), 32768 * ruler.MEASURED_TOKEN_RATIO)
+    assert f"BENCH_REQUEST_TIMEOUT_S={expected_timeout}" in calls[0]
 
 
 def test_run_passes_a_positive_timeout_to_every_docker_run_call(tmp_path, monkeypatch):

@@ -28,14 +28,20 @@ takes this branch for any "gpt"/"o1" model name; our aliases take neither
 branch of the pinned model_map lookup, so cl100k_base is the harness's own
 fallback made explicit rather than a new choice).
 
-Bounded retries: a single-threaded loop (get_pred() in the pinned harness
-uses one thread per shard; this launcher processes samples sequentially, so
-os._exit's thread pitfall documented in ruler_run.py does not apply here),
-up to MAX_ATTEMPTS per sample with a short backoff, and a hard stop
-(sys.exit(1), safe here because the whole process is a single thread) after
-MAX_CONSECUTIVE_FAILURES consecutive sample failures, so a persistent
-endpoint error fails fast and loud instead of burning through every
-remaining sample one by one.
+Zero retries: exactly one request per sample (MAX_ATTEMPTS = 1, no backoff).
+A timeout or a disconnection is recorded as a failed item (judge false,
+finish_reason "error") in the same output file as every other item, never
+resent: resending abandons the first attempt in place and queues up behind
+it, losing the real answer (proven live on LiveCodeBench, 2026-09-24). A
+hard stop (sys.exit(1), safe here because the whole process is a single
+thread: get_pred() in the pinned harness uses one thread per shard, this
+launcher processes samples sequentially) still fires on two conditions,
+neither a retry of any one request, both an abort-the-whole-task circuit
+breaker: a failure before this run has ever recorded a real success (the
+endpoint itself looks unreachable, not just this one sample was slow), and
+MAX_CONSECUTIVE_FAILURES consecutive sample failures (the endpoint went
+dead mid-run). Either way, a dead endpoint must fail the task, not produce
+a full run of empty answers silently scored as real zeros.
 
 Selection: _select_items builds each candidate's full prompt (_build_prompt,
 template plus context plus question plus choices) and measures ITS token
@@ -73,23 +79,39 @@ from __future__ import annotations
 import argparse
 import json
 import pathlib
+import os
 import random
 import re
 import sys
-import time
 
 DATA_PATH = pathlib.Path("/longbench_v2_data.json")
 TEMPLATE_PATH = pathlib.Path("/longbench/prompts/0shot.txt")
 
-# Kept in sync with benchrun.suites.longbench's own MAX_ATTEMPTS / backoff
-# (this script runs container-side and cannot import benchrun):
+# Kept in sync with benchrun.suites.longbench's own MAX_ATTEMPTS (this script
+# runs container-side and cannot import benchrun):
 # bench/tests/test_longbench_run.py asserts the two agree.
-MAX_ATTEMPTS = 3
+MAX_ATTEMPTS = 1
+# Not a retry budget: a persistent endpoint error aborts the whole task
+# after this many CONSECUTIVE single-attempt item failures, instead of
+# burning through every remaining sample one by one.
 MAX_CONSECUTIVE_FAILURES = 3
 # Fixed for reproducibility across reps and reruns (see module docstring);
 # not derived from the model, config or rep number, so a given band's
 # candidate pool is sampled the same way regardless of who is running it.
 SELECTION_SEED = 20260924
+
+
+def _give_up_reason(ever_succeeded: bool, consecutive_failures: int) -> str | None:
+    """Pure decision behind the fail-fast circuit breaker (module
+    docstring): None means "record this one failed item and keep going",
+    a string means "abort the whole task", carrying why. Kept as its own
+    function so the two triggers (never succeeded yet, too many failures
+    in a row) are testable without a real OpenAI client or network access."""
+    if not ever_succeeded:
+        return "no item has succeeded yet"
+    if consecutive_failures >= MAX_CONSECUTIVE_FAILURES:
+        return f"{consecutive_failures} consecutive item failures"
+    return None
 
 
 def _extract_answer(response: str) -> str | None:
@@ -207,9 +229,14 @@ def main() -> None:
         )
         sys.exit(1)
 
-    client = OpenAI(base_url=args.base_url, api_key="x")
+    client_kwargs = {"base_url": args.base_url, "api_key": "x", "max_retries": 0}
+    timeout_env = os.environ.get("BENCH_REQUEST_TIMEOUT_S")
+    if timeout_env is not None:
+        client_kwargs["timeout"] = float(timeout_env)
+    client = OpenAI(**client_kwargs)
     out_path = save_dir / f"longbench_v2_{args.context_length}.jsonl"
     consecutive_failures = 0
+    ever_succeeded = False
 
     with open(out_path, "w", encoding="utf-8") as handle:
         for item in selected:
@@ -227,55 +254,67 @@ def main() -> None:
                     file=sys.stderr,
                 )
 
-            record = None
-            last_exc = None
-            for attempt in range(1, MAX_ATTEMPTS + 1):
-                try:
-                    response = client.chat.completions.create(
-                        model=args.model_alias,
-                        messages=[{"role": "user", "content": prompt}],
-                        temperature=0.1,
-                        max_tokens=args.max_tokens,
-                    )
-                    choice = response.choices[0]
-                    content = choice.message.content or ""
-                    pred = _extract_answer(content)
-                    record = {
-                        "_id": item["_id"],
-                        "domain": item["domain"],
-                        "sub_domain": item["sub_domain"],
-                        "difficulty": item["difficulty"],
-                        "length": item["length"],
-                        "answer": item["answer"],
-                        "response": content,
-                        "pred": pred,
-                        # result.py's own scoring rule (LONGBENCH_SHA),
-                        # ported verbatim: exact letter match, no partial
-                        # credit and no compensation for an unparseable
-                        # response.
-                        "judge": pred == item["answer"],
-                        "finish_reason": choice.finish_reason,
-                        "completion_tokens": response.usage.completion_tokens if response.usage else None,
-                        "input_truncated": input_truncated,
-                        "input_tokens_cut": input_tokens_cut,
-                    }
-                    break
-                except Exception as exc:  # noqa: BLE001 - real API/network errors, retried below
-                    last_exc = exc
-                    if attempt < MAX_ATTEMPTS:
-                        time.sleep(2 * attempt)
-
-            if record is None:
+            # Exactly one request, no retry (module docstring): a timeout or
+            # a disconnection is recorded as a failed item below, never
+            # resent.
+            try:
+                response = client.chat.completions.create(
+                    model=args.model_alias,
+                    messages=[{"role": "user", "content": prompt}],
+                    temperature=0.1,
+                    max_tokens=args.max_tokens,
+                )
+                choice = response.choices[0]
+                content = choice.message.content or ""
+                pred = _extract_answer(content)
+                record = {
+                    "_id": item["_id"],
+                    "domain": item["domain"],
+                    "sub_domain": item["sub_domain"],
+                    "difficulty": item["difficulty"],
+                    "length": item["length"],
+                    "answer": item["answer"],
+                    "response": content,
+                    "pred": pred,
+                    # result.py's own scoring rule (LONGBENCH_SHA),
+                    # ported verbatim: exact letter match, no partial
+                    # credit and no compensation for an unparseable
+                    # response.
+                    "judge": pred == item["answer"],
+                    "finish_reason": choice.finish_reason,
+                    "completion_tokens": response.usage.completion_tokens if response.usage else None,
+                    "input_truncated": input_truncated,
+                    "input_tokens_cut": input_tokens_cut,
+                }
+            except Exception as exc:  # noqa: BLE001 - real API/network error, recorded not retried
+                print(f"longbench_run: item {item['_id']} failed, no retry "
+                      f"({type(exc).__name__}: {exc}), recorded as a failed item", file=sys.stderr)
+                record = {
+                    "_id": item["_id"],
+                    "domain": item["domain"],
+                    "sub_domain": item["sub_domain"],
+                    "difficulty": item["difficulty"],
+                    "length": item["length"],
+                    "answer": item["answer"],
+                    "response": "",
+                    "pred": None,
+                    "judge": False,
+                    "finish_reason": "error",
+                    "completion_tokens": None,
+                    "input_truncated": input_truncated,
+                    "input_tokens_cut": input_tokens_cut,
+                }
                 consecutive_failures += 1
-                print(f"longbench_run: item {item['_id']} failed after {MAX_ATTEMPTS} attempts ({last_exc!r})", file=sys.stderr)
-                if consecutive_failures >= MAX_CONSECUTIVE_FAILURES:
-                    print(
-                        f"longbench_run: {consecutive_failures} consecutive item failures, giving up",
-                        file=sys.stderr,
-                    )
+                handle.write(json.dumps(record) + "\n")
+                handle.flush()
+                give_up_reason = _give_up_reason(ever_succeeded, consecutive_failures)
+                if give_up_reason is not None:
+                    print(f"longbench_run: giving up, {give_up_reason} ({type(exc).__name__}: {exc})",
+                          file=sys.stderr)
                     sys.exit(1)
                 continue
 
+            ever_succeeded = True
             consecutive_failures = 0
             handle.write(json.dumps(record) + "\n")
             handle.flush()

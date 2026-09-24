@@ -79,7 +79,16 @@ def make_app(upstream: str, journal_path: str) -> web.Application:
     async def resources(app: web.Application):
         # One pooled session for the gateway's lifetime: a session per request
         # would fold a TCP connect into every measured ttft_s and total_s.
-        timeout = aiohttp.ClientTimeout(total=None, sock_read=3600)
+        # sock_read disabled (None): every client now carries its own
+        # request timeout, sized from benchrun.suites.request_timeout_s for
+        # the config under test (bench/harness/README.md). A gateway-side
+        # cap shorter than a legitimate slow-but-progressing decode would
+        # cut the relay out from under a client still waiting for it, the
+        # same defect proven live on LiveCodeBench, 2026-09-24, just moved
+        # from the client side to here; the client's own timeout is what
+        # must fire first, and it always does since it is sized from the
+        # same floor this gateway measures.
+        timeout = aiohttp.ClientTimeout(total=None, sock_read=None)
         app[SESSION] = aiohttp.ClientSession(timeout=timeout)
         app[JOURNAL] = open(journal_path, "a", encoding="utf-8", buffering=1)
         yield

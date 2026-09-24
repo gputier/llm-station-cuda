@@ -5,7 +5,7 @@ import shutil
 
 from benchrun.config import load_config
 from benchrun.runner import SuiteContext
-from benchrun.suites import lcb
+from benchrun.suites import lcb, request_timeout_s
 from benchrun.suites.lcb import LiveCodeBenchSuite, parse_lcb
 
 # Cut from a real eval_all file (spark on the 99, release_v6, contests of
@@ -53,6 +53,9 @@ def test_run_reads_the_file_the_harness_writes(tmp_path, monkeypatch):
     assert f"{lcb.HF_CACHE_VOLUME}:/root/.cache/huggingface" in cmd
     assert cmd[cmd.index("--start_date") + 1] == "2025-04-05"
     assert cmd[cmd.index("--max-problems") + 1] == "100"
+    expected_timeout = request_timeout_s(cfg.sampling["max_tokens"], lcb.PROMPT_TOKENS_ESTIMATE)
+    assert expected_timeout > 90
+    assert f"BENCH_REQUEST_TIMEOUT_S={expected_timeout}" in cmd
     assert "OPENAI_BASE_URL=http://gw:8081/v1" in cmd
     assert seen_timeouts[0] is not None and seen_timeouts[0] > 0
     assert seen_timeouts[0] == lcb.subprocess_timeout_s(100, cfg.sampling.get("max_tokens", 0))

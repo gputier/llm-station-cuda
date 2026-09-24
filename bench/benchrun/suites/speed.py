@@ -33,7 +33,7 @@ import json
 import pathlib
 import urllib.request
 
-from benchrun.suites import max_ctx, write_skip_report
+from benchrun.suites import max_ctx, request_timeout_s, write_skip_report
 from benchrun.suites.corpus import CHARS_PER_TOKEN, DEFAULT_CORPUS, filler_text as _filler_text
 
 QUESTION = "\n\nResume ce code en une phrase."
@@ -84,7 +84,7 @@ def _read_new_ttft(journal_path: pathlib.Path, offset: int) -> tuple[float | Non
     return ttft, new_offset
 
 
-def _one_pass(base_url: str, journal_path: pathlib.Path, filler: str, gen_tokens: int) -> dict:
+def _one_pass(base_url: str, journal_path: pathlib.Path, filler: str, gen_tokens: int, prompt_tokens: int) -> dict:
     body = json.dumps({
         "messages": [{"role": "user", "content": filler + QUESTION}],
         "max_tokens": gen_tokens,
@@ -96,7 +96,12 @@ def _one_pass(base_url: str, journal_path: pathlib.Path, filler: str, gen_tokens
         base_url + "/v1/chat/completions", data=body,
         headers={"Content-Type": "application/json; charset=utf-8"}, method="POST",
     )
-    with urllib.request.urlopen(req, timeout=900) as resp:
+    # Talks to the gateway in-process, no docker run/exec (no
+    # BENCH_REQUEST_TIMEOUT_S to pass): the client-side timeout is still
+    # sized from the shared benchrun.suites.request_timeout_s, replacing the
+    # flat 900 s that could abandon a real prefill+decode budget above it
+    # (proven live on LiveCodeBench, 2026-09-24, for the docker-run suites).
+    with urllib.request.urlopen(req, timeout=request_timeout_s(gen_tokens, prompt_tokens)) as resp:
         payload = json.loads(resp.read())
     timings = payload.get("timings")
     # decode_tps and prefill_tps are the whole point of this suite: a
@@ -153,7 +158,7 @@ class SpeedSuite:
         rows = []
         for n in run_lengths:
             filler = _filler_text(self.corpus_dir, n * CHARS_PER_TOKEN)
-            passes = [_one_pass(ctx.base_url, self.journal_path, filler, self.gen_tokens)
+            passes = [_one_pass(ctx.base_url, self.journal_path, filler, self.gen_tokens, n)
                       for _ in range(self.reps)]
             detail = {key: median_row(passes, key) for key in DETAIL_KEYS}
             rows.append({"item_id": f"pp{n}", "passed": 1, "detail": detail})

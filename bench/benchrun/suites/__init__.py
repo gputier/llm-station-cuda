@@ -34,6 +34,19 @@ def per_request_seconds(prompt_tokens: float, max_tokens: int) -> float:
     return prompt_tokens / PREFILL_FLOOR_TOKENS_PER_SECOND + max(max_tokens, 1) / DECODE_FLOOR_TOKENS_PER_SECOND
 
 
+def request_timeout_s(max_tokens: int, prompt_tokens: float) -> int:
+    """Client-side timeout for ONE request against the served model: the
+    full prefill+decode budget for the given prompt and generation length,
+    with the shared safety margin. Every suite adapter (docker run/exec
+    -e BENCH_REQUEST_TIMEOUT_S) and every harness launcher or sitecustomize
+    patch that configures a model client's own timeout computes it from this
+    single function, never a local copy: a client-side delay shorter than
+    this abandons a request the server is still legitimately working on,
+    which is exactly the defect this function exists to close (proven live
+    on LiveCodeBench, 2026-09-24)."""
+    return int(per_request_seconds(prompt_tokens, max_tokens) * SAFETY_FACTOR)
+
+
 def max_ctx(cfg) -> int:
     try:
         idx = cfg.args.index("--ctx-size")

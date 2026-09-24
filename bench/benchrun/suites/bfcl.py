@@ -11,7 +11,7 @@ import pathlib
 import subprocess
 
 from benchrun.config import served_alias
-from benchrun.suites import NETWORK, SAFETY_FACTOR, per_request_seconds
+from benchrun.suites import NETWORK, SAFETY_FACTOR, per_request_seconds, request_timeout_s
 
 IMAGE = "bench-bfcl"
 # BFCL prompts (tool schema plus turn history) stay modest; kept generous.
@@ -98,11 +98,16 @@ class BfclSuite:
         ]
         max_tokens = ctx.cfg.sampling.get("max_tokens", 0)
         n_categories = len(self.categories)
+        # The generate phase is the only one that calls the model
+        # (evaluate() grades local result files, no model call at all):
+        # bfcl_run.py reads this to size the OpenAI client's own timeout and
+        # to set the SDK's max_retries to 0 (bench/harness/README.md).
+        generate_env = [*common_env, "-e", f"BENCH_REQUEST_TIMEOUT_S={request_timeout_s(max_tokens, PROMPT_TOKENS_ESTIMATE)}"]
         subprocess.run(
             [
                 "docker", "run", "--rm",
                 "--network", NETWORK,
-                *common_env,
+                *generate_env,
                 "-v", f"{rep_dir}:/out",
                 IMAGE,
                 "python", "/bfcl_run.py", model_alias, "generate",

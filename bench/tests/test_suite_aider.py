@@ -5,7 +5,7 @@ import shutil
 
 from benchrun.config import load_config
 from benchrun.runner import SuiteContext
-from benchrun.suites import aider
+from benchrun.suites import aider, request_timeout_s
 from benchrun.suites.aider import AiderSuite, parse_aider
 
 FIX = pathlib.Path(__file__).parent / "fixtures" / "aider_results_sample"
@@ -65,3 +65,5 @@ def test_run_passes_a_positive_timeout_sized_from_the_keyword_count(tmp_path, mo
     assert cmd[cmd.index("--keywords") + 1] == "one,two,three"
     assert seen_timeouts[0] is not None and seen_timeouts[0] > 0
     assert seen_timeouts[0] == aider.subprocess_timeout_s(3, cfg.sampling.get("max_tokens", 0))
+    expected_timeout = request_timeout_s(cfg.sampling.get("max_tokens", 0), aider.PROMPT_TOKENS_ESTIMATE)
+    assert f"BENCH_REQUEST_TIMEOUT_S={expected_timeout}" in cmd

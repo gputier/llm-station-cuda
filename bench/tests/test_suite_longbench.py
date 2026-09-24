@@ -7,7 +7,7 @@ import pytest
 
 from benchrun.config import load_config
 from benchrun.runner import SuiteSkipped
-from benchrun.suites import longbench
+from benchrun.suites import longbench, request_timeout_s
 from benchrun.suites.longbench import LongBenchV2Suite, parse_longbench_v2, subprocess_timeout_s
 from _helpers import cfg_with_ctx_size, suite_ctx
 
@@ -97,6 +97,9 @@ def test_run_reads_the_file_the_harness_writes(tmp_path, monkeypatch):
     assert "--base-url" in calls[0]
     assert calls[0][calls[0].index("--base-url") + 1] == "http://gw:8081/v1"
     assert all(r["item_id"].endswith("@32768") for r in rows)
+    cfg = dataclasses.replace(CFG, model="nex")
+    expected_timeout = request_timeout_s(cfg.sampling.get("max_tokens", 0), 32768 * longbench.MEASURED_TOKEN_RATIO)
+    assert f"BENCH_REQUEST_TIMEOUT_S={expected_timeout}" in calls[0]
 
 
 def test_run_passes_a_positive_timeout(tmp_path, monkeypatch):

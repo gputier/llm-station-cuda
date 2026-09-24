@@ -6,7 +6,7 @@ import pytest
 
 from benchrun.config import load_config
 from benchrun.runner import SuiteContext
-from benchrun.suites import livebench
+from benchrun.suites import livebench, request_timeout_s
 from benchrun.suites.livebench import LiveBenchSuite, parse_livebench
 
 # Cut from a real run (spark on the 99, live_bench/reasoning/zebra_puzzle,
@@ -60,6 +60,8 @@ def test_run_reads_the_file_the_harness_writes(tmp_path, monkeypatch):
     assert f"{livebench.HF_CACHE_VOLUME}:/root/.cache/huggingface" in cmd
     assert seen_timeouts[0] is not None and seen_timeouts[0] > 0
     assert seen_timeouts[0] == livebench.subprocess_timeout_s(("reasoning",), cfg.sampling.get("max_tokens", 0))
+    expected_timeout = request_timeout_s(cfg.sampling.get("max_tokens", 0), livebench.PROMPT_TOKENS_ESTIMATE)
+    assert f"BENCH_REQUEST_TIMEOUT_S={expected_timeout}" in cmd
 
 
 def test_run_fails_when_a_category_grades_nothing(tmp_path, monkeypatch):

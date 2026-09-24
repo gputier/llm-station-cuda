@@ -6,7 +6,7 @@ import pytest
 
 from benchrun.config import load_config
 from benchrun.runner import SuiteContext, SuiteSkipped
-from benchrun.suites import speed
+from benchrun.suites import request_timeout_s, speed
 from benchrun.suites.speed import DEFAULT_CORPUS, SpeedSuite, _filler_text, lengths_to_run, median_row
 
 # Real /v1/chat/completions response and matching gateway journal line, both
@@ -47,8 +47,11 @@ def test_run_reads_decode_and_prefill_from_the_response_and_ttft_from_the_journa
     journal_path = tmp_path / "journal.jsonl"
     calls = []
 
+    seen_timeouts = []
+
     def fake_urlopen(req, timeout=None):
         calls.append(req)
+        seen_timeouts.append(timeout)
         # The gateway appends one journal line per relayed request, before
         # the client sees the response: replaying that order here is what
         # proves _read_new_ttft matches the right line to the right call.
@@ -62,6 +65,9 @@ def test_run_reads_decode_and_prefill_from_the_response_and_ttft_from_the_journa
     suite = SpeedSuite(prompt_tokens=(512,), gen_tokens=256, reps=3, journal_path=journal_path)
     rows = suite.run(ctx)
     assert len(calls) == 3
+    expected_timeout = request_timeout_s(256, 512)
+    assert seen_timeouts == [expected_timeout] * 3
+    assert expected_timeout > 0
     assert rows == [{
         "item_id": "pp512",
         "passed": 1,
@@ -160,7 +166,7 @@ def test_one_pass_raises_when_the_response_carries_no_timings(tmp_path, monkeypa
 
     monkeypatch.setattr(speed.urllib.request, "urlopen", fake_urlopen)
     with pytest.raises(RuntimeError, match="no usable timings"):
-        speed._one_pass("http://gw:8081", journal_path, "filler", 256)
+        speed._one_pass("http://gw:8081", journal_path, "filler", 256, 512)
 
 
 def test_one_pass_raises_when_the_journal_has_no_ttft(tmp_path, monkeypatch):
@@ -174,4 +180,4 @@ def test_one_pass_raises_when_the_journal_has_no_ttft(tmp_path, monkeypatch):
 
     monkeypatch.setattr(speed.urllib.request, "urlopen", fake_urlopen)
     with pytest.raises(RuntimeError, match="no ttft_s"):
-        speed._one_pass("http://gw:8081", journal_path, "filler", 256)
+        speed._one_pass("http://gw:8081", journal_path, "filler", 256, 512)

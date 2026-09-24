@@ -16,18 +16,28 @@ unconditionally (llm.process_batch(prompts=...)); the pinned repo's own
 
 OpenAIClient.__call__ swallows every real exception (its except branch falls
 through to `return response` with response never assigned, raising
-UnboundLocalError instead) and get_output()'s own retry-forever loop (pinned,
-unmodified) never stops, so a persistent endpoint error would spin the
-container indefinitely. Two fixes, both applied here rather than in the
-pinned files:
+UnboundLocalError instead), and get_output() (pinned, unmodified: `while
+True: try: llm.process_batch(...); break except Exception: continue`)
+retries the SAME batch on any exception with no cap at all: proven live on
+LiveCodeBench, 2026-09-24, a client that resends a request the server may
+still be decoding abandons the first attempt in place (--parallel 1) and the
+resend queues up behind it, losing the real answer. Two fixes, both applied
+here rather than in the pinned files:
 
 1. OpenAIClient.__call__ is replaced with a corrected version that performs
    the same request (same messages, same generation kwargs, same
-   token-budget trim) but lets a real exception propagate, and additionally
-   captures finish_reason and completion_tokens (the pinned __call__ only
-   ever returns response.choices[0].message.content, discarding both).
-   Neither field survives into <task>.jsonl (call_api.py's own
-   outputs_parallel dict only ever holds
+   token-budget trim, client-side timeout from BENCH_REQUEST_TIMEOUT_S,
+   SDK max_retries=0), but instead of letting a real exception propagate
+   into get_output()'s retry-forever loop, it catches every openai SDK error
+   (timeout, disconnection, HTTP error) and returns an empty prediction:
+   get_output()'s try always succeeds on the first pass, so the pinned loop
+   never retries, and the failed request is recorded as a failed item
+   instead of silently resent. A non-SDK exception (a bug in this launcher,
+   not a request failure) is NOT caught here and is left to reach fix 2.
+   finish_reason and completion_tokens (the pinned __call__ only ever
+   returns response.choices[0].message.content, discarding both; "error" and
+   None for a failed request) do not survive into <task>.jsonl (call_api.py's
+   own outputs_parallel dict only ever holds
    index/pred/input/outputs/others/truncation/length), so this launcher
    appends one line per real request to a sibling <save_dir>/<task>.meta.jsonl,
    keyed by the sha256 of the exact prompt text sent (which call_api.py DOES
@@ -35,22 +45,16 @@ pinned files:
    benchrun.suites.ruler.parse_ruler can join the two files back together
    without needing the sample's index (never passed down to __call__ by the
    pinned code).
-2. OpenAIClient.process_batch is replaced by a version that counts failures
-   across calls (get_output calls process_batch again, unmodified, on every
-   failure) and aborts the whole process once either a CONSECUTIVE or a
-   TOTAL budget is exceeded, instead of reusing Client.process_batch
-   unboundedly. Both counters are read and written under _FAILURE_LOCK (a
-   plain int mutated from up to RULER_THREADS concurrent threads with no
-   lock would lose increments, and a flaky endpoint that never fails 3 times
-   in a row would never trip a consecutive-only counter), and the TOTAL
-   budget is set from args.num_samples in main(): a persistent or flaky
-   endpoint that fails at least as many times as the number of samples
-   requested has clearly not delivered value proportional to its cost, even
-   if none of those failures were consecutive. os._exit(1), not sys.exit(1),
-   terminates the whole process from whichever thread calls it: get_output()
-   runs on its own worker Thread, and SystemExit raised there only
-   terminates that thread, leaving the container silently exiting 0 with an
-   incomplete prediction file.
+2. OpenAIClient.process_batch is replaced by a thin wrapper that still calls
+   the pinned Client.process_batch unmodified, but if that ever raises
+   anyway (fix 1 made every real API/network failure a non-raising, recorded
+   result, so this can only be an unexpected bug, not a slow or unreachable
+   endpoint), it gives up immediately instead of letting get_output() retry
+   the same batch forever: os._exit(1), not sys.exit(1), terminates the
+   whole process from whichever thread calls it (get_output() runs on its
+   own worker Thread, and SystemExit raised there only terminates that
+   thread, leaving the container silently exiting 0 with an incomplete
+   prediction file).
 
 Two steps per (task, length): data/prepare.py (unmodified, run as a real
 subprocess: it shells out to the task generator itself and never imports the
@@ -76,20 +80,19 @@ sys.path.insert(0, str(SCRIPTS_DIR / "pred"))
 # Generous ceiling for the openai-compatible path: prepare.py already sizes
 # the haystack to --max_seq_length, so the real prompt never approaches this.
 MAX_LENGTH = 400000
-# A persistent error (wrong port, endpoint returning 500 on every request,
-# and so on) is not worth retrying beyond a handful of tries: the pinned
-# call_api.py retries forever with no cap otherwise (see module docstring).
+# Not a retry budget (module docstring, fix 1): a persistent or dead
+# endpoint aborts the whole run after this many CONSECUTIVE single-attempt
+# request failures, instead of scoring every remaining sample a silent 0.
 MAX_CONSECUTIVE_FAILURES = 3
-# Minimum total-failure budget regardless of num_samples, so a tiny sample
-# count still gets a meaningful number of tries before giving up.
-MIN_TOTAL_FAILURES = 10
 
 _META_LOCK = threading.Lock()
 _META_PATH: pathlib.Path | None = None
-_FAILURE_LOCK = threading.Lock()
+# Read and written under _STATE_LOCK: _patched_call runs concurrently from
+# up to RULER_THREADS worker threads (Client.process_batch's own
+# ThreadPoolExecutor), so a plain int/bool would lose updates to a race.
+_STATE_LOCK = threading.Lock()
+_ever_succeeded = False
 _consecutive_failures = 0
-_total_failures = 0
-_max_total_failures = MIN_TOTAL_FAILURES
 
 
 def _patched_openai_init(self, model_name, **generation_kwargs):
@@ -108,27 +111,46 @@ def _patched_openai_init(self, model_name, **generation_kwargs):
 
 def _patched_create_client(self):
     """The pinned _create_client (client_wrappers.Client, unmodified) builds
-    `OpenAI(api_key=...)` with the SDK's own default retry (max_retries=2):
-    a single _patched_call attempt can silently absorb up to 3 real HTTP
-    failures before ever raising to _bounded_process_batch, undercounting
-    real failures by up to 3x and delaying the total-failure budget (fix
-    below) exactly when it matters most, a genuinely unreliable endpoint.
+    `OpenAI(api_key=...)` with the SDK's own default timeout (600 s) and
+    retry (max_retries=2). BENCH_REQUEST_TIMEOUT_S (set by
+    bench/benchrun/suites/ruler.py from the shared
+    benchrun.suites.request_timeout_s) becomes the client's own timeout, and
     max_retries=0 makes one _patched_call attempt map to exactly one real
-    HTTP request, so _bounded_process_batch's counters reflect reality.
+    HTTP request: the SDK never silently resends on its own before
+    _patched_call's own error handling (fix 1, module docstring) ever sees
+    the failure.
     """
     from openai import OpenAI
 
-    self.client = OpenAI(api_key=self.openai_api_key, max_retries=0)
+    timeout_env = os.environ.get("BENCH_REQUEST_TIMEOUT_S")
+    kwargs = {"api_key": self.openai_api_key, "max_retries": 0}
+    if timeout_env is not None:
+        kwargs["timeout"] = float(timeout_env)
+    self.client = OpenAI(**kwargs)
 
 
 def _patched_call(self, prompt: str, **_kwargs):
     """Same request as the pinned OpenAIClient.__call__, minus the swallowed
-    exception (module docstring, fix 1) and the in-place mutation of
-    self.generation_kwargs (the pinned code reused the same dict across
-    every call and shrank tokens_to_generate on it permanently after the
-    first long prompt); plus recording finish_reason and completion_tokens
-    to _META_PATH, keyed by the exact prompt text sent.
+    exception and the in-place mutation of self.generation_kwargs (the
+    pinned code reused the same dict across every call and shrank
+    tokens_to_generate on it permanently after the first long prompt); plus
+    recording finish_reason and completion_tokens to _META_PATH, keyed by
+    the exact prompt text sent.
+
+    A real SDK error (timeout, disconnection, HTTP error) is caught here,
+    not let through to get_output()'s retry-forever loop (module docstring,
+    fix 1): the pinned harness's own resend-on-any-exception is exactly the
+    defect proven live on LiveCodeBench, so this returns a recorded, empty
+    prediction instead of raising, making get_output()'s try succeed on the
+    first and only attempt every time, EXCEPT when the fail-fast predicate
+    below trips (no response received yet in this run, or
+    MAX_CONSECUTIVE_FAILURES in a row): a dead endpoint must fail the whole
+    run, not silently produce every remaining sample as a scored 0.
     """
+    import openai
+
+    global _ever_succeeded, _consecutive_failures
+
     system_msg = []
     user_assistant_msgs = [{"role": "user", "content": prompt}]
     msgs = system_msg + user_assistant_msgs
@@ -139,64 +161,80 @@ def _patched_call(self, prompt: str, **_kwargs):
     if tokens_to_generate_new < tokens_to_generate:
         tokens_to_generate = tokens_to_generate_new
 
-    response = self.client.chat.completions.create(
-        model=self.model_name,
-        messages=msgs,
-        max_tokens=tokens_to_generate,
-        temperature=request["temperature"],
-        seed=request["random_seed"],
-        top_p=request["top_p"],
-        stop=request["stop"],
-    )
-    choice = response.choices[0]
+    prompt_sha256 = hashlib.sha256(prompt.encode("utf-8")).hexdigest()
+    try:
+        response = self.client.chat.completions.create(
+            model=self.model_name,
+            messages=msgs,
+            max_tokens=tokens_to_generate,
+            temperature=request["temperature"],
+            seed=request["random_seed"],
+            top_p=request["top_p"],
+            stop=request["stop"],
+        )
+        choice = response.choices[0]
+        finish_reason = choice.finish_reason
+        completion_tokens = response.usage.completion_tokens if response.usage else None
+        pred_text = choice.message.content or ""
+        with _STATE_LOCK:
+            _ever_succeeded = True
+            _consecutive_failures = 0
+    except openai.OpenAIError as exc:
+        with _STATE_LOCK:
+            _consecutive_failures += 1
+            fail_fast = (not _ever_succeeded) or (_consecutive_failures >= MAX_CONSECUTIVE_FAILURES)
+            reason = "no response received yet" if not _ever_succeeded else f"{_consecutive_failures} consecutive failures"
+        print(f"ruler_run: request failed (prompt_sha256={prompt_sha256}), no retry "
+              f"({type(exc).__name__}: {exc}), recorded as a failed item", file=sys.stderr)
+        if fail_fast:
+            print(f"ruler_run: giving up, {reason} ({type(exc).__name__}: {exc})", file=sys.stderr)
+            sys.stderr.flush()
+            # sys.exit here would only terminate this worker thread: get_output()
+            # runs its process_batch call from a dedicated worker Thread, and
+            # _patched_call itself runs inside Client.process_batch's own
+            # ThreadPoolExecutor workers. os._exit terminates the whole
+            # process from any thread, which is what "give up" must mean.
+            os._exit(1)
+        finish_reason = "error"
+        completion_tokens = None
+        pred_text = ""
+
     meta = {
-        "prompt_sha256": hashlib.sha256(prompt.encode("utf-8")).hexdigest(),
-        "finish_reason": choice.finish_reason,
-        "completion_tokens": response.usage.completion_tokens if response.usage else None,
+        "prompt_sha256": prompt_sha256,
+        "finish_reason": finish_reason,
+        "completion_tokens": completion_tokens,
     }
     if _META_PATH is not None:
         with _META_LOCK:
             with open(_META_PATH, "a", encoding="utf-8") as handle:
                 handle.write(json.dumps(meta) + "\n")
-    return {"text": [choice.message.content or ""]}
+    return {"text": [pred_text]}
 
 
 def _bounded_process_batch(self, prompts, **kwargs):
+    """Thin passthrough to the pinned Client.process_batch: every real
+    API/network failure is already caught and recorded by _patched_call
+    (fix 1, module docstring), so this only ever sees an unexpected bug, not
+    a slow or unreachable endpoint. Giving up immediately (fix 2, module
+    docstring) is what "zero retries" must mean for that case too, instead
+    of letting get_output() retry the same batch forever.
+    """
     import client_wrappers
 
     try:
-        result = client_wrappers.Client.process_batch(self, prompts, **kwargs)
+        return client_wrappers.Client.process_batch(self, prompts, **kwargs)
     except Exception as exc:
-        global _consecutive_failures, _total_failures
-        with _FAILURE_LOCK:
-            _consecutive_failures += 1
-            _total_failures += 1
-            consecutive, total = _consecutive_failures, _total_failures
-        if consecutive >= MAX_CONSECUTIVE_FAILURES or total >= _max_total_failures:
-            reason = (
-                f"{consecutive} consecutive failures" if consecutive >= MAX_CONSECUTIVE_FAILURES
-                else f"{total} total failures (budget {_max_total_failures}, catches a flaky endpoint "
-                     "that never fails 3 times in a row but never delivers either)"
-            )
-            print(
-                f"ruler_run: process_batch failed, {reason} ({exc!r}); the pinned "
-                "call_api.py retries forever otherwise, giving up instead",
-                file=sys.stderr,
-            )
-            sys.stderr.flush()
-            # sys.exit here would only terminate this worker thread (module
-            # docstring, fix 2): os._exit terminates the whole process from
-            # any thread, which is what "give up" must mean for a persistent
-            # endpoint error.
-            os._exit(1)
-        raise
-    with _FAILURE_LOCK:
-        _consecutive_failures = 0
-    return result
+        print(f"ruler_run: process_batch failed unexpectedly ({exc!r}), giving up (zero retries)",
+              file=sys.stderr)
+        sys.stderr.flush()
+        # sys.exit here would only terminate this worker thread (module
+        # docstring, fix 2): os._exit terminates the whole process from any
+        # thread, which is what "give up" must mean here.
+        os._exit(1)
 
 
 def main() -> None:
-    global _META_PATH, _max_total_failures
+    global _META_PATH
 
     parser = argparse.ArgumentParser()
     parser.add_argument("model_alias")
@@ -219,7 +257,6 @@ def main() -> None:
     _META_PATH = save_dir / f"{args.task}.meta.jsonl"
     if _META_PATH.exists():
         _META_PATH.unlink()
-    _max_total_failures = max(MIN_TOTAL_FAILURES, args.num_samples)
 
     subprocess.run(
         [

@@ -7,11 +7,37 @@ flag to add one. The alias is served through OpenAICompletionsHandler, the
 only handler that speaks plain OpenAI chat completions with tools and needs
 no Hugging Face tokenizer; BFCL-HANDLERS.md records why the family-specific
 handlers do not fit.
+
+register() also patches OpenAICompletionsHandler._build_client_kwargs
+(bfcl_eval/model_handler/api_inference/openai_completion.py, not ours to
+edit): the pinned version only ever reads api_key/base_url/default_headers
+from the environment, leaving the OpenAI SDK's own defaults for the request
+timeout (600 s) and max_retries (2) in place. BENCH_REQUEST_TIMEOUT_S (set
+by bench/benchrun/suites/bfcl.py from the shared
+benchrun.suites.request_timeout_s) becomes the client's own timeout, and
+max_retries is forced to 0: the generate phase's own category/item loop
+already accounts for a failed item, a silent SDK resend on a timeout it
+never sees is what abandons the server-side request instead (module
+docstring of bench/harness/lcb_run.py describes the same defect proven live
+on the 99, 2026-09-24).
 """
 from __future__ import annotations
 
+import os
 import sys
 from types import SimpleNamespace
+
+
+def _build_client_kwargs_with_timeout(self) -> dict:
+    kwargs = _ORIGINAL_BUILD_CLIENT_KWARGS(self)
+    timeout_env = os.environ.get("BENCH_REQUEST_TIMEOUT_S")
+    if timeout_env is not None:
+        kwargs["timeout"] = float(timeout_env)
+    kwargs["max_retries"] = 0
+    return kwargs
+
+
+_ORIGINAL_BUILD_CLIENT_KWARGS = None
 
 
 def register(alias: str) -> None:
@@ -19,6 +45,11 @@ def register(alias: str) -> None:
     from bfcl_eval.model_handler.api_inference.openai_completion import (
         OpenAICompletionsHandler,
     )
+
+    global _ORIGINAL_BUILD_CLIENT_KWARGS
+    if _ORIGINAL_BUILD_CLIENT_KWARGS is None:
+        _ORIGINAL_BUILD_CLIENT_KWARGS = OpenAICompletionsHandler._build_client_kwargs
+        OpenAICompletionsHandler._build_client_kwargs = _build_client_kwargs_with_timeout
 
     MODEL_CONFIG_MAPPING[alias] = ModelConfig(
         model_name=alias,

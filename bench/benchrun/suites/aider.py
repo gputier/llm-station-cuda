@@ -12,7 +12,7 @@ import pathlib
 import subprocess
 
 from benchrun.config import served_alias
-from benchrun.suites import NETWORK, SAFETY_FACTOR, per_request_seconds
+from benchrun.suites import NETWORK, SAFETY_FACTOR, per_request_seconds, request_timeout_s
 
 IMAGE = "bench-aider"
 # An aider exercise prompt carries the whole file under edit plus
@@ -86,6 +86,13 @@ class AiderSuite:
                 "-e", f"OPENAI_API_BASE={ctx.base_url}/v1",
                 "-e", "OPENAI_API_KEY=x",
                 "-e", "AIDER_BENCHMARK_DIR=/",
+                # Read by the image's sitecustomize.py
+                # (bench/harness/aider_sitecustomize): sizes the pinned
+                # aider.models.request_timeout (hardcoded 600 s) and removes
+                # base_coder.py's retry-on-any-exception loop, which retries
+                # a timed-out or disconnected request the same way
+                # LiveCodeBench's pinned harness did (proven live, 2026-09-24).
+                "-e", f"BENCH_REQUEST_TIMEOUT_S={request_timeout_s(max_tokens, PROMPT_TOKENS_ESTIMATE)}",
                 "-v", f"{ctx.out_dir}:/output",
                 IMAGE,
                 "python", "benchmark/benchmark.py", f"/output/{result_name}",
