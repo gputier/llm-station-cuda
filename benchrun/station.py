@@ -19,9 +19,9 @@ class StationError(Exception):
 
 
 def parse_vram(nvidia_out: str, shared_bytes_out: str) -> dict:
-    used = int(nvidia_out.strip().splitlines()[0])
+    used, total = (int(v) for v in nvidia_out.strip().splitlines()[0].split(","))
     shared = int(float(shared_bytes_out.strip() or 0)) // (1024 * 1024)
-    return {"used_mb": used, "shared_mb": shared}
+    return {"used_mb": used, "total_mb": total, "shared_mb": shared}
 
 
 def ps_quote(value: str) -> str:
@@ -91,7 +91,7 @@ class Station:
         urllib.request.urlopen(req, timeout=600).read()
 
     def vram(self) -> dict:
-        used = self._ps("nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits").stdout
+        used = self._ps("nvidia-smi --query-gpu=memory.used,memory.total --format=csv,noheader,nounits").stdout
         shared = self._ps(
             "(Get-Counter '\\GPU Process Memory(*)\\Shared Usage').CounterSamples | "
             "Measure-Object CookedValue -Sum | ForEach-Object Sum",

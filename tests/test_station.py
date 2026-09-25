@@ -34,7 +34,7 @@ def test_start_times_out_when_health_never_ok(monkeypatch):
 
 
 def test_parse_vram():
-    assert parse_vram("24576\n", "123456789\n") == {"used_mb": 24576, "shared_mb": 117}
+    assert parse_vram("24576, 32607\n", "123456789\n") == {"used_mb": 24576, "total_mb": 32607, "shared_mb": 117}
 
 
 def test_ctl_path_with_quote_is_escaped_in_command(monkeypatch):

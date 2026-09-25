@@ -10,13 +10,13 @@ CFG = load_config(pathlib.Path(__file__).parent / "fixtures" / "config_ok.yaml")
 
 
 class FakeStation:
-    def __init__(self, shared_mb=0):
-        self.log, self.shared_mb = [], shared_mb
+    def __init__(self, shared_mb=0, used_mb=20000):
+        self.log, self.shared_mb, self.used_mb = [], shared_mb, used_mb
 
     def start(self, cfg, timeout_s=900): self.log.append("start")
     def warmup(self): self.log.append("warmup")
     def stop(self): self.log.append("stop")
-    def vram(self): return {"used_mb": 20000, "shared_mb": self.shared_mb}
+    def vram(self): return {"used_mb": self.used_mb, "total_mb": 32607, "shared_mb": self.shared_mb}
 
 
 class FailingStartStation(FakeStation):
@@ -83,7 +83,7 @@ class FailingVramMidSuiteStation(FakeStation):
         self.vram_calls += 1
         if self._current_model == self.failing_model and self.vram_calls >= 2:
             raise RuntimeError("vram read blew up")
-        return {"used_mb": 20000, "shared_mb": 10}
+        return {"used_mb": 20000, "total_mb": 32607, "shared_mb": 10}
 
 
 class RisingVramStation(FakeStation):
@@ -97,8 +97,8 @@ class RisingVramStation(FakeStation):
 
     def vram(self):
         self.vram_calls += 1
-        shared = 10 if self.vram_calls == 1 else 900
-        return {"used_mb": 20000, "shared_mb": shared}
+        first = self.vram_calls == 1
+        return {"used_mb": 20000 if first else 32400, "total_mb": 32607, "shared_mb": 10 if first else 900}
 
 
 class FakeSuite:
@@ -246,11 +246,20 @@ def test_runner_skips_station_when_everything_done(tmp_path, monkeypatch):
 
 
 def test_runner_marks_spill(tmp_path, monkeypatch):
-    camp, _ = make(tmp_path, station=FakeStation(shared_mb=900))
+    camp, _ = make(tmp_path, station=FakeStation(shared_mb=900, used_mb=32400))
     monkeypatch.setattr(camp, "_set_context", lambda *a: None)
     camp.run([CFG])
     meta = json.loads((tmp_path / "99" / "tiel" / "R1" / "meta.json").read_text())
     assert meta["spill"] is True
+
+
+def test_runner_shared_memory_with_room_on_the_card_is_not_a_spill(tmp_path, monkeypatch):
+    # Real reading, bonsai R1 on the 99: pinned host buffers, card far from full.
+    camp, _ = make(tmp_path, station=FakeStation(shared_mb=1611, used_mb=20530))
+    monkeypatch.setattr(camp, "_set_context", lambda *a: None)
+    camp.run([CFG])
+    meta = json.loads((tmp_path / "99" / "tiel" / "R1" / "meta.json").read_text())
+    assert meta["spill"] is False
 
 
 def test_runner_writes_meta_when_suite_raises(tmp_path, monkeypatch):
