@@ -59,9 +59,23 @@ def _peak_vram(samples: list[dict]) -> dict | None:
         return None
     return {
         "used_mb": max(s["used_mb"] for s in samples),
+        "total_mb": max(s["total_mb"] for s in samples),
         "shared_mb": max(s["shared_mb"] for s in samples),
         "samples": len(samples),
     }
+
+
+# llama-server keeps gigabytes of pinned host buffers that Windows counts as
+# the process's shared GPU memory even with the card half empty (measured
+# 2026-09-25: bonsai R1 on the 99, 20530 of 32607 MiB used, 1611 MiB shared).
+# A spill is the driver falling back to system memory, which only happens
+# once the dedicated memory is full: both conditions are required.
+SPILL_HEADROOM_MB = 512
+
+
+def _is_spill(vram: dict | None, shared_limit_mb: int) -> bool:
+    return (bool(vram) and vram["shared_mb"] > shared_limit_mb
+            and vram["used_mb"] >= vram["total_mb"] - SPILL_HEADROOM_MB)
 
 
 class Campaign:
@@ -99,7 +113,7 @@ class Campaign:
         # one cell. Called on both the normal and the interrupted exit path.
         # Returns the short failure summary for CampaignError, or None.
         vram = _peak_vram(vram_samples)
-        meta = {"vram": vram, "spill": bool(vram) and vram["shared_mb"] > self.spill_limit_mb,
+        meta = {"vram": vram, "spill": _is_spill(vram, self.spill_limit_mb),
                 "config": dataclasses.asdict(cfg), "started": started, "ended": time.time()}
         failure_parts = []
         tracebacks = []
