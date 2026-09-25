@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # Deploy one machine's bench-derived launch profiles and its llm-ctl script.
 #
-# DO NOT RUN THIS AGAINST A STATION WHILE A BENCH CAMPAIGN IS USING IT. Both
+# It refuses to run against a station a bench campaign is using. Both
 # stations run a llm-ctl script that every live campaign calls through
 # bench/benchrun/station.py, and replacing it mid-run can break that run.
-# Deploy only once both stations are free.
+# The check is the first thing it does, see below.
 #
 # What it does, in order:
 #   1. Builds benchrun:dev if needed (same image bench/scripts/test.sh uses)
@@ -49,6 +49,25 @@ ssh_var="STATION_${machine}_SSH"
 ssh_target="$(sed -n "s/^${ssh_var}=//p" "$env_file" | tail -n 1)"
 [[ -n "$ssh_target" ]] || { echo "missing ${ssh_var} in ${env_file}" >&2; exit 2; }
 
+# BatchMode: fail instead of waiting on a prompt nobody will answer.
+ssh_opts=(-o ConnectTimeout=10 -o BatchMode=yes)
+
+# Refuse while a bench uses this station, the case the header describes. Two
+# signs, either one is enough: a runner container of this machine is up here
+# (harness/compose.yaml service runner-<M>), or the station serves an instance
+# the bench started, which llm-ctl names "bench-<model>-<variant>". The first
+# covers the gap between two configurations, when nothing is loaded.
+if [[ -n "$(docker ps -q --filter "label=com.docker.compose.service=runner-${machine}")" ]]; then
+  echo "refused: a runner-${machine} container is running a bench against this station" >&2
+  exit 3
+fi
+status="$(ssh "${ssh_opts[@]}" "$ssh_target" \
+  "powershell -NoProfile -ExecutionPolicy Bypass -File D:\\LLM-Setup\\llm-ctl.ps1 -Action status")"
+if grep -q 'name=bench-' <<<"$status"; then
+  echo "refused: the station is serving a bench instance: $(grep 'name=bench-' <<<"$status")" >&2
+  exit 3
+fi
+
 # The llm-ctl scripts live at the repository root, one level above the bench/
 # directory this script cd's into.
 if [[ "$machine" == "99" ]]; then
@@ -68,7 +87,6 @@ source harness/pins.env
 docker run --rm -e PYTHONDONTWRITEBYTECODE=1 -v "$PWD":/bench -v "$out_dir":/out -w /bench benchrun:dev \
   python -m benchrun profiles --machine "$machine" --out /out
 
-ssh_opts=(-o ConnectTimeout=10)
 ssh "${ssh_opts[@]}" "$ssh_target" \
   "powershell -NoProfile -Command \"New-Item -ItemType Directory -Force -Path 'D:\\LLM-Setup\\profiles' | Out-Null\""
 
