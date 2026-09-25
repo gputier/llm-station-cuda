@@ -45,8 +45,6 @@ llm_variant "Bonsai 2, ingestion soixante fois plus rapide, fenêtre 262k" \
 # bonsai2 tourne sur les deux machines, pas bonsai : entrées pour les deux.
 llm_variant "R1, Bonsai 1, seule valeur publiée par la fiche, machine 32 Go" \
   "${LLM_HOST:-your-32gb-box}" "profile -Name bonsai-r1" bonsai-r1 '' bonsai-r1 262144 '' 65536
-llm_variant "R2, Bonsai 1, modèle brouillon d'une autre famille, risque de rejet élevé, machine 32 Go" \
-  "${LLM_HOST:-your-32gb-box}" "profile -Name bonsai-r2" bonsai-r2 '' bonsai-r2 262144 '' 65536
 llm_variant "R3, Bonsai 1, cache mémoire réduit, fenêtre étendue par contournement, rappel à prouver, machine 32 Go" \
   "${LLM_HOST:-your-32gb-box}" "profile -Name bonsai-r3" bonsai-r3 '' bonsai-r3 393216 '' 65536
 llm_variant "R1, Bonsai 2, réglage de référence, environ 6 Go de poids, machine 32 Go" \

@@ -10,6 +10,7 @@ from benchrun.profiles import (
     sampling_flags,
     write_profiles,
 )
+from test_all_configs import RETIRED
 
 FIX = pathlib.Path(__file__).parent / "fixtures"
 CONFIGS_ROOT = pathlib.Path(__file__).parents[1] / "configs"
@@ -80,7 +81,7 @@ def test_build_profile_keeps_the_base_args_and_appends_sampling():
 def test_write_profiles_for_a_whole_machine_has_no_duplicate_flag(tmp_path, machine):
     out_dir = tmp_path / machine
     written = write_profiles(machine, out_dir, CONFIGS_ROOT)
-    expected_count = len(EXPECTED_MODELS[machine]) * 3
+    expected_count = len(EXPECTED_MODELS[machine]) * 3 - sum(1 for r in RETIRED if r[0] == machine)
     assert len(written) == expected_count
     names = set()
     for path in written:
@@ -104,8 +105,10 @@ def test_every_bench_config_of_both_machines_yields_a_profile_without_error():
     for machine, models in EXPECTED_MODELS.items():
         for model in models:
             for variant in ("R1", "R2", "R3"):
+                if (machine, model, variant) in RETIRED:
+                    continue
                 cfg = load_config(CONFIGS_ROOT / machine / model / f"{variant}.yaml")
                 spec = build_profile(cfg)
                 assert spec["name"] == f"{model}-r{variant[1]}"
                 total += 1
-    assert total == 72
+    assert total == 72 - len(RETIRED)
