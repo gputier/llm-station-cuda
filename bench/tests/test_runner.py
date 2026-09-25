@@ -208,6 +208,24 @@ def test_set_context_lays_the_suite_override_over_the_config_sampling(tmp_path, 
     assert posted[1]["sampling"] == {"temperature": 0.6, "max_tokens": 16384}
 
 
+def test_suite_sees_the_sampling_the_gateway_applies(tmp_path, monkeypatch):
+    # Review finding, 2026-09-25: the mini level capped lcb at 16384 while the
+    # suite sized its client timeout on the profile's own 8192.
+    seen = []
+
+    class Capped(FakeSuite):
+        sampling_override = {"max_tokens": 16384}
+
+        def run(self, ctx):
+            seen.append(ctx.cfg.sampling["max_tokens"])
+            return super().run(ctx)
+
+    camp = Campaign(FakeStation(), "http://gw", [Capped()], tmp_path, reps=1)
+    monkeypatch.setattr(camp, "_set_context", lambda *a: None)
+    camp.run([dataclasses.replace(CFG, sampling={**CFG.sampling, "max_tokens": 8192})])
+    assert seen == [16384]
+
+
 def test_runner_runs_three_reps_after_warmup(tmp_path, monkeypatch):
     suite = FakeSuite()
     camp, _ = make(tmp_path, suite=suite)
