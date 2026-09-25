@@ -47,10 +47,18 @@ def _suite_description(suite: str, item_id: str) -> str:
 
 
 def _journal_rows(journal_lines: list[dict], run_id: str, suite: str, rep: int) -> list[dict]:
-    return [
+    """The journal rows of the last pass of one rep. The journal is appended
+    to by every launch, so a rep replayed after a failure has the failed
+    attempt's rows too; only the latest pass_id is the one its result file
+    describes. Rows written before pass_id existed form a single group."""
+    rows = [
         rec for rec in journal_lines
         if rec.get("run_id") == run_id and rec.get("suite") == suite and rec.get("rep") == rep
     ]
+    if not rows:
+        return rows
+    last_pass = max(rows, key=lambda rec: rec.get("t_start") or 0).get("pass_id")
+    return [rec for rec in rows if rec.get("pass_id") == last_pass]
 
 
 def _read_journal(journal_path: pathlib.Path) -> list[dict]:

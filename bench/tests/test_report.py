@@ -42,6 +42,23 @@ def test_build_mini_report_one_profile_one_test(tmp_path):
     assert "1 réussites sur 1" in report
 
 
+def test_build_mini_report_counts_only_the_last_pass_of_a_replayed_rep(tmp_path):
+    out_root = tmp_path / "mini"
+    variant_dir = out_root / "99" / "tiel" / "R1"
+    _write_result(variant_dir, "lcb", "problem-3", 1)
+    failed = json.loads(_journal_line("99/tiel/R1", "lcb", 1, 9000, 300.0, 30.0))
+    replayed = json.loads(_journal_line("99/tiel/R1", "lcb", 1, 512, 12.5, 30.0))
+    failed.update(pass_id="a", t_start=100.0)
+    replayed.update(pass_id="b", t_start=900.0)
+    journal = tmp_path / "journal-99.jsonl"
+    journal.write_text(json.dumps(failed) + "\n" + json.dumps(replayed) + "\n")
+
+    report = build_mini_report(out_root, "99", journal, seed=42, caps_by_suite={}, default_cap=2048, generated_at="2026-09-24T10:00:00")
+
+    row = next(l for l in report.splitlines() if l.startswith("| lcb"))
+    assert "| 512 |" in row and "9512" not in row and "9000" not in row
+
+
 def test_build_mini_report_sums_multi_request_items(tmp_path):
     # A BFCL multi-turn or agentic item takes several requests: the report
     # sums tokens and duration across every journal line for that one

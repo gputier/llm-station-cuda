@@ -53,7 +53,7 @@ async def test_gateway_journals_timings_and_reasoning(aiohttp_client, tmp_path):
     r = await gw.post("/v1/chat/completions", json={"messages": []})
     assert (await r.json())["choices"][0]["message"]["content"] == "ok"
     rec = json.loads(journal.read_text().splitlines()[-1])
-    assert rec["run_id"] == "r1" and rec["rep"] == 1
+    assert rec["run_id"] == "r1" and rec["rep"] == 1 and rec["pass_id"] == "p1"
     assert rec["timings"]["predicted_per_second"] == 50.0
     assert rec["reasoning_chars"] == 3
 

@@ -13,7 +13,8 @@ Two subcommands:
   count per suite, deterministically (see DETERMINISTIC_PRESET_SIZES). Each
   level writes under its own DIR/<preset>/<machine> subtree, so mini,
   medium, large and a Full campaign's own --out never collide. mini also
-  writes seed.txt (the seed drawn, replayable with --seed) and rapport.md
+  writes seed.txt (the seed drawn, replayable with --seed, and reread by a
+  relaunch on the same --out, see mini_seed) and rapport.md
   (benchrun.report.build_mini_report) next to it.
 
 Station and the gateway URL both come from an environment file: this
@@ -330,6 +331,27 @@ def run_campaign(args: argparse.Namespace, env: dict) -> None:
     campaign.run(configs)
 
 
+def mini_seed(level_dir: pathlib.Path, requested: int | None) -> int:
+    """The seed of a mini output directory, fixed by its first launch.
+
+    A relaunch resumes the reps that did not finish (Campaign._pending), so it
+    must draw exactly what the first launch drew, or one profile would answer
+    other questions than the two it is compared with. seed.txt is written
+    before anything runs and reread on every later launch; a --seed that
+    contradicts it is refused rather than mixing two draws in one report."""
+    seed_file = level_dir / "seed.txt"
+    if seed_file.exists():
+        stored = int(seed_file.read_text(encoding="utf-8").strip())
+        if requested is not None and requested != stored:
+            raise SystemExit(f"{seed_file} holds seed {stored}, --seed {requested} would mix two draws: "
+                             "use another --out for a new draw")
+        return stored
+    seed = requested if requested is not None else random.SystemRandom().randrange(2**32)
+    level_dir.mkdir(parents=True, exist_ok=True)
+    seed_file.write_text(f"{seed}\n", encoding="utf-8")
+    return seed
+
+
 def run_bench(args: argparse.Namespace, env: dict) -> None:
     private_root = pathlib.Path(env["BENCH_PRIVATE"])
     station = build_station(args.machine, env)
@@ -340,7 +362,7 @@ def run_bench(args: argparse.Namespace, env: dict) -> None:
     out_root = pathlib.Path(args.out) / args.preset
     seed = None
     if args.preset == "mini":
-        seed = args.seed if args.seed is not None else random.SystemRandom().randrange(2**32)
+        seed = mini_seed(out_root / args.machine, args.seed)
     suites = bench_suites(args.preset, private_root, args.machine, seed=seed)
     campaign = Campaign(station, gateway_url(args.machine), suites, out_root=out_root,
                          reps=1, private_root=private_root)
@@ -349,8 +371,6 @@ def run_bench(args: argparse.Namespace, env: dict) -> None:
     finally:
         if args.preset == "mini":
             level_dir = out_root / args.machine
-            level_dir.mkdir(parents=True, exist_ok=True)
-            (level_dir / "seed.txt").write_text(f"{seed}\n", encoding="utf-8")
             report = build_mini_report(
                 out_root, args.machine, journal_path(private_root, args.machine),
                 seed, MINI_MAX_TOKENS_BY_SUITE, MINI_MAX_TOKENS_DEFAULT,

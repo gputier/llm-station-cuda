@@ -206,6 +206,9 @@ def test_set_context_lays_the_suite_override_over_the_config_sampling(tmp_path, 
     camp._set_context(dataclasses.replace(CFG, sampling={"temperature": 0.6, "max_tokens": 16384}), FakeSuite(), 1)
     assert posted[0]["sampling"] == {"temperature": 0.6, "max_tokens": 256}
     assert posted[1]["sampling"] == {"temperature": 0.6, "max_tokens": 16384}
+    # Each pass gets its own id, which the report uses to drop a failed
+    # attempt's journal rows once the rep has been replayed.
+    assert posted[0]["pass_id"] and posted[0]["pass_id"] != posted[1]["pass_id"]
 
 
 def test_suite_sees_the_sampling_the_gateway_applies(tmp_path, monkeypatch):

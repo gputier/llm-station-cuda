@@ -102,9 +102,17 @@ _llm_up() { curl -sS -m 3 "http://$1:${LLM_PORT}/health" 2>/dev/null | grep -q '
 # _llm_matches INDEX STATE. Bash substring tests and not grep: under pipefail,
 # grep -q can close the pipe before printf has written, and a match then reads
 # as a failure.
+#
+# The served alias must also be this variant's own instance name, the last word
+# of its action ("qwen", or "qwen-r1" for "profile -Name qwen-r1"): llm-ctl
+# starts every instance with --alias set to that name. A MATCH on the weights
+# path alone took the qwen-r1 bench profile, same weights folder, for the
+# everyday qwen, skipped the reload and handed Claude Code the wrong window
+# and output budget (review of 2026-09-25).
 _llm_matches() {
   [[ "$2" != free && "$2" != unknown && "$2" == *"${_llm_match[$1]}"* ]] || return 1
-  [[ -z "${_llm_exclude[$1]}" || "$2" != *"${_llm_exclude[$1]}"* ]]
+  [[ -z "${_llm_exclude[$1]}" || "$2" != *"${_llm_exclude[$1]}"* ]] || return 1
+  [[ "${2##* }" == "${_llm_actions[$1]##* }" ]]
 }
 
 _llm_serves() { _llm_matches "$1" "$(_llm_state "${_llm_hosts[$1]}")"; }

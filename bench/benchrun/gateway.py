@@ -111,7 +111,10 @@ def make_app(upstream: str, journal_path: str) -> web.Application:
             return web.json_response({"error": "no bench context set"}, status=409)
         path = request.path
         body = _apply(await request.json(), ctx, path)
-        rec = {"run_id": ctx["run_id"], "suite": ctx["suite"], "rep": ctx["rep"], "path": path,
+        rec = {"run_id": ctx["run_id"], "suite": ctx["suite"], "rep": ctx["rep"],
+               # One id per pass (Campaign._set_context): a rep replayed after
+               # a failure is told apart from the attempt it replaces.
+               "pass_id": ctx.get("pass_id"), "path": path,
                "t_start": time.time(), "ttft_s": None, "total_s": None, "status": None,
                "request_sampling": {k: body.get(k) for k in ctx["sampling"]},
                # llama-server's /v1/messages (Anthropic shape) returns no
