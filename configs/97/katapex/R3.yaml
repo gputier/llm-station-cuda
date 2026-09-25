@@ -54,12 +54,19 @@ sources:
 # meme machine (bench/configs/97/bonsai2/R3.yaml). Fenetre et VRAM
 # reellement mesurees dans docs/phase0-2026-09.md.
 ctx_proven: null
-# The embedded template raises 'System message must be at the beginning'
-# on a late system turn, which Claude Code sends mid-session (500 on the
-# first turn, reported 2026-09-25 on occamy R2). The file is that template
-# with the raising line alone replaced by an ordinary ChatML system turn.
-# 2026-09-25: the MiniPlus quant described above spilled out of this 16 GB
-# card at 262144 context and moved to the 99 (bench/configs/99/katapex). This
-# machine now serves APEX-dynamic-v2 from Myric/KAT-Coder-V2.5-Dev-MTP-APEX-GGUF
-# (11.91 GiB, built for a 16 GB card, no MTP head). mudler's APEX-I-Mini
-# (12.54 GiB) was tried first and still spilled in R1 and R2 (132 tok/s prefill).
+# The template embedded in this model's GGUF raises 'System message must be
+# at the beginning' on a late system turn, which Claude Code sends
+# mid-session (500 on the first turn, seen 2026-09-25 on occamy R2). Read
+# from the GGUF header of both quants of this model on 2026-09-25: the
+# raising line is there. The file is that template with the raising line
+# alone replaced by an ordinary ChatML system turn; a late system turn is
+# answered since, checked on the served profile.
+# 2026-09-25: the provenance above (repository, size, sha256) describes
+# the MiniPlus quant, which spilled out of this 16 GB card at 262144
+# context and moved to the 99 (bench/configs/99/katapex). This config loads
+# instead, from Myric/KAT-Coder-V2.5-Dev-MTP-APEX-GGUF:
+# KAT-Coder-V2.5-Dev-APEX-dynamic-v2.gguf (built for a 16 GB card, no MTP
+# head), 12785596800 bytes, sha256
+# a21c2549d1771460f37efb9265b4d402a1594d08012d588ea5ce3d8a0fcd248e. mudler's
+# APEX-I-Mini (12.54 GiB) was tried first and still spilled in R1 and R2.
+# Sizes checked equal on the station disk and at the source.

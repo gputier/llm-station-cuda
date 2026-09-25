@@ -69,4 +69,7 @@ ctx_proven: null
 # Moved from the 97 on 2026-09-25: this quant spills out of the 16 GB card
 # at 262144 context (about 30 tok/s instead of 130), and every model must
 # run fully on its card at that context. Same file, same flags, same engine
-# (b11156 is installed on both machines); the 97 now serves a smaller quant.
+# (b11156 is installed on both machines). Where the text above reasons
+# about a 16 GB card, it was written for the 97: this machine has 32 GB.
+# The froggeric template accepts a late system turn: checked on the served
+# profile on 2026-09-25, no raise, unlike this model's embedded template.

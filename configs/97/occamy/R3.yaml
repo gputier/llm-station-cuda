@@ -60,10 +60,19 @@ sources:
 # logique que bonsai2/R3 et katapex/R3 sur cette meme machine. Fenetre et
 # VRAM reellement mesurees dans docs/phase0-2026-09.md.
 ctx_proven: null
-# The embedded template raises 'System message must be at the beginning'
-# on a late system turn, which Claude Code sends mid-session (500 on the
-# first turn, reported 2026-09-25 on occamy R2). The file is that template
-# with the raising line alone replaced by an ordinary ChatML system turn.
-# 2026-09-25: the MiniPlus quant described above spilled out of this 16 GB
-# card at 262144 context and moved to the 99 (bench/configs/99/occamy). This
-# machine now serves the smaller quant from IsValorum/Occamy-1.0-APEX-I-NanoPlus-GGUF.
+# The template embedded in this model's GGUF raises 'System message must be
+# at the beginning' on a late system turn, which Claude Code sends
+# mid-session (500 on the first turn, seen 2026-09-25 on occamy R2). Read
+# from the GGUF header of both quants of this model on 2026-09-25: the
+# raising line is there. The file is that template with the raising line
+# alone replaced by an ordinary ChatML system turn; a late system turn is
+# answered since, checked on the served profile.
+# 2026-09-25: the provenance above (repository, size, sha256) describes
+# the MiniPlus quant, which spilled out of this 16 GB card at 262144
+# context and moved to the 99 (bench/configs/99/occamy). This config loads
+# instead, from IsValorum/Occamy-1.0-APEX-I-NanoPlus-GGUF:
+# Occamy-1.0.APEX-I-NanoPlus.gguf, 12554402080 bytes, sha256
+# 210b9d0abf8b1acf52c7772b279e263b9affda386d141f75709371a8da651f81, and its
+# mmproj-Q8_0.gguf, 610655392 bytes, sha256
+# e1f2f36b9aa3d7e22e970f619402673266e9796269f6c9cd183d11a7e0e34e30.
+# Sizes checked equal on the station disk and at the source.

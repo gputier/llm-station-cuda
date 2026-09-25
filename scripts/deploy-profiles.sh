@@ -46,7 +46,9 @@ done
 # (BENCH_PRIVATE holds a path with a space), so sourcing it breaks. Only the
 # one key this script needs is read, last assignment wins as in compose.
 ssh_var="STATION_${machine}_SSH"
-ssh_target="$(sed -n "s/^${ssh_var}=//p" "$env_file" | tail -n 1)"
+# tr drops the carriage return a file saved on Windows leaves on each line,
+# which __main__.load_env_file strips as well.
+ssh_target="$(sed -n "s/^${ssh_var}=//p" "$env_file" | tail -n 1 | tr -d '\r')"
 [[ -n "$ssh_target" ]] || { echo "missing ${ssh_var} in ${env_file}" >&2; exit 2; }
 
 # BatchMode: fail instead of waiting on a prompt nobody will answer.
