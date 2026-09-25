@@ -34,7 +34,7 @@ async def start(aiohttp_client, tmp_path):
     up_client = await aiohttp_client(up)
     journal = tmp_path / "journal.jsonl"
     gw = await aiohttp_client(make_app(str(up_client.make_url("")).rstrip("/"), str(journal)))
-    ctx = {"run_id": "r1", "suite": "lcb", "rep": 1,
+    ctx = {"run_id": "r1", "suite": "lcb", "rep": 1, "pass_id": "p1",
            "sampling": {"temperature": 0.6, "top_k": 20}, "chat_template_kwargs": {"reasoning_effort": "medium"}}
     assert (await gw.post("/_bench/context", json=ctx)).status == 200
     return gw, up, journal
