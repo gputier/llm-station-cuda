@@ -143,8 +143,11 @@ def _profile_rows(variant_dir: pathlib.Path, run_id: str, journal_lines: list[di
         rep_file = suite_dir / "rep1.jsonl"
         error_file = suite_dir / "rep1.error"
         if not rep_file.exists():
-            if error_file.exists() and suite not in UNRANKED_SUITES:
-                total_count += 1
+            if error_file.exists():
+                # A failed speed run still gets its row, it only stays out of
+                # the "réussites sur N" count, as in the success branch below.
+                if suite not in UNRANKED_SUITES:
+                    total_count += 1
                 rows.append({
                     "suite": suite,
                     "description": _suite_description(suite, ""),

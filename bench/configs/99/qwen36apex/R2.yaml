@@ -99,11 +99,15 @@ sources:
 # chargeur generique --spec-draft-model puisse ouvrir ; c'est la tete
 # embarquee du fichier principal qui doit servir, pas ce fichier a part.
 ctx_proven: null
-# The embedded template raises 'System message must be at the beginning'
-# on a late system turn, which Claude Code sends mid-session (500 on the
-# first turn, reported 2026-09-25 on occamy R2). The file is that template
-# with the raising line alone replaced by an ordinary ChatML system turn.
+# The template embedded in this model's GGUF raises 'System message must be
+# at the beginning' on a late system turn, which Claude Code sends
+# mid-session (500 on the first turn, seen 2026-09-25 on occamy R2). Read
+# from the GGUF header of both quants of this model on 2026-09-25: the
+# raising line is there. The file is that template with the raising line
+# alone replaced by an ordinary ChatML system turn; a late system turn is
+# answered since, checked on the served profile.
 # Moved from the 97 on 2026-09-25: this quant spills out of the 16 GB card
 # at 262144 context (about 30 tok/s instead of 130), and every model must
 # run fully on its card at that context. Same file, same flags, same engine
-# (b11156 is installed on both machines); the 97 now serves a smaller quant.
+# (b11156 is installed on both machines). Where the text above reasons
+# about a 16 GB card, it was written for the 97: this machine has 32 GB.

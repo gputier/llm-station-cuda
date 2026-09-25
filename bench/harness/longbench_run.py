@@ -212,7 +212,7 @@ def main() -> None:
     args = parser.parse_args()
 
     import tiktoken
-    from openai import OpenAI
+    from openai import OpenAI, OpenAIError
 
     encoding = tiktoken.get_encoding("cl100k_base")
     data = json.loads(DATA_PATH.read_text(encoding="utf-8"))
@@ -263,6 +263,9 @@ def main() -> None:
             # Exactly one request, no retry (module docstring): a timeout or
             # a disconnection is recorded as a failed item below, never
             # resent.
+            # Only the request sits in the try, and only an API error is
+            # caught: a bug in the scoring below must raise, not pass for a
+            # dead endpoint and trip the consecutive-failure cut-off.
             try:
                 response = client.chat.completions.create(
                     model=args.model_alias,
@@ -270,29 +273,7 @@ def main() -> None:
                     temperature=0.1,
                     max_tokens=args.max_tokens,
                 )
-                choice = response.choices[0]
-                content = choice.message.content or ""
-                pred = _extract_answer(content)
-                record = {
-                    "_id": item["_id"],
-                    "domain": item["domain"],
-                    "sub_domain": item["sub_domain"],
-                    "difficulty": item["difficulty"],
-                    "length": item["length"],
-                    "answer": item["answer"],
-                    "response": content,
-                    "pred": pred,
-                    # result.py's own scoring rule (LONGBENCH_SHA),
-                    # ported verbatim: exact letter match, no partial
-                    # credit and no compensation for an unparseable
-                    # response.
-                    "judge": pred == item["answer"],
-                    "finish_reason": choice.finish_reason,
-                    "completion_tokens": response.usage.completion_tokens if response.usage else None,
-                    "input_truncated": input_truncated,
-                    "input_tokens_cut": input_tokens_cut,
-                }
-            except Exception as exc:  # noqa: BLE001 - real API/network error, recorded not retried
+            except OpenAIError as exc:
                 print(f"longbench_run: item {item['_id']} failed, no retry "
                       f"({type(exc).__name__}: {exc}), recorded as a failed item", file=sys.stderr)
                 record = {
@@ -320,6 +301,27 @@ def main() -> None:
                     sys.exit(1)
                 continue
 
+            choice = response.choices[0]
+            content = choice.message.content or ""
+            pred = _extract_answer(content)
+            record = {
+                "_id": item["_id"],
+                "domain": item["domain"],
+                "sub_domain": item["sub_domain"],
+                "difficulty": item["difficulty"],
+                "length": item["length"],
+                "answer": item["answer"],
+                "response": content,
+                "pred": pred,
+                # result.py's own scoring rule (LONGBENCH_SHA), ported
+                # verbatim: exact letter match, no partial credit and no
+                # compensation for an unparseable response.
+                "judge": pred == item["answer"],
+                "finish_reason": choice.finish_reason,
+                "completion_tokens": response.usage.completion_tokens if response.usage else None,
+                "input_truncated": input_truncated,
+                "input_tokens_cut": input_tokens_cut,
+            }
             ever_succeeded = True
             consecutive_failures = 0
             handle.write(json.dumps(record) + "\n")

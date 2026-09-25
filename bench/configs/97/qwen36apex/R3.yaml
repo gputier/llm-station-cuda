@@ -66,6 +66,12 @@ sources:
 # isolee de la speculation testee par R2, pour ne pas melanger deux
 # variables dans une seule configuration.
 ctx_proven: null
-# 2026-09-25: the MiniPlus quant described above spilled out of this 16 GB
-# card at 262144 context and moved to the 99 (bench/configs/99/qwen36apex). This
-# machine now serves the smaller quant from IsValorum/Qwen3.6-35B-A3B-MTP-APEX-I-NanoPlus-GGUF.
+# 2026-09-25: the provenance above (repository, size, sha256) describes
+# the MiniPlus quant, which spilled out of this 16 GB card at 262144
+# context and moved to the 99 (bench/configs/99/qwen36apex). This config loads
+# instead, from IsValorum/Qwen3.6-35B-A3B-MTP-APEX-I-NanoPlus-GGUF:
+# Qwen3.6-35B-A3B.APEX-I-NanoPlus.gguf, 13032470112 bytes, sha256
+# d82ad1aad32bb70605ddc8db088f63734bcc3cef706e89b64925fddf910bd6bb.
+# Sizes checked equal on the station disk and at the source.
+# The froggeric template accepts a late system turn: checked on the served
+# profile on 2026-09-25, no raise, unlike this model's embedded template.

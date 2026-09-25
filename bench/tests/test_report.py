@@ -209,6 +209,22 @@ def test_build_mini_report_shows_a_failed_suite_as_erreur(tmp_path):
     assert "0 réussites sur 1" in report
 
 
+def test_build_mini_report_shows_a_failed_speed_run_without_counting_it(tmp_path):
+    out_root = tmp_path / "mini"
+    variant_dir = out_root / "99" / "tiel" / "R1"
+    _write_result(variant_dir, "lcb", "problem-1", 1)
+    (variant_dir / "speed").mkdir(parents=True)
+    (variant_dir / "speed" / "rep1.error").write_text("TimeoutError: no answer\n", encoding="utf-8")
+    journal = tmp_path / "journal-99.jsonl"
+    journal.write_text(_journal_line("99/tiel/R1", "lcb", 1, 100, 1.0, 20.0) + "\n")
+
+    report = build_mini_report(out_root, "99", journal, seed=1, caps_by_suite={}, default_cap=2048, generated_at="2026-09-24T10:00:00")
+
+    rows = [l for l in report.splitlines() if l.startswith("| speed")]
+    assert len(rows) == 1 and "| erreur (TimeoutError) |" in rows[0]
+    assert "1 réussites sur 1" in report  # speed stays out of the count
+
+
 def test_build_mini_report_empty_machine_says_so(tmp_path):
     out_root = tmp_path / "mini"
     journal = tmp_path / "journal-99.jsonl"

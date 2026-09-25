@@ -16,7 +16,8 @@ CONFIGS_ROOT = pathlib.Path(__file__).parents[1] / "configs"
 
 EXPECTED_MODELS = {
     "99": ["muse", "qwen", "qwenu", "qwenf", "qwent", "tiel", "ornith", "kat", "nex",
-           "spark", "bonsai", "bonsai2", "xing", "veriloop", "hemmingway"],
+           "spark", "bonsai", "bonsai2", "xing", "veriloop", "hemmingway",
+           "qwen36apex", "katapex", "occamy"],
     "97": ["tiel", "qwen36", "bonsai2", "qwen36apex", "katapex", "occamy"],
 }
 
@@ -107,4 +108,4 @@ def test_every_bench_config_of_both_machines_yields_a_profile_without_error():
                 spec = build_profile(cfg)
                 assert spec["name"] == f"{model}-r{variant[1]}"
                 total += 1
-    assert total == 63
+    assert total == 72

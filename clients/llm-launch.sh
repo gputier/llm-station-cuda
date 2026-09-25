@@ -135,7 +135,9 @@ _llm_load() {
     waited=$(( waited + 5 ))
   done
   err "Échec : le modèle n'a pas répondu en ${LLM_LOAD_TIMEOUT} s."
-  err "Journal : D:\\LLM-Setup\\logs\\llm-err-${_llm_actions[$i]}.log sur ${host}."
+  # llm-ctl names the log after the instance: the action itself ("tiel"), or
+  # the profile name that ends "profile -Name tiel-r1". Its last word is both.
+  err "Journal : D:\\LLM-Setup\\logs\\llm-err-${_llm_actions[$i]##* }.log sur ${host}."
   return 1
 }
 
