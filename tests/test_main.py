@@ -315,6 +315,21 @@ def test_main_bench_dispatches_with_preset_and_seed(tmp_path, monkeypatch):
     assert args.models == "tiel,qwen" and args.out == "/private/runs/bench" and args.seed == 123
 
 
+def test_mini_seed_is_drawn_once_then_reread_on_a_relaunch(tmp_path):
+    level_dir = tmp_path / "mini" / "99"
+    first = entry.mini_seed(level_dir, None)
+    assert (level_dir / "seed.txt").read_text(encoding="utf-8").strip() == str(first)
+    assert entry.mini_seed(level_dir, None) == first
+    assert entry.mini_seed(level_dir, first) == first
+
+
+def test_mini_seed_keeps_an_explicit_seed_and_refuses_a_conflicting_one(tmp_path):
+    level_dir = tmp_path / "mini" / "97"
+    assert entry.mini_seed(level_dir, 123) == 123
+    with pytest.raises(SystemExit):
+        entry.mini_seed(level_dir, 456)
+
+
 def test_main_rejects_an_unknown_machine(tmp_path):
     env_path = _write_env(tmp_path)
     with pytest.raises(SystemExit):

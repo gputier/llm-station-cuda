@@ -17,6 +17,7 @@ import pathlib
 import time
 import traceback
 import urllib.request
+import uuid
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -106,7 +107,8 @@ class Campaign:
 
     def _set_context(self, cfg: BenchConfig, suite, rep: int) -> None:
         body = json.dumps({"run_id": f"{cfg.machine}/{cfg.model}/{cfg.variant}", "suite": suite.name,
-                           "rep": rep, "sampling": _effective_cfg(cfg, suite).sampling,
+                           "rep": rep, "pass_id": uuid.uuid4().hex,
+                           "sampling": _effective_cfg(cfg, suite).sampling,
                            "chat_template_kwargs": cfg.chat_template_kwargs}).encode()
         req = urllib.request.Request(self.gateway_url + "/_bench/context", data=body,
                                      headers={"Content-Type": "application/json"}, method="POST")
