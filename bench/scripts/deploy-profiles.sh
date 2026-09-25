@@ -42,16 +42,19 @@ done
 [[ "$machine" == "99" || "$machine" == "97" ]] || usage
 [[ -n "$env_file" && -f "$env_file" ]] || usage
 
-# shellcheck disable=SC1090
-set -a; source "$env_file"; set +a
+# The file is a compose env file, not shell: values are literal and unquoted
+# (BENCH_PRIVATE holds a path with a space), so sourcing it breaks. Only the
+# one key this script needs is read, last assignment wins as in compose.
 ssh_var="STATION_${machine}_SSH"
-ssh_target="${!ssh_var:-}"
+ssh_target="$(sed -n "s/^${ssh_var}=//p" "$env_file" | tail -n 1)"
 [[ -n "$ssh_target" ]] || { echo "missing ${ssh_var} in ${env_file}" >&2; exit 2; }
 
+# The llm-ctl scripts live at the repository root, one level above the bench/
+# directory this script cd's into.
 if [[ "$machine" == "99" ]]; then
-  ctl_script="llm-ctl.ps1"
+  ctl_script="../llm-ctl.ps1"
 else
-  ctl_script="llm-ctl-16gb.ps1"
+  ctl_script="../llm-ctl-16gb.ps1"
 fi
 
 out_dir="$(mktemp -d)"
