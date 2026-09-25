@@ -1,4 +1,4 @@
-machine: "97"
+machine: "99"
 model: qwen36apex
 variant: R1
 label: "sampling thinking de la fiche de base, cache q8_0 (recette de la fiche APEX), sans MTP"
@@ -7,14 +7,14 @@ workdir: 'D:\LLM-Setup\llama-cpp-b11156'
 cudabin: null
 args:
   - '-m'
-  - 'D:\models\qwen36apex-nano\Qwen3.6-35B-A3B.APEX-I-NanoPlus.gguf'
+  - 'D:\models\qwen36apex\Qwen3.6-35B-A3B.APEX-I-MiniPlus-V2.1.gguf'
   - '--n-gpu-layers'
   - '99'
   - '--flash-attn'
   - 'on'
   - '--jinja'
   - '--chat-template-file'
-  - 'D:\models\qwen36apex-nano\chat-template-system-anywhere.jinja'
+  - 'D:\models\qwen36apex\chat-template-system-anywhere.jinja'
   - '--host'
   - '0.0.0.0'
   - '--port'
@@ -90,6 +90,7 @@ ctx_proven: null
 # on a late system turn, which Claude Code sends mid-session (500 on the
 # first turn, reported 2026-09-25 on occamy R2). The file is that template
 # with the raising line alone replaced by an ordinary ChatML system turn.
-# 2026-09-25: the MiniPlus quant described above spilled out of this 16 GB
-# card at 262144 context and moved to the 99 (bench/configs/99/qwen36apex). This
-# machine now serves the smaller quant from IsValorum/Qwen3.6-35B-A3B-MTP-APEX-I-NanoPlus-GGUF.
+# Moved from the 97 on 2026-09-25: this quant spills out of the 16 GB card
+# at 262144 context (about 30 tok/s instead of 130), and every model must
+# run fully on its card at that context. Same file, same flags, same engine
+# (b11156 is installed on both machines); the 97 now serves a smaller quant.

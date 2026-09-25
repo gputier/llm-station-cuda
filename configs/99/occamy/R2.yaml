@@ -1,4 +1,4 @@
-machine: "97"
+machine: "99"
 model: occamy
 variant: R2
 label: "sampling precis (sourcee : mitigation de boucle de raisonnement discutee sur la fiche), meme moteur que R1"
@@ -7,16 +7,16 @@ workdir: 'D:\LLM-Setup\llama-cpp-b11156'
 cudabin: null
 args:
   - '-m'
-  - 'D:\models\occamy-nano\Occamy-1.0.APEX-I-NanoPlus.gguf'
+  - 'D:\models\occamy\Occamy-1.0.APEX-I-MiniPlus-V2.1.gguf'
   - '--mmproj'
-  - 'D:\models\occamy-nano\mmproj-Q8_0.gguf'
+  - 'D:\models\occamy\mmproj-Accio-Lab_occamy-1.0-Q8_0.gguf'
   - '--n-gpu-layers'
   - '99'
   - '--flash-attn'
   - 'on'
   - '--jinja'
   - '--chat-template-file'
-  - 'D:\models\occamy-nano\chat-template-system-anywhere.jinja'
+  - 'D:\models\occamy\chat-template-system-anywhere.jinja'
   - '--host'
   - '0.0.0.0'
   - '--port'
@@ -70,6 +70,7 @@ ctx_proven: null
 # on a late system turn, which Claude Code sends mid-session (500 on the
 # first turn, reported 2026-09-25 on occamy R2). The file is that template
 # with the raising line alone replaced by an ordinary ChatML system turn.
-# 2026-09-25: the MiniPlus quant described above spilled out of this 16 GB
-# card at 262144 context and moved to the 99 (bench/configs/99/occamy). This
-# machine now serves the smaller quant from IsValorum/Occamy-1.0-APEX-I-NanoPlus-GGUF.
+# Moved from the 97 on 2026-09-25: this quant spills out of the 16 GB card
+# at 262144 context (about 30 tok/s instead of 130), and every model must
+# run fully on its card at that context. Same file, same flags, same engine
+# (b11156 is installed on both machines); the 97 now serves a smaller quant.
