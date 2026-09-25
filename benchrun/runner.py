@@ -48,6 +48,14 @@ class SuiteContext:
     private_root: pathlib.Path
 
 
+def _effective_cfg(cfg: BenchConfig, suite) -> BenchConfig:
+    """The configuration as served for this suite: a suite may pin sampling
+    keys its measure depends on (speed pins max_tokens, the mini level caps
+    it), laid over the configuration's own values."""
+    override = getattr(suite, "sampling_override", {})
+    return dataclasses.replace(cfg, sampling={**cfg.sampling, **override}) if override else cfg
+
+
 class Suite(Protocol):
     name: str
 
@@ -97,11 +105,8 @@ class Campaign:
         return todo
 
     def _set_context(self, cfg: BenchConfig, suite, rep: int) -> None:
-        # A suite may pin sampling keys its measure depends on (the speed
-        # suite pins max_tokens), laid over the configuration's own values.
-        sampling = {**cfg.sampling, **getattr(suite, "sampling_override", {})}
         body = json.dumps({"run_id": f"{cfg.machine}/{cfg.model}/{cfg.variant}", "suite": suite.name,
-                           "rep": rep, "sampling": sampling,
+                           "rep": rep, "sampling": _effective_cfg(cfg, suite).sampling,
                            "chat_template_kwargs": cfg.chat_template_kwargs}).encode()
         req = urllib.request.Request(self.gateway_url + "/_bench/context", data=body,
                                      headers={"Content-Type": "application/json"}, method="POST")
@@ -162,7 +167,10 @@ class Campaign:
                         out = cell / suite.name
                         out.mkdir(parents=True, exist_ok=True)
                         self._set_context(cfg, suite, rep)
-                        ctx = SuiteContext(self.gateway_url, cfg, rep, out, self.private_root)
+                        # The suite sees the sampling the gateway will apply, so
+                        # its client timeouts size on the real max_tokens.
+                        ctx = SuiteContext(self.gateway_url, _effective_cfg(cfg, suite), rep, out,
+                                           self.private_root)
                         try:
                             results = suite.run(ctx)
                             if not results:
