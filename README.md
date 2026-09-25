@@ -33,10 +33,13 @@ did not transpose either.
 All thirteen share port 8080 and are mutually exclusive on the GPU: loading one
 unloads the others.
 
-Two more were served here and are gone: `whittle` and `xing`, both rejected on
-2026-09-19. Their weights were deleted the same evening, and on 2026-09-21 their
-profiles left the control script rather than sit there offering a load that
-cannot happen. What they measured is kept in
+One more was served here and stays gone: `whittle`, rejected on 2026-09-19. Its
+weights were deleted the same evening, and on 2026-09-21 its profile left the
+control script rather than sit there offering a load that cannot happen.
+`xing`, rejected the same day for the same reason, came back on 2026-09-24 as
+a bench-only model: no permanent profile in `llm-ctl.ps1`, only three bench
+profiles under `bench/configs/99/xing` and a bench-only launcher,
+[clients/xing](clients/xing). What both measured is kept in
 [docs/tuning-log.md](docs/tuning-log.md), which is the point of having measured
 them.
 
@@ -91,11 +94,14 @@ window was brought down from 1,048,576 to 262,144 on 2026-08-31 because a
 million tokens cost more than they returned. The model still reaches a million,
 recall proven at 556,390 tokens; this box just does not serve it there.
 
-A second box, an RTX 4080 SUPER with 16 GB, serves two model families from
-[llm-ctl-16gb.ps1](llm-ctl-16gb.ps1) since 2026-09-14: `tiel`, the same
-Tiel-Coder in UD-IQ3_XXS, and `qwen36`, Qwen3.6-35B-A3B in UD-IQ3_XXS, both at
-the full 262,144 window. Their pages: [models/tiel-coder-35b-a3b/](models/tiel-coder-35b-a3b/)
-and [models/qwen3.6-35b-a3b/](models/qwen3.6-35b-a3b/).
+A second box, an RTX 4080 SUPER with 16 GB, serves two production model
+families from [llm-ctl-16gb.ps1](llm-ctl-16gb.ps1) since 2026-09-14: `tiel`,
+the same Tiel-Coder in UD-IQ3_XXS, and `qwen36`, Qwen3.6-35B-A3B in UD-IQ3_XXS,
+both at the full 262,144 window. Their pages: [models/tiel-coder-35b-a3b/](models/tiel-coder-35b-a3b/)
+and [models/qwen3.6-35b-a3b/](models/qwen3.6-35b-a3b/). It also carries
+bench-only profiles for four more models, `bonsai2`, `occamy`, `katapex` and
+`qwen36apex` (`bench/configs/97/`), on the same terms as the 32 GB box's own
+bench-only models, covered in the Bench section below.
 
 ## Quick start
 
@@ -125,23 +131,66 @@ export LLM_SSH_USER=your-ssh-user
 ./clients/tiel        # asks which box, loads Tiel there if needed, then runs Claude Code
 ```
 
-There is one launcher per model family, eight in all, listed with what each is
-good at in [clients/README.md](clients/README.md). Three open with a menu.
-`tiel` and `qwen` do it because their models are served on both boxes: `qwen`
-covers the aligned and the uncensored Qwen3.8 here, and Qwen3.6 on the 16 GB
-box. `bonsai` does it for another reason, both its generations sitting on this
-box on two different engines. `embed` has none
-on purpose: it serves embeddings, not a chat endpoint.
+There is one launcher per model family, fifteen in all, listed with what each
+is good at in [clients/README.md](clients/README.md). `embed` has none on
+purpose: it serves embeddings, not a chat endpoint.
+
+Three launchers open with a hand-written menu regardless of the bench. `tiel`
+and `qwen` do it because their models are served on both boxes: `qwen` covers
+the aligned and the uncensored Qwen3.8 here, and Qwen3.6 on the 16 GB box.
+`bonsai` does it for another reason, both its generations sitting on this box
+on two different engines.
+
+Every model the bench compared also carries an R1/R2/R3 menu entry per box,
+deployed by [bench/scripts/deploy-profiles.sh](bench/scripts/deploy-profiles.sh)
+and started with `llm-ctl -Action profile -Name <model>-r<N>`, the exact
+configuration a bench run measured, tracked and stopped like any other
+profile (Bonsai 1 is the one exception, its R2 retired on 2026-09-25 for
+running no engine that reads its draft model). Six launchers exist only for
+that purpose, with nothing but bench entries in their menu: `hemmingway`,
+`veriloop` and `xing` on the 32 GB box, `qwen36` on the 16 GB one, and
+`qwen36apex`, `katapex` and `occamy` on both. Full detail is in
+[clients/README.md](clients/README.md).
 
 The three paths at the top of `llm-ctl.ps1` (`$RootDir`, `$ModelsDir`,
 `$CudaRoot`) are the only installation-specific values. Everything else is
 portable.
 
+## Bench
+
+Every model above went through the same bench, under `bench/`. Two ways to run
+it:
+
+- `python -m benchrun bench --preset mini|medium|large --machine <machine>
+--out <dir>` for day-to-day follow-up. `medium` and `large` run a fixed,
+  deterministic question count per suite; `mini` draws one question per
+  suite instead, the same one for a model's R1, R2 and R3 so the three stay
+  comparable, and writes it to `seed.txt` for a reproducible relaunch. Each
+  level writes under its own `<dir>/<preset>/<machine>` subtree; `mini` also
+  writes a `rapport.md` there.
+- `python -m benchrun run` for the full campaign, the reference run, launched
+  from time to time on a given model rather than on every change.
+
+Placement across the two boxes follows one rule, applied on 2026-09-25 to
+`occamy`, `katapex` and `qwen36apex`: a model runs entirely on its card at the
+262,144-token window, with no overflow into shared memory, or it moves to the
+other machine or to a lighter quantization. Those three spilled out of the
+16 GB card at that window (about 30 tokens/s instead of 130); their full quant
+now runs on the 32 GB box, and the 16 GB box keeps a lighter quant of the same
+weights.
+
+`bench/scripts/deploy-profiles.sh --machine 99|97 --env <file>` turns each
+bench config into a launch profile and a launcher menu entry, and refuses to
+run against a station a campaign is still using. Method notes and every
+harness-level decision are in [bench/harness/README.md](bench/harness/README.md);
+the dated log of what ran and what it found is
+[docs/campagne-2026-09.md](docs/campagne-2026-09.md).
+
 ## Documentation
 
 | File                                                                       | What it covers                                                                                        |
 | -------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| [docs/INDEX.md](docs/INDEX.md)                                             | The twelve documents of this folder, each with the question it answers                                |
+| [docs/INDEX.md](docs/INDEX.md)                                             | The fifteen documents of this folder, each with the question it answers                               |
 | [docs/prerequisites.md](docs/prerequisites.md)                             | Everything that must be installed before a first build                                                |
 | [docs/building-llama-cpp.md](docs/building-llama-cpp.md)                   | The eight CUDA builds, why four are official releases and the four others forks or local compilations |
 | [docs/claude-code-integration.md](docs/claude-code-integration.md)         | How a local server replaces the Anthropic API, and what that costs                                    |

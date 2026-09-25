@@ -27,7 +27,7 @@ export LLM_SSH_KEY=~/.ssh/id_ed25519     # optional, see below
 ./occamy      # bench only, full quant on the 32 GB box, lighter quant on the 16 GB box
 ```
 
-## One body for all eight
+## One body for all fifteen
 
 Every launcher is a few lines that declare its model and source
 [llm-launch.sh](llm-launch.sh), never run on its own. Until 2026-09-14 the six
@@ -83,10 +83,12 @@ request turned into `llama-server` flags (there is no gateway day to day).
 logged and stopped like any hand-written profile, never like the bench run
 itself.
 
-Every model the bench compared now has an R1/R2/R3 entry in a launcher's menu:
-after the hand-written entries already there for `tiel`, `kat`, `muse`, `nex`,
-`ornith`, `spark`, `bonsai` (bonsai and bonsai2) and `qwen` (qwen, qwenu, qwent
-and the qwenf candidate, all four Qwen3.8-27B builds sharing one file, per the
+Every model the bench compared now has an R1/R2/R3 entry in a launcher's menu,
+Bonsai 1 the one exception: its R2 was retired on 2026-09-25, no engine on the
+station able to read its draft model. These entries sit after the
+hand-written entries already there for `tiel`, `kat`, `muse`, `nex`, `ornith`,
+`spark`, `bonsai` (bonsai and bonsai2) and `qwen` (qwen, qwenu, qwent and the
+qwenf candidate, all four Qwen3.8-27B builds sharing one file, per the
 one-launcher-per-family rule above); and as a dedicated launcher for every
 model the bench compared that had none: `hemmingway`, `veriloop`, `xing` on
 the 32 GB box, `qwen36` on the 16 GB one, and `qwen36apex`, `katapex`, `occamy`
