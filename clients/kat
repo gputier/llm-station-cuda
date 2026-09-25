@@ -16,4 +16,12 @@ source "$(dirname "${BASH_SOURCE[0]}")/llm-launch.sh"
 
 llm_variant "KAT-Coder sur la machine 32 Go, fenêtre 393k" "${LLM_HOST:-your-32gb-box}" kat kat-coder '' kat-coder-v25-35b-a3b 393216
 
+# Profils du banc (bench/benchrun/profiles.py), un par config bench/configs.
+llm_variant "R1, réglage de référence, réflexion activée, machine 32 Go" \
+  "${LLM_HOST:-your-32gb-box}" "profile -Name kat-r1" kat-r1 '' kat-r1 393216 '' 81920
+llm_variant "R2, réflexion désactivée, réponse directe, machine 32 Go" \
+  "${LLM_HOST:-your-32gb-box}" "profile -Name kat-r2" kat-r2 '' kat-r2 393216 '' 32768
+llm_variant "R3, cache mémoire réduit, non confirmé, machine 32 Go" \
+  "${LLM_HOST:-your-32gb-box}" "profile -Name kat-r3" kat-r3 '' kat-r3 393216 '' 81920
+
 llm_launch "$@"

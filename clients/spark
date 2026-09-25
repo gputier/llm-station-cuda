@@ -21,4 +21,12 @@ LLM_LOAD_TIMEOUT=180
 
 llm_variant "Spark-X2.5-4B sur la machine 32 Go, fenêtre 262k" "${LLM_HOST:-your-32gb-box}" spark spark-x2.5 '' spark-x2.5-4b 262144
 
+# Profils du banc (bench/benchrun/profiles.py), un par config bench/configs.
+llm_variant "R1, réglage de référence, comme la fiche, machine 32 Go" \
+  "${LLM_HOST:-your-32gb-box}" "profile -Name spark-r1" spark-r1 '' spark-r1 262144 '' 81920
+llm_variant "R2, modèle brouillon pour accélérer la génération, gain non revérifié, machine 32 Go" \
+  "${LLM_HOST:-your-32gb-box}" "profile -Name spark-r2" spark-r2 '' spark-r2 262144 '' 81920
+llm_variant "R3, réglage actuel de la station, sans grammaire imposée, machine 32 Go" \
+  "${LLM_HOST:-your-32gb-box}" "profile -Name spark-r3" spark-r3 '' spark-r3 262144 '' 81920
+
 llm_launch "$@"

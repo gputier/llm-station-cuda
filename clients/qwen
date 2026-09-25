@@ -31,4 +31,33 @@ llm_variant "Qwen3.8-27B Uncensored sur la machine 32 Go, si l'aligné refuse, f
 llm_variant "Qwen3.6-35B-A3B sur la machine 16 Go, fenêtre 262k" "${LLM_HOST_16GB:-your-16gb-box}" qwen36 qwen3.6-35b '' qwen3.6-35b-a3b 262144 180000
 llm_variant "Qwen3.8-27B TWIN-TURBO sur la machine 32 Go, à l'essai, fenêtre 262k" "${LLM_HOST:-your-32gb-box}" qwent qwen3.8-27b-twin-turbo-709l '' qwen3.8-27b-twin-turbo 262144
 
+# Profils du banc (bench/benchrun/profiles.py), un par config bench/configs.
+# qwenu, qwent et qwenf rejoignent ici qwen, la famille couvre déjà les quatre
+# modèles Qwen3.8-27B de la machine 32 Go : un fichier par famille, pas un par
+# modèle (choix de conception du 2026-09-14, voir l'en-tête de llm-launch.sh).
+llm_variant "R1, Qwen, palier intermédiaire, cache mémoire large, machine 32 Go" \
+  "${LLM_HOST:-your-32gb-box}" "profile -Name qwen-r1" qwen-r1 '' qwen-r1 262144 '' 81920
+llm_variant "R2, Qwen, palier léger, gabarit de dialogue alternatif, effort moyen, machine 32 Go" \
+  "${LLM_HOST:-your-32gb-box}" "profile -Name qwen-r2" qwen-r2 '' qwen-r2 393216 '' 32768
+llm_variant "R3, Qwen, palier léger, cache mémoire réduit, moteur récent, non confirmé, machine 32 Go" \
+  "${LLM_HOST:-your-32gb-box}" "profile -Name qwen-r3" qwen-r3 '' qwen-r3 393216 '' 131072
+llm_variant "R1, Qwen Uncensored, qualité renforcée, gabarit embarqué, réflexion désactivée, machine 32 Go" \
+  "${LLM_HOST:-your-32gb-box}" "profile -Name qwenu-r1" qwenu-r1 '' qwenu-r1 262144 '' 8192
+llm_variant "R2, Qwen Uncensored, cache mémoire réduit, gabarit alternatif, machine 32 Go" \
+  "${LLM_HOST:-your-32gb-box}" "profile -Name qwenu-r2" qwenu-r2 '' qwenu-r2 262144 '' 8192
+llm_variant "R3, Qwen Uncensored, cache mémoire réduit, mesure de fenêtre étendue, non confirmé, machine 32 Go" \
+  "${LLM_HOST:-your-32gb-box}" "profile -Name qwenu-r3" qwenu-r3 '' qwenu-r3 393216 '' 131072
+llm_variant "R1, Qwen TWIN-TURBO, gabarit de l'auteur avec modes de réflexion, réflexion active, machine 32 Go" \
+  "${LLM_HOST:-your-32gb-box}" "profile -Name qwent-r1" qwent-r1 '' qwent-r1 262144 '' 81920
+llm_variant "R2, Qwen TWIN-TURBO, réflexion désactivée, gabarit alternatif, machine 32 Go" \
+  "${LLM_HOST:-your-32gb-box}" "profile -Name qwent-r2" qwent-r2 '' qwent-r2 262144 '' 8192
+llm_variant "R3, Qwen TWIN-TURBO, fenêtre étendue, débit de traitement plus large, sous surveillance mémoire, machine 32 Go" \
+  "${LLM_HOST:-your-32gb-box}" "profile -Name qwent-r3" qwent-r3 '' qwent-r3 393216 '' 131072
+llm_variant "R1, Qwen candidat qwenf, gabarit de l'auteur, réflexion par défaut, machine 32 Go" \
+  "${LLM_HOST:-your-32gb-box}" "profile -Name qwenf-r1" qwenf-r1 '' qwenf-r1 262144 '' 81920
+llm_variant "R2, Qwen candidat qwenf, réflexion désactivée, machine 32 Go" \
+  "${LLM_HOST:-your-32gb-box}" "profile -Name qwenf-r2" qwenf-r2 '' qwenf-r2 262144 '' 8192
+llm_variant "R3, Qwen candidat qwenf, modèle brouillon renforcé, non mesuré jusqu'ici, machine 32 Go" \
+  "${LLM_HOST:-your-32gb-box}" "profile -Name qwenf-r3" qwenf-r3 '' qwenf-r3 262144 '' 81920
+
 llm_launch "$@"

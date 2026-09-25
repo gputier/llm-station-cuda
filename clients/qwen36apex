@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# qwen36apex - Claude Code on Qwen3.6-35B-A3B APEX, served by the 16 GB box.
+#
+# A separate model from qwen36 (its own weights, APEX-MTP), not a variant of
+# it: kept in its own launcher rather than folded into qwen36's menu.
+# Bench-only entries, from bench/configs/97/qwen36apex.
+#
+# Scope: the exported variables live in this process only. A plain `claude` in
+# another shell keeps talking to Anthropic.
+
+source "$(dirname "${BASH_SOURCE[0]}")/llm-launch.sh"
+
+# Profils du banc (bench/benchrun/profiles.py), un par config bench/configs.
+llm_variant "R1, réglage de base, sans modèle brouillon, machine 16 Go" \
+  "${LLM_HOST_16GB:-your-16gb-box}" "profile -Name qwen36apex-r1" qwen36apex-r1 '' qwen36apex-r1 262144 '' 81920
+llm_variant "R2, modèle brouillon embarqué, sourcé, machine 16 Go" \
+  "${LLM_HOST_16GB:-your-16gb-box}" "profile -Name qwen36apex-r2" qwen36apex-r2 '' qwen36apex-r2 262144 '' 81920
+llm_variant "R3, gabarit de dialogue alternatif, non confirmé, machine 16 Go" \
+  "${LLM_HOST_16GB:-your-16gb-box}" "profile -Name qwen36apex-r3" qwen36apex-r3 '' qwen36apex-r3 262144 '' 81920
+
+llm_launch "$@"

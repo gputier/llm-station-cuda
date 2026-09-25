@@ -33,7 +33,7 @@ LLM_OUTPUT_TOKENS=16384
 LLM_MCP=none
 
 _llm_labels=(); _llm_hosts=(); _llm_actions=(); _llm_match=(); _llm_exclude=()
-_llm_ids=(); _llm_windows=(); _llm_compact_at=()
+_llm_ids=(); _llm_windows=(); _llm_compact_at=(); _llm_output_tokens=()
 
 # Tokens Claude Code keeps between its compaction trigger and the window it
 # compacts against, read in the 2.1.271 binary on 2026-09-15.
@@ -41,34 +41,60 @@ LLM_SUMMARY_BUFFER=13000
 
 err() { printf '%s\n' "$*" >&2; }
 
-# llm_variant LABEL HOST ACTION MATCH EXCLUDE MODEL_ID WINDOW [COMPACT_AT]
-#   ACTION      the llm-ctl.ps1 action that loads the model on HOST
-#   MATCH       lowercase text the served model_path must contain
+# llm_variant LABEL HOST ACTION MATCH EXCLUDE MODEL_ID WINDOW [COMPACT_AT] [OUTPUT_TOKENS]
+#   ACTION      the llm-ctl.ps1 action that loads the model on HOST. May carry
+#               its own argument, e.g. "profile -Name tiel-r1": the whole string
+#               is interpolated after "-Action " in the remote command (_llm_load).
+#   MATCH       lowercase text the served state (model_path, a space, the
+#               served alias: see _llm_state) must contain
 #   EXCLUDE     lowercase text it must NOT contain, or '' when none is needed
 #   WINDOW      the window the server really serves, n_ctx in /props
 #   COMPACT_AT  optional: the context size where automatic compaction starts,
 #               for a model that stops writing its summary past that size
+#   OUTPUT_TOKENS  optional: this variant's own output budget, replacing
+#                  LLM_OUTPUT_TOKENS. A bench profile carries the max_tokens
+#                  its own config asks for (bench/benchrun/profiles.py), which
+#                  a single global constant cannot express for every profile
+#                  at once.
 llm_variant() {
   _llm_labels+=("$1"); _llm_hosts+=("$2"); _llm_actions+=("$3"); _llm_match+=("$4")
   _llm_exclude+=("$5"); _llm_ids+=("$6"); _llm_windows+=("$7"); _llm_compact_at+=("${8:-}")
+  _llm_output_tokens+=("${9:-}")
 }
 
 # What port 8080 on HOST says, printed as one of three states:
-#   free          the connection is refused: nothing listens, nobody to disturb
-#   <model_path>  lowercased, the model answering /props
-#   unknown       anything else: a timeout, an error, a model still loading
+#   free              the connection is refused: nothing listens, nobody to disturb
+#   <model_path> <id> lowercased, /props' model_path and /v1/models' served id,
+#                      space separated
+#   unknown           anything else: a timeout, an error, a model still loading
 # Both servers are single-slot, so /props and not /health says WHICH model holds
 # the port. Only "free" lets a load go ahead without asking: a server busy on a
 # long prompt can miss a 3-second timeout, and reading that as "nothing running"
 # would load over whoever is using it. Found by review on 2026-09-14 and
 # reproduced with a stubbed curl; the per-model launchers before this one had
 # the same hole.
+#
+# The /v1/models id is appended for one reason: three bench-profile variants of
+# the same model can share the exact same weights file and differ only in their
+# flags (sampling, chat template), in which case model_path alone cannot tell
+# them apart. Every profile has run with --alias since 2026-09-20
+# (docs/api-usage.md), so /v1/models answers with the profile's own name; a
+# MATCH written against that alias (e.g. "tiel-r1") disambiguates where
+# model_path cannot. Every MATCH written against a model_path substring, as
+# every launcher before this change did, keeps matching exactly as before: it
+# is still a substring of this same combined string.
 _llm_state() {
-  local out rc=0 m
+  local out rc=0 m id
   out=$(curl -sS -m 3 "http://$1:${LLM_PORT}/props" 2>/dev/null) || rc=$?
   if (( rc == 7 )); then echo free; return; fi
   m=$(printf '%s' "$out" | sed -n 's/.*"model_path":"\([^"]*\)".*/\1/p' | tr '[:upper:]' '[:lower:]')
-  if (( rc == 0 )) && [[ -n "$m" ]]; then echo "$m"; else echo unknown; fi
+  if (( rc == 0 )) && [[ -n "$m" ]]; then
+    id=$(curl -sS -m 3 "http://$1:${LLM_PORT}/v1/models" 2>/dev/null \
+      | sed -n 's/.*"id":"\([^"]*\)".*/\1/p' | tr '[:upper:]' '[:lower:]')
+    echo "$m $id"
+  else
+    echo unknown
+  fi
 }
 
 _llm_up() { curl -sS -m 3 "http://$1:${LLM_PORT}/health" 2>/dev/null | grep -q '"status":"ok"'; }
@@ -185,8 +211,9 @@ llm_launch() {
   # this budget in every local session, measured on 2.1.271 on 2026-09-15:
   # exported 16384 plus a settings value of 64000 sends max_tokens 64000, while
   # --settings wins over the user file.
-  local context_tokens=$(( ${_llm_windows[$i]} - LLM_OUTPUT_TOKENS ))
-  local budget="\"CLAUDE_CODE_MAX_OUTPUT_TOKENS\":\"${LLM_OUTPUT_TOKENS}\",\"CLAUDE_CODE_MAX_CONTEXT_TOKENS\":\"${context_tokens}\""
+  local output_tokens=${_llm_output_tokens[$i]:-$LLM_OUTPUT_TOKENS}
+  local context_tokens=$(( ${_llm_windows[$i]} - output_tokens ))
+  local budget="\"CLAUDE_CODE_MAX_OUTPUT_TOKENS\":\"${output_tokens}\",\"CLAUDE_CODE_MAX_CONTEXT_TOKENS\":\"${context_tokens}\""
   # CLAUDE_CODE_AUTO_COMPACT_WINDOW moves only the compaction trigger: the
   # client still refuses a turn at the real window. The trigger sits at that
   # window minus the output budget and the summary buffer, so the variable is
@@ -194,7 +221,7 @@ llm_launch() {
   # refusal is about 10,000 tokens, a few turns.
   local compact_at=${_llm_compact_at[$i]}
   if [[ -n "$compact_at" ]]; then
-    budget="${budget},\"CLAUDE_CODE_AUTO_COMPACT_WINDOW\":\"$(( compact_at + LLM_OUTPUT_TOKENS + LLM_SUMMARY_BUFFER ))\""
+    budget="${budget},\"CLAUDE_CODE_AUTO_COMPACT_WINDOW\":\"$(( compact_at + output_tokens + LLM_SUMMARY_BUFFER ))\""
   fi
   budget="{\"env\":{${budget}}}"
 

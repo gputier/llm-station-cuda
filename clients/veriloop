@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# veriloop - Claude Code on Veriloop, served by the 32 GB box.
+#
+# Bench-only model: no hand-written production profile exists for it, only the
+# three profiles the bench compared (bench/configs/99/veriloop). The menu
+# below asks which one to load.
+#
+# Scope: the exported variables live in this process only. A plain `claude` in
+# another shell keeps talking to Anthropic.
+
+source "$(dirname "${BASH_SOURCE[0]}")/llm-launch.sh"
+
+# Profils du banc (bench/benchrun/profiles.py), un par config bench/configs.
+llm_variant "R1, réglage de référence de l'éditeur, effort de réflexion élevé, sans modèle brouillon, machine 32 Go" \
+  "${LLM_HOST:-your-32gb-box}" "profile -Name veriloop-r1" veriloop-r1 '' veriloop-r1 262144 '' 65536
+llm_variant "R2, modèle brouillon sourcé, même fenêtre que R1, machine 32 Go" \
+  "${LLM_HOST:-your-32gb-box}" "profile -Name veriloop-r2" veriloop-r2 '' veriloop-r2 262144 '' 65536
+llm_variant "R3, cache mémoire ajusté, non confirmé, machine 32 Go" \
+  "${LLM_HOST:-your-32gb-box}" "profile -Name veriloop-r3" veriloop-r3 '' veriloop-r3 262144 '' 65536
+
+llm_launch "$@"

@@ -1,5 +1,5 @@
 param(
-  [ValidateSet('bench','tiel','qwen36','stop','status','logs')]
+  [ValidateSet('bench','profile','tiel','qwen36','stop','status','logs')]
   [string]$Action,
   [string]$Name,   # optional: for 'stop' and 'logs', targets a named instance
   [int]$Tail = 40, # for 'logs': history lines to show before following live
@@ -56,6 +56,11 @@ $ModelsDir = 'D:\models'
 $instDir    = "$RootDir\instances"
 $logDir     = "$RootDir\logs"
 $serverPort = 8080
+# Where python -m benchrun profiles writes one JSON file per (machine, model,
+# variant) bench config, named "<model>-r<N>.json" (bench/benchrun/profiles.py).
+# 'profile' below reads from here; 'bench' still reads whatever -Spec points
+# to, unchanged.
+$profilesDir = "$RootDir\profiles"
 
 New-Item -ItemType Directory -Force -Path $instDir, $logDir | Out-Null
 
@@ -287,6 +292,28 @@ function Get-Status {
   if (-not $any) { Write-Output "NOT_RUNNING" }
 }
 
+# The one line -Action bench -DryRun prints, isolated so it can be tested
+# without touching a station: no path here is resolved on disk, everything
+# comes from the already-parsed spec object.
+function Format-DryRunLine($exe, $name, $benchArgs) {
+  return "DRYRUN " + $exe + " " + ((@('--alias', $name) + @($benchArgs)) -join ' ')
+}
+
+# Shared by 'bench' and 'profile': both start a JSON launch spec (name, exe,
+# workDir, args, env) the same way Start-LLM starts any other profile.
+# 'bench' spec comes from benchrun (bench/benchrun/config.py), 'profile' spec
+# from benchrun.profiles; this function does not care which.
+function Invoke-Spec($s) {
+  $benchArgs = @($s.args)
+  if ($DryRun) {
+    Write-Output (Format-DryRunLine $s.exe $s.name $benchArgs)
+    return
+  }
+  $envVars = @{}
+  foreach ($p in $s.env.PSObject.Properties) { $envVars[$p.Name] = $p.Value }
+  Start-LLM $s.name $benchArgs $s.exe $s.workDir $envVars
+}
+
 # ---------------------------------------------------------------------------
 # Profiles.
 #
@@ -444,17 +471,19 @@ switch ($Action) {
 
   'bench' {
     if (-not $Spec -or -not (Test-Path $Spec)) { Write-Output "ERROR spec not found: $Spec"; exit 2 }
-    $s = Get-Content -Raw $Spec | ConvertFrom-Json
-    $benchArgs = @($s.args)
-    if ($DryRun) {
-      Write-Output ("DRYRUN " + $s.exe + " " + ((@('--alias', $s.name) + $benchArgs) -join ' '))
-      break
-    }
-    $envVars = @{}
-    foreach ($p in $s.env.PSObject.Properties) { $envVars[$p.Name] = $p.Value }
-    Start-LLM $s.name $benchArgs $s.exe $s.workDir $envVars
+    Invoke-Spec (Get-Content -Raw $Spec | ConvertFrom-Json)
     break
   }
 
-  default  { Write-Output "USAGE: llm-ctl.ps1 -Action tiel|qwen36|bench|stop|status|logs" }
+  'profile' {
+    # Not the bench action: a profile started this way is tracked and logged
+    # exactly like 'tiel' or 'qwen36' above, and 'bench' itself is untouched.
+    if (-not $Name) { Write-Output "ERROR -Name required for -Action profile"; exit 2 }
+    $profilePath = Join-Path $profilesDir "$Name.json"
+    if (-not (Test-Path $profilePath)) { Write-Output "ERROR profile not found: $profilePath"; exit 2 }
+    Invoke-Spec (Get-Content -Raw $profilePath | ConvertFrom-Json)
+    break
+  }
+
+  default  { Write-Output "USAGE: llm-ctl.ps1 -Action tiel|qwen36|bench|profile|stop|status|logs" }
 }

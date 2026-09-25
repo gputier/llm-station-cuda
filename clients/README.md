@@ -17,7 +17,14 @@ export LLM_SSH_KEY=~/.ssh/id_ed25519     # optional, see below
 ./bonsai      # 27B in 7 GiB, the best quality per byte, asks which generation
 ./spark       # 4B, last on every measure
 ./muse        # agentic, vision, faithful OCR
-./qwen        # Qwen3.8 aligned, uncensored or TWIN-TURBO on the 32 GB box, Qwen3.6 on the 16 GB one
+./qwen        # Qwen3.8 aligned, uncensored, TWIN-TURBO or the qwenf candidate on the 32 GB box, Qwen3.6 on the 16 GB one
+./hemmingway  # bench only, 32 GB box
+./veriloop    # bench only, 32 GB box
+./xing        # bench only, 32 GB box
+./qwen36      # bench only, 16 GB box
+./qwen36apex  # bench only, 16 GB box
+./katapex     # bench only, 16 GB box
+./occamy      # bench only, 16 GB box
 ```
 
 ## One body for all eight
@@ -65,6 +72,44 @@ Which one to reach for, with the figures behind each line, is in
 
 `embed` has no launcher on purpose: it serves embeddings, not a chat endpoint.
 
+## The bench's own profiles, in the same menus
+
+`bench/benchrun/profiles.py` writes one launch-profile JSON per bench config
+(`bench/configs/<machine>/<model>/R{1,2,3}.yaml`), the sampling and
+chat-template settings the bench's own gateway would otherwise send per
+request turned into `llama-server` flags (there is no gateway day to day).
+`llm-ctl.ps1` and `llm-ctl-16gb.ps1` start one with `-Action profile -Name
+<model>-r<N>`, the same way `-Action bench` starts a bench spec: tracked,
+logged and stopped like any hand-written profile, never like the bench run
+itself.
+
+Every model the bench compared now has an R1/R2/R3 entry in a launcher's menu:
+after the hand-written entries already there for `tiel`, `kat`, `muse`, `nex`,
+`ornith`, `spark`, `bonsai` (bonsai and bonsai2) and `qwen` (qwen, qwenu, qwent
+and the qwenf candidate, all four Qwen3.8-27B builds sharing one file, per the
+one-launcher-per-family rule above); and as a dedicated launcher for every
+model the bench compared that had none: `hemmingway`, `veriloop`, `xing` on
+the 32 GB box, `qwen36`, `qwen36apex`, `katapex`, `occamy` on the 16 GB one.
+`tiel` and `bonsai2` run on both boxes, so their bench entries appear twice,
+once per machine.
+
+Each entry's label is drawn from its config's own `label` field, reworded in
+plain terms (no flag name, no internal mechanism): which R number, one line on
+what changed, which box. `ACTION` is `profile -Name <model>-r<N>`, a two-word
+string `llm_launch` passes whole into the remote command, exactly like a
+one-word action. `MODEL_ID` and `MATCH` are both the profile's own alias
+(`<model>-r<N>`), and `WINDOW` its config's `--ctx-size`.
+
+MATCH here targets the alias, not `model_path`: several R-variants of the same
+model can share the exact same weights file, differing only in sampling or
+chat template, and `model_path` alone cannot tell them apart in that case. See
+"they check which model is loaded" below for how `_llm_state` now reads both.
+
+A bench profile also sets its own output-token budget, the ninth argument to
+`llm_variant`, taken from its config's `max_tokens` rather than the global
+`LLM_OUTPUT_TOKENS`: one fixed constant cannot fit sixty-three different
+profiles' own figures.
+
 ## LLM_SSH_KEY, and why it exists
 
 The launchers call plain `ssh` unless `LLM_SSH_KEY` names a key, in which case
@@ -107,6 +152,15 @@ the `qwenf` candidate matches none.
 `llm-launch.sh` lowercases `model_path` once and compares with bash substring
 tests rather than `grep -q`: under `pipefail`, `grep -q` can close the pipe
 before `printf` has written, and a match then reads as a failure.
+
+Since the bench profiles joined the menus, `_llm_state` also reads `/v1/models`
+and appends its served `id` (the profile's `--alias`, every profile has
+carried one since 2026-09-20) to `model_path` before matching. A model's own
+weights answer to more than one bench profile when only sampling or the chat
+template differs between them, in which case `model_path` is identical across
+R1, R2 and R3 and cannot say which one is loaded; the alias can. Every MATCH
+written before this change, against a `model_path` substring, still matches
+exactly as before: it is a substring of the same combined string.
 
 ## They warm up on their own
 

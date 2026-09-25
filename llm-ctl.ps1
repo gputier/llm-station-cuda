@@ -1,5 +1,5 @@
 param(
-  [ValidateSet('bench','bonsai','bonsai2','embed','kat','muse','nex','ornith','qwen','qwenf','qwent','qwenu','spark','tiel','stop','status','logs')]
+  [ValidateSet('bench','profile','bonsai','bonsai2','embed','kat','muse','nex','ornith','qwen','qwenf','qwent','qwenu','spark','tiel','stop','status','logs')]
   [string]$Action,
   [string]$Name,  # optional: for 'stop' and 'logs', targets a named instance
   [int]$Tail = 40, # for 'logs': history lines to show before following live
@@ -131,6 +131,12 @@ $workDirDflash2 = "$RootDir\llama-cpp-prism-dflash2\llama\build-win\bin"
 
 $instDir   = "$RootDir\instances"
 New-Item -ItemType Directory -Force -Path $instDir | Out-Null
+
+# Where python -m benchrun profiles writes one JSON file per (machine, model,
+# variant) bench config, named "<model>-r<N>.json" (bench/benchrun/profiles.py).
+# 'profile' below reads from here; 'bench' still reads whatever -Spec points
+# to, unchanged.
+$profilesDir = "$RootDir\profiles"
 
 # Logs live in their own directory since 2026-09-10. They used to sit at the root
 # of $RootDir, where they were indistinguishable from the scripts, the model
@@ -468,6 +474,28 @@ function Get-Status {
   if (-not $any) { Write-Output "NOT_RUNNING" }
 }
 
+# The one line -Action bench -DryRun prints, isolated so it can be tested
+# without touching a station: no path here is resolved on disk, everything
+# comes from the already-parsed spec object.
+function Format-DryRunLine($exe, $name, $benchArgs) {
+  return "DRYRUN " + $exe + " " + ((@('--alias', $name) + @($benchArgs)) -join ' ')
+}
+
+# Shared by 'bench' and 'profile': both start a JSON launch spec (name, exe,
+# workDir, cudaBin, args, env) the same way Start-LLM starts any other
+# profile. 'bench' spec comes from benchrun (bench/benchrun/config.py),
+# 'profile' spec from benchrun.profiles; this function does not care which.
+function Invoke-Spec($s) {
+  $benchArgs = @($s.args)
+  if ($DryRun) {
+    Write-Output (Format-DryRunLine $s.exe $s.name $benchArgs)
+    return
+  }
+  $envVars = @{}
+  foreach ($p in $s.env.PSObject.Properties) { $envVars[$p.Name] = $p.Value }
+  Start-LLM $s.name $benchArgs $null $s.exe $s.workDir $s.cudaBin $envVars
+}
+
 switch ($Action) {
   'stop'   { if ($Name) { Stop-One $Name } else { Stop-All }; break }
   'status' { Get-Status; break }
@@ -475,15 +503,18 @@ switch ($Action) {
 
   'bench' {
     if (-not $Spec -or -not (Test-Path $Spec)) { Write-Output "ERROR spec not found: $Spec"; exit 2 }
-    $s = Get-Content -Raw $Spec | ConvertFrom-Json
-    $benchArgs = @($s.args)
-    if ($DryRun) {
-      Write-Output ("DRYRUN " + $s.exe + " " + ((@('--alias', $s.name) + $benchArgs) -join ' '))
-      break
-    }
-    $envVars = @{}
-    foreach ($p in $s.env.PSObject.Properties) { $envVars[$p.Name] = $p.Value }
-    Start-LLM $s.name $benchArgs $null $s.exe $s.workDir $s.cudaBin $envVars
+    Invoke-Spec (Get-Content -Raw $Spec | ConvertFrom-Json)
+    break
+  }
+
+  'profile' {
+    # Not the bench action: a profile started this way is tracked, logged and
+    # stopped exactly like any hand-written profile above, and 'bench' itself
+    # is untouched.
+    if (-not $Name) { Write-Output "ERROR -Name required for -Action profile"; exit 2 }
+    $profilePath = Join-Path $profilesDir "$Name.json"
+    if (-not (Test-Path $profilePath)) { Write-Output "ERROR profile not found: $profilePath"; exit 2 }
+    Invoke-Spec (Get-Content -Raw $profilePath | ConvertFrom-Json)
     break
   }
 

@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# hemmingway - Claude Code on Hemmingway, served by the 32 GB box.
+#
+# Bench-only model: no hand-written production profile exists for it, only the
+# three profiles the bench compared (bench/configs/99/hemmingway). The menu
+# below asks which one to load.
+#
+# Scope: the exported variables live in this process only. A plain `claude` in
+# another shell keeps talking to Anthropic.
+
+source "$(dirname "${BASH_SOURCE[0]}")/llm-launch.sh"
+
+# Profils du banc (bench/benchrun/profiles.py), un par config bench/configs.
+llm_variant "R1, réglage de référence de l'éditeur, réflexion embarquée activée, machine 32 Go" \
+  "${LLM_HOST:-your-32gb-box}" "profile -Name hemmingway-r1" hemmingway-r1 '' hemmingway-r1 262144 '' 65536
+llm_variant "R2, réflexion embarquée désactivée pour comparaison, non confirmé, machine 32 Go" \
+  "${LLM_HOST:-your-32gb-box}" "profile -Name hemmingway-r2" hemmingway-r2 '' hemmingway-r2 262144 '' 65536
+llm_variant "R3, cache mémoire réduit, réflexion embarquée conservée, non confirmé, machine 32 Go" \
+  "${LLM_HOST:-your-32gb-box}" "profile -Name hemmingway-r3" hemmingway-r3 '' hemmingway-r3 262144 '' 65536
+
+llm_launch "$@"

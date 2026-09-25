@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# occamy - Claude Code on Occamy, served by the 16 GB box.
+#
+# Bench-only model: no hand-written production profile exists for it, only the
+# three profiles the bench compared (bench/configs/97/occamy). The menu below
+# asks which one to load.
+#
+# Scope: the exported variables live in this process only. A plain `claude` in
+# another shell keeps talking to Anthropic.
+
+source "$(dirname "${BASH_SOURCE[0]}")/llm-launch.sh"
+
+# Profils du banc (bench/benchrun/profiles.py), un par config bench/configs.
+llm_variant "R1, réglage de base, encodeur d'image chargé, machine 16 Go" \
+  "${LLM_HOST_16GB:-your-16gb-box}" "profile -Name occamy-r1" occamy-r1 '' occamy-r1 262144 '' 32768
+llm_variant "R2, réglage précis contre les boucles de raisonnement, sourcé, machine 16 Go" \
+  "${LLM_HOST_16GB:-your-16gb-box}" "profile -Name occamy-r2" occamy-r2 '' occamy-r2 262144 '' 32768
+llm_variant "R3, cache mémoire réduit, non confirmé, machine 16 Go" \
+  "${LLM_HOST_16GB:-your-16gb-box}" "profile -Name occamy-r3" occamy-r3 '' occamy-r3 262144 '' 32768
+
+llm_launch "$@"

@@ -16,4 +16,18 @@ source "$(dirname "${BASH_SOURCE[0]}")/llm-launch.sh"
 llm_variant "Tiel-Coder sur la machine 32 Go, fenêtre 393k" "${LLM_HOST:-your-32gb-box}" tiel tiel-coder '' tiel-coder-35b-a3b 393216
 llm_variant "Tiel-Coder sur la machine 16 Go, fenêtre 262k" "${LLM_HOST_16GB:-your-16gb-box}" tiel tiel-coder '' tiel-coder-35b-a3b 262144
 
+# Profils du banc (bench/benchrun/profiles.py), un par config bench/configs.
+llm_variant "R1, réglage de référence de l'éditeur, réflexion à effort réduit, machine 32 Go" \
+  "${LLM_HOST:-your-32gb-box}" "profile -Name tiel-r1" tiel-r1 '' tiel-r1 393216 '' 131072
+llm_variant "R2, gabarit de dialogue alternatif, effort de réflexion moyen, machine 32 Go" \
+  "${LLM_HOST:-your-32gb-box}" "profile -Name tiel-r2" tiel-r2 '' tiel-r2 393216 '' 131072
+llm_variant "R3, réglage économe en mémoire, non confirmé par l'éditeur, machine 32 Go" \
+  "${LLM_HOST:-your-32gb-box}" "profile -Name tiel-r3" tiel-r3 '' tiel-r3 393216 '' 131072
+llm_variant "R1, réglage de référence de l'éditeur, machine 16 Go" \
+  "${LLM_HOST_16GB:-your-16gb-box}" "profile -Name tiel-r1" tiel-r1 '' tiel-r1 262144 '' 81920
+llm_variant "R2, gabarit de dialogue alternatif, non confirmé, machine 16 Go" \
+  "${LLM_HOST_16GB:-your-16gb-box}" "profile -Name tiel-r2" tiel-r2 '' tiel-r2 262144 '' 81920
+llm_variant "R3, débit ajusté, non confirmé, machine 16 Go" \
+  "${LLM_HOST_16GB:-your-16gb-box}" "profile -Name tiel-r3" tiel-r3 '' tiel-r3 262144 '' 81920
+
 llm_launch "$@"
