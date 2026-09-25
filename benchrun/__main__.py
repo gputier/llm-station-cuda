@@ -34,6 +34,7 @@ import pathlib
 import random
 import tempfile
 
+from . import profiles as profiles_cmd
 from .config import load_config
 from .report import build_mini_report
 from .runner import Campaign
@@ -381,7 +382,12 @@ def main(argv: list[str] | None = None) -> None:
     bench_p.add_argument("--seed", type=int, default=None,
                           help="mini only: replay a previous mini launch's random draw")
 
+    profiles_cmd.add_subparser(sub)
+
     args = ap.parse_args(argv)
+    if args.cmd == "profiles":
+        profiles_cmd.run(args)
+        return
     env = resolve_env(args.env)
     if args.cmd == "run":
         run_campaign(args, env)
