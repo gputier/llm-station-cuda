@@ -22,9 +22,9 @@ export LLM_SSH_KEY=~/.ssh/id_ed25519     # optional, see below
 ./veriloop    # bench only, 32 GB box
 ./xing        # bench only, 32 GB box
 ./qwen36      # bench only, 16 GB box
-./qwen36apex  # bench only, 16 GB box
-./katapex     # bench only, 16 GB box
-./occamy      # bench only, 16 GB box
+./qwen36apex  # bench only, full quant on the 32 GB box, lighter quant on the 16 GB box
+./katapex     # bench only, full quant on the 32 GB box, lighter quant on the 16 GB box
+./occamy      # bench only, full quant on the 32 GB box, lighter quant on the 16 GB box
 ```
 
 ## One body for all eight
@@ -89,9 +89,21 @@ after the hand-written entries already there for `tiel`, `kat`, `muse`, `nex`,
 and the qwenf candidate, all four Qwen3.8-27B builds sharing one file, per the
 one-launcher-per-family rule above); and as a dedicated launcher for every
 model the bench compared that had none: `hemmingway`, `veriloop`, `xing` on
-the 32 GB box, `qwen36`, `qwen36apex`, `katapex`, `occamy` on the 16 GB one.
-`tiel` and `bonsai2` run on both boxes, so their bench entries appear twice,
-once per machine.
+the 32 GB box, `qwen36` on the 16 GB one, and `qwen36apex`, `katapex`, `occamy`
+on both boxes. `tiel` and `bonsai2` also run on both boxes, so their bench
+entries appear twice, once per machine.
+
+`qwen36apex`, `katapex` and `occamy` moved to both boxes on 2026-09-25, once
+each was found to spill out of the 16 GB card at the full 262,144 window
+(about 30 tokens/s instead of 130): the placement rule is that a model runs
+entirely on the card at that window, with no overflow, or it changes machine
+or quantization. Their full quant now runs on the 32 GB box; the 16 GB box
+keeps a lighter quant of the same weights (NanoPlus for `occamy` and
+`qwen36apex`, APEX-dynamic-v2 for `katapex`). All three also load a chat
+template with one line replaced: the template baked into their GGUF raises on
+a system message that arrives after the conversation has started, which
+Claude Code sends mid-session, and only that one line differs from the
+original.
 
 Each entry's label is drawn from its config's own `label` field, reworded in
 plain terms (no flag name, no internal mechanism): which R number, one line on
@@ -109,6 +121,14 @@ A bench profile also sets its own output-token budget, the ninth argument to
 `llm_variant`, taken from its config's `max_tokens` rather than the global
 `LLM_OUTPUT_TOKENS`: one fixed constant cannot fit sixty-three different
 profiles' own figures.
+
+These profile files are written and deployed by
+`bench/scripts/deploy-profiles.sh --machine 99|97 --env <file>`, which also
+sends the matching `llm-ctl` script to the station. It refuses to run against
+a station a bench campaign is using: a `runner-<machine>` container still up,
+or the station already serving an instance named `bench-*`, either one stops
+it before anything is sent, since overwriting `llm-ctl` mid-campaign could
+break the run in progress.
 
 ## LLM_SSH_KEY, and why it exists
 
