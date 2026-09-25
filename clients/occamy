@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
-# occamy - Claude Code on Occamy, served by the 16 GB box.
+# occamy - Claude Code on Occamy, served by the 32 GB box in its
+# full quant, and by the 16 GB box in a smaller one that fits its card.
 #
 # Bench-only model: no hand-written production profile exists for it, only the
-# three profiles the bench compared (bench/configs/97/occamy). The menu below
+# three profiles the bench compared, per machine (bench/configs/99/occamy and
+# bench/configs/97/occamy). The menu below
 # asks which one to load.
 #
 # Scope: the exported variables live in this process only. A plain `claude` in
@@ -11,11 +13,17 @@
 source "$(dirname "${BASH_SOURCE[0]}")/llm-launch.sh"
 
 # Profils du banc (bench/benchrun/profiles.py), un par config bench/configs.
-llm_variant "R1, réglage de base, encodeur d'image chargé, machine 16 Go" \
+llm_variant "R1, réglage de base, encodeur d'image chargé, machine 32 Go" \
+  "${LLM_HOST:-your-32gb-box}" "profile -Name occamy-r1" occamy-r1 '' occamy-r1 262144 '' 32768
+llm_variant "R2, réglage précis contre les boucles de raisonnement, sourcé, machine 32 Go" \
+  "${LLM_HOST:-your-32gb-box}" "profile -Name occamy-r2" occamy-r2 '' occamy-r2 262144 '' 32768
+llm_variant "R3, cache mémoire réduit, non confirmé, machine 32 Go" \
+  "${LLM_HOST:-your-32gb-box}" "profile -Name occamy-r3" occamy-r3 '' occamy-r3 262144 '' 32768
+llm_variant "R1, réglage de base, encodeur d'image chargé, version allégée, machine 16 Go" \
   "${LLM_HOST_16GB:-your-16gb-box}" "profile -Name occamy-r1" occamy-r1 '' occamy-r1 262144 '' 32768
-llm_variant "R2, réglage précis contre les boucles de raisonnement, sourcé, machine 16 Go" \
+llm_variant "R2, réglage précis contre les boucles de raisonnement, sourcé, version allégée, machine 16 Go" \
   "${LLM_HOST_16GB:-your-16gb-box}" "profile -Name occamy-r2" occamy-r2 '' occamy-r2 262144 '' 32768
-llm_variant "R3, cache mémoire réduit, non confirmé, machine 16 Go" \
+llm_variant "R3, cache mémoire réduit, non confirmé, version allégée, machine 16 Go" \
   "${LLM_HOST_16GB:-your-16gb-box}" "profile -Name occamy-r3" occamy-r3 '' occamy-r3 262144 '' 32768
 
 llm_launch "$@"

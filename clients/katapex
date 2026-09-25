@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
-# katapex - Claude Code on KAT APEX, served by the 16 GB box.
+# katapex - Claude Code on KAT APEX, served by the 32 GB box in its
+# full quant, and by the 16 GB box in a smaller one that fits its card.
 #
 # Bench-only model: no hand-written production profile exists for it, only the
-# three profiles the bench compared (bench/configs/97/katapex). The menu below
+# three profiles the bench compared, per machine (bench/configs/99/katapex and
+# bench/configs/97/katapex). The menu below
 # asks which one to load.
 #
 # Scope: the exported variables live in this process only. A plain `claude` in
@@ -11,11 +13,17 @@
 source "$(dirname "${BASH_SOURCE[0]}")/llm-launch.sh"
 
 # Profils du banc (bench/benchrun/profiles.py), un par config bench/configs.
-llm_variant "R1, sampling de base, réflexion active, machine 16 Go" \
+llm_variant "R1, sampling de base, réflexion active, machine 32 Go" \
+  "${LLM_HOST:-your-32gb-box}" "profile -Name katapex-r1" katapex-r1 '' katapex-r1 262144 '' 81920
+llm_variant "R2, réflexion préservée après réponse, sourcé, machine 32 Go" \
+  "${LLM_HOST:-your-32gb-box}" "profile -Name katapex-r2" katapex-r2 '' katapex-r2 262144 '' 32768
+llm_variant "R3, cache mémoire réduit, non confirmé, machine 32 Go" \
+  "${LLM_HOST:-your-32gb-box}" "profile -Name katapex-r3" katapex-r3 '' katapex-r3 262144 '' 81920
+llm_variant "R1, sampling de base, réflexion active, version allégée, machine 16 Go" \
   "${LLM_HOST_16GB:-your-16gb-box}" "profile -Name katapex-r1" katapex-r1 '' katapex-r1 262144 '' 81920
-llm_variant "R2, réflexion préservée après réponse, sourcé, machine 16 Go" \
+llm_variant "R2, réflexion préservée après réponse, sourcé, version allégée, machine 16 Go" \
   "${LLM_HOST_16GB:-your-16gb-box}" "profile -Name katapex-r2" katapex-r2 '' katapex-r2 262144 '' 32768
-llm_variant "R3, cache mémoire réduit, non confirmé, machine 16 Go" \
+llm_variant "R3, cache mémoire réduit, non confirmé, version allégée, machine 16 Go" \
   "${LLM_HOST_16GB:-your-16gb-box}" "profile -Name katapex-r3" katapex-r3 '' katapex-r3 262144 '' 81920
 
 llm_launch "$@"
