@@ -50,26 +50,30 @@ MANIFEST_99=(
     "XHToken/Spark-X2.5-1.7B-GGUF|Spark-X2.5-1.7B-Q8_0.gguf|D:\\models\\spark-x2.5-4b\\Spark-X2.5-1.7B-Q8_0.gguf|cd77c03185a834bb1162a4b7713520be5838058bfc54873645beff470bb24442"
     "spiritbuun/Qwen3.6-27B-DFlash-GGUF|dflash-draft-3.6-q8_0.gguf|D:\\models\\ternary-bonsai-27b\\dflash-draft-3.6-q8_0.gguf|29ba8b816eedea674e8bdabbd29db8da69539117c76da40e40d2207c0fb224db"
     "prism-ml/Ternary-Bonsai-2-27B-gguf|Ternary-Bonsai-2-27B-PTQ1_0.gguf|D:\\models\\ternary-bonsai-2-27b\\Ternary-Bonsai-2-27B-PTQ1_0.gguf|53107f530aa52eb00912263ab1ee29bd199261c87cd7b4ad4ca1318c1fe33ee3"
-    "JonathanColetti/Qwen3.8-27B-Uncensored-GGUF|Qwen3.8-27B-Uncensored-Q6_K.gguf|D:\\models\\qwen3.8-27b-uncensored\\Qwen3.8-27B-Uncensored-Q6_K.gguf|a50aa1478295b58ee3d93eabe02c17f6d5fcf6cb787fd8a0ab07ac629a46cae6"
+    # qwenu R1 left the Q6_K on 2026-09-25 (it filled the 32 GB card at 262144);
+    # all three settings serve the Q5_K_M, sha256 read from
+    # /api/models/JonathanColetti/Qwen3.8-27B-Uncensored-GGUF?blobs=true on 2026-09-25.
+    "JonathanColetti/Qwen3.8-27B-Uncensored-GGUF|Qwen3.8-27B-Uncensored-Q5_K_M.gguf|D:\\models\\qwen3.8-27b-uncensored\\Qwen3.8-27B-Uncensored-Q5_K_M.gguf|24780644a95f759a9aeeb228c3d852028f2fd40ce0b74d68134246ec4a959547"
     "froggeric/Qwen-Fixed-Chat-Templates|chat_template.jinja|D:\\models\\shared\\froggeric-chat-template.jinja|e57684bae4156211a55473c5a63be976a405a37ab5be5ae0e5abf1df5349c4b2"
     "unsloth/Muse-Glimmer-30B-GGUF|mmproj-Muse-Glimmer-30B-BF16.gguf|D:\\models\\muse-glimmer-30b\\mmproj-BF16.gguf|d08cdcfa0b41d8e20554b52df404ba4f7b440d0bc502a90038508b6407df8ee1"
     # Three models added 2026-09-24 on Guillaume's ruling (task t16a). Each
     # sha256 checked against /api/models/<repo>?blobs=true on 2026-09-24.
     "XingChen-AGI/Xing4.0-29B-A4B-GGUF|xing4_0-29b-IQ4_NL.gguf|D:\\models\\xing4.0-29b-a4b\\xing4_0-29b-IQ4_NL.gguf|9c9c81cf83b6ce974d3440088318de83b727c0064124ca6c3c919289adadb4dd"
-    "tsinghua-sigs-robot-lab/VeriLoop-E2-Q8_0-GGUF|VeriLoop-E2-Q8_0.gguf|D:\\models\\veriloop-e2\\VeriLoop-E2-Q8_0.gguf|6204a47274cfbc0c69c39877fb06615ce842bbab264eea77e2e0a5e3ae2fb8e8"
-    # tsinghua-sigs-robot-lab/VeriLoop-E2-Q8_0-GGUF started answering HTTP 401
-    # anonymously around 2026-09-24 09:50 UTC, after the main file above was
-    # already downloaded and hash-verified: gated or pulled mid-session, see
-    # docs/phase0-2026-09.md. The MTP draft therefore comes from the sibling
-    # public repository. Its BF16 draft (mtp-VeriLoop-E2-BF16.gguf) was tried
-    # first and rejected by b11156 at load with a real tensor-count error
-    # ("expected 19, got 18"); not fetched here any more, see
-    # docs/phase0-2026-09.md. The Q8_0 draft from the same sibling repository
-    # loads cleanly (same file the gated repo also published, same sha256):
+    # VeriLoop-E2 moved on 2026-09-25 from Q8_0 (28595765600 bytes), which
+    # spilled out of the 32 GB card at a 262144 window, to the Q6_K its
+    # publisher names the overall sweet spot (QUANTIZATION_QUALITY.md of the
+    # public repository). The gated VeriLoop-E2-Q8_0-GGUF repository answers
+    # HTTP 401 anonymously since 2026-09-24, see docs/phase0-2026-09.md. The
+    # BF16 draft is rejected by b11156 at load ("expected 19, got 18"); the
+    # Q6_K draft is the same file as the Q5_K_M one (same sha256). Both
     # checked against
-    # /api/models/tsinghua-sigs-robot-lab/VeriLoop-E2-GGUF?blobs=true on 2026-09-24.
-    "tsinghua-sigs-robot-lab/VeriLoop-E2-GGUF|mtp-VeriLoop-E2-Q8_0.gguf|D:\\models\\veriloop-e2\\mtp-VeriLoop-E2-Q8_0.gguf|b9920ce49c43dc94267a51e986573b1178c2250a7a362093ecade4275792ef8f"
+    # /api/models/tsinghua-sigs-robot-lab/VeriLoop-E2-GGUF?blobs=true on 2026-09-25.
+    "tsinghua-sigs-robot-lab/VeriLoop-E2-GGUF|VeriLoop-E2-Q6_K.gguf|D:\\models\\veriloop-e2\\VeriLoop-E2-Q6_K.gguf|15d8f856471c4853f6bf0036b2a517426c6cb30a0313cef58a7f9577fd26fe9e"
+    "tsinghua-sigs-robot-lab/VeriLoop-E2-GGUF|mtp-VeriLoop-E2-Q6_K.gguf|D:\\models\\veriloop-e2\\mtp-VeriLoop-E2-Q6_K.gguf|0e7f2dfe254f3a5d195d105832411acc1007fd7bb9ac980fe9aae4a1f290d671"
     "bartowski/Altworld_Hemmingway-1-GGUF|Altworld_Hemmingway-1-Q5_K_M.gguf|D:\\models\\hemmingway-1\\Altworld_Hemmingway-1-Q5_K_M.gguf|b0ebd5bab0919114303dfb20d8e517fdd75d92a8d20ffa8005b5de54abc05f2e"
+    # hemmingway R1 serves the Q5_K_S since 2026-09-25 (Q5_K_M with KV q8_0
+    # filled the card); R2 and R3 keep the Q5_K_M above.
+    "bartowski/Altworld_Hemmingway-1-GGUF|Altworld_Hemmingway-1-Q5_K_S.gguf|D:\\models\\hemmingway-1\\Altworld_Hemmingway-1-Q5_K_S.gguf|bef192279e5c3cd4452ba47419bb217e8cb1f579b7cbc101e67b09acbd99d4cc"
 )
 # Station 97 (RTX 4080 SUPER, 16 GB, Ada): bonsai2 R1/R2/R3, ruling of
 # Guillaume of 2026-09-24 (docs/phase0-2026-09.md, "Choix de packing bonsai2

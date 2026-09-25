@@ -21,6 +21,8 @@ args:
   - '--flash-attn'
   - 'on'
   - '--jinja'
+  - '--chat-template-file'
+  - 'D:\models\qwen3.8-27b-turbo-fcf\chat-template-system-anywhere.jinja'
   - '--host'
   - '0.0.0.0'
   - '--port'
@@ -56,3 +58,10 @@ sources:
   presence_penalty: "https://huggingface.co/DavidAU/Qwen3.8-27B-TURBO-Fable-Cold-Fusion-735-882-Heretic-Uncensored-NEO-CODER-MAX-MTP-GGUF (mode thinking, lu le 2026-09-23)"
   max_tokens: "https://huggingface.co/DavidAU/Qwen3.8-27B-TURBO-Fable-Cold-Fusion-735-882-Heretic-Uncensored-NEO-CODER-MAX-MTP-GGUF, fiche du finetune (decensure de Qwen/Qwen3.8-27B via Heretic) : reprend la section Best Practices du modele de base, Final Response 131072, lu le 2026-09-24 ; capped a 81920 (fenetre 262144, regle budget de sortie du 24/09)"
 ctx_proven: null
+# 2026-09-25: the template embedded in this model's GGUF raises 'System
+# message must be at the beginning' on a late system turn, which Claude Code
+# sends mid-session. Read from the GGUF header on the station, and seen as an
+# HTTP 500 by the audit of every 99 profile. The file loaded here is that
+# embedded template with the raising line alone replaced by an ordinary
+# ChatML system turn, the fix already applied to the APEX quants; sampling,
+# thinking and every other line of the template are unchanged.
