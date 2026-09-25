@@ -1,19 +1,17 @@
 machine: "99"
 model: qwenu
 variant: R1
-label: "Q6_K, template embarqué, sampling non-thinking de la fiche"
+label: "Q5_K_M depuis le 25/09 (Q6_K débordait de la carte), template embarqué, sampling non-thinking de la fiche"
 exe: 'D:\LLM-Setup\llama-cpp-upstream\build-win\bin\Release\llama-server.exe'
 workdir: 'D:\LLM-Setup\llama-cpp-upstream\build-win\bin\Release'
 cudabin: 'C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.3\bin'
 args:
   - '-m'
-  - 'D:\models\qwen3.8-27b-uncensored\Qwen3.8-27B-Uncensored-Q6_K.gguf'
-  # Fichier réel confirmé via l'API HF le 23/09/2026 (blobs=true) : dépôt
-  # JonathanColetti/Qwen3.8-27B-Uncensored-GGUF, sha256
-  # a50aa1478295b58ee3d93eabe02c17f6d5fcf6cb787fd8a0ab07ac629a46cae6. Le
-  # dépôt est identifié par comparaison exacte du sha256 du Q5_K_M déjà
-  # installé (24780644a95f759a9aeeb228c3d852028f2fd40ce0b74d68134246ec4a959547),
-  # qui correspond bit à bit au fichier du même nom sur ce dépôt.
+  - 'D:\models\qwen3.8-27b-uncensored\Qwen3.8-27B-Uncensored-Q5_K_M.gguf'
+  # Repository JonathanColetti/Qwen3.8-27B-Uncensored-GGUF, identified on
+  # 2026-09-23 by an exact sha256 match with the installed file: sha256
+  # 24780644a95f759a9aeeb228c3d852028f2fd40ce0b74d68134246ec4a959547
+  # (/api/models/<repo>?blobs=true).
   - '--mmproj'
   - 'D:\models\qwen3.8-27b-uncensored\mmproj-Qwen3.8-27B-Uncensored-F16.gguf'
   - '--spec-type'
@@ -27,6 +25,8 @@ args:
   - '--flash-attn'
   - 'on'
   - '--jinja'
+  - '--chat-template-file'
+  - 'D:\models\qwen3.8-27b-uncensored\chat-template-system-anywhere.jinja'
   - '--host'
   - '0.0.0.0'
   - '--port'
@@ -64,3 +64,15 @@ sources:
   max_tokens: ".superpowers/sdd/2026-09-23-banc-llm-refonte-plan/progress.md, ruling Y (modèle non-thinking) ; 8192 déjà taillé pour une réponse sans réflexion (moitié des 16384 de la variante thinking R3)"
   enable_thinking: "https://huggingface.co/Qwen/Qwen3.8-27B, section \"Instruct (or Non-Thinking) Mode\" : chat_template_kwargs={\"enable_thinking\": False} (lu le 2026-09-24) ; ce fichier sert le gabarit embarqué du gguf, qui lit la même variable (confirmé par le smoke test)"
 ctx_proven: null
+# 2026-09-25: the template embedded in this model's GGUF raises 'System
+# message must be at the beginning' on a late system turn, which Claude Code
+# sends mid-session. Read from the GGUF header on the station, and seen as an
+# HTTP 500 by the audit of every 99 profile. The file loaded here is that
+# embedded template with the raising line alone replaced by an ordinary
+# ChatML system turn, the fix already applied to the APEX quants; sampling,
+# thinking and every other line of the template are unchanged.
+# 2026-09-25: with the Q6_K quant this setting filled the card (32150 of
+# 32607 MiB, about 700 MiB more shared memory than R3) and read a 12k prompt
+# at 2318 tok/s against 3265 for R3. Placement rule: every setting runs
+# fully on the GPU at 262144, so it takes the Q5_K_M already served by R2
+# and R3 (same repository, on the station since 2026-09-19).

@@ -1,19 +1,17 @@
 machine: "99"
 model: veriloop
 variant: R2
-label: "deviation SOURCEE : motif MTP des auteurs (drafter en CPU, --n-gpu-layers-draft 0), mais ctx 262144 avec KV q4_0 comme R1 (regle de Guillaume, 256K partout ou ca tient) plutot que les 8192 de leur propre motif conservateur ; mesure en direct, tient (509 Mio de marge) ; drafter Q8_0 du depot public soeur (le depot gate publiait aussi ce fichier, meme sha256 ; le drafter BF16 du depot soeur a ete essaye en premier et rejete par b11156 avec une erreur reelle de nombre de tenseurs, voir docs/phase0-2026-09.md)"
+label: "Q6_K depuis le 25/09 (Q8_0 debordait de la carte) ; MTP des auteurs, drafter mtp-VeriLoop-E2-Q6_K sur la carte (sur le CPU, recette des auteurs, il generait a 1,4 tok/s) ; ctx 262144 avec KV q4_0 comme R1 (regle de Guillaume, 256K partout) plutot que les 8192 du motif conservateur des auteurs ; le drafter BF16 est rejete par b11156 (erreur de nombre de tenseurs, voir docs/phase0-2026-09.md)"
 exe: 'D:\LLM-Setup\llama-cpp-b11156\llama-server.exe'
 workdir: 'D:\LLM-Setup\llama-cpp-b11156'
 cudabin: null
 args:
   - '-m'
-  - 'D:\models\veriloop-e2\VeriLoop-E2-Q8_0.gguf'
+  - 'D:\models\veriloop-e2\VeriLoop-E2-Q6_K.gguf'
   - '--spec-type'
   - 'draft-mtp'
   - '--spec-draft-model'
-  - 'D:\models\veriloop-e2\mtp-VeriLoop-E2-Q8_0.gguf'
-  - '--n-gpu-layers-draft'
-  - '0'
+  - 'D:\models\veriloop-e2\mtp-VeriLoop-E2-Q6_K.gguf'
   - '--n-gpu-layers'
   - '99'
   - '--load-mode'
@@ -21,6 +19,8 @@ args:
   - '--flash-attn'
   - 'on'
   - '--jinja'
+  - '--chat-template-file'
+  - 'D:\models\veriloop-e2\chat-template-system-anywhere.jinja'
   - '--host'
   - '0.0.0.0'
   - '--port'
@@ -56,3 +56,21 @@ sources:
   max_tokens: "https://huggingface.co/tsinghua-sigs-robot-lab/VeriLoop-E2, README complet (pas de budget publie), lu le 2026-09-24 : aucun budget de jetons publie par les auteurs ; 65536 garde les cellules long-contexte a 128K actives (docs/phase0-2026-09.md, section Budget de sortie, 24/09), meme valeur que R1"
   reasoning_effort: "https://huggingface.co/tsinghua-sigs-robot-lab/VeriLoop-E2/raw/main/chat_template.jinja, ligne 119, lu le 2026-09-24"
 ctx_proven: null
+# 2026-09-25: the Q8_0 quant (28595765600 bytes, 26.63 GiB) filled this
+# 32 GB card at a 262144 window and spilled into shared memory: the audit of
+# every 99 profile read a 12k prompt at 3383 tok/s on R1, 38 on R2 and 116
+# on R3. Placement rule: every setting runs fully on the GPU at 262144, so
+# the model moves to the quant its publisher names the overall sweet spot,
+# tsinghua-sigs-robot-lab/VeriLoop-E2-GGUF QUANTIZATION_QUALITY.md (read
+# 2026-09-25): Q6_K, 22082532096 bytes, sha256
+# 15d8f856471c4853f6bf0036b2a517426c6cb30a0313cef58a7f9577fd26fe9e, PPL
+# parity with BF16 within uncertainty, mean KLD 0.0044.
+# The template embedded in the GGUF raises 'System message must be at the
+# beginning' on a late system turn, which Claude Code sends mid-session
+# (HTTP 500 in the same audit). The file loaded here is that template with
+# the raising line alone replaced by an ordinary ChatML system turn.
+# The drafter moves to the same repository's mtp-VeriLoop-E2-Q6_K.gguf,
+# 2008056096 bytes, sha256
+# 0e7f2dfe254f3a5d195d105832411acc1007fd7bb9ac980fe9aae4a1f290d671, and to
+# the GPU: on the CPU, as the authors' recipe has it, it generated at 1.4
+# tok/s on 2026-09-25 and stalled the short bench for three hours.

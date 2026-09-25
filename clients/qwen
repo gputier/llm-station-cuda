@@ -40,19 +40,19 @@ llm_variant "R1, Qwen, palier intermédiaire, cache mémoire large, machine 32 G
 llm_variant "R2, Qwen, palier léger, gabarit de dialogue alternatif, effort moyen, machine 32 Go" \
   "${LLM_HOST:-your-32gb-box}" "profile -Name qwen-r2" qwen-r2 '' qwen-r2 393216 '' 32768
 llm_variant "R3, Qwen, palier léger, cache mémoire réduit, moteur récent, non confirmé, machine 32 Go" \
-  "${LLM_HOST:-your-32gb-box}" "profile -Name qwen-r3" qwen-r3 '' qwen-r3 393216 '' 131072
-llm_variant "R1, Qwen Uncensored, qualité renforcée, gabarit embarqué, réflexion désactivée, machine 32 Go" \
+  "${LLM_HOST:-your-32gb-box}" "profile -Name qwen-r3" qwen-r3 '' qwen-r3 262144 '' 81920
+llm_variant "R1, Qwen Uncensored, gabarit embarqué, réflexion désactivée, machine 32 Go" \
   "${LLM_HOST:-your-32gb-box}" "profile -Name qwenu-r1" qwenu-r1 '' qwenu-r1 262144 '' 8192
 llm_variant "R2, Qwen Uncensored, cache mémoire réduit, gabarit alternatif, machine 32 Go" \
   "${LLM_HOST:-your-32gb-box}" "profile -Name qwenu-r2" qwenu-r2 '' qwenu-r2 262144 '' 8192
-llm_variant "R3, Qwen Uncensored, cache mémoire réduit, mesure de fenêtre étendue, non confirmé, machine 32 Go" \
-  "${LLM_HOST:-your-32gb-box}" "profile -Name qwenu-r3" qwenu-r3 '' qwenu-r3 393216 '' 131072
+llm_variant "R3, Qwen Uncensored, cache mémoire réduit, gabarit alternatif, non confirmé, machine 32 Go" \
+  "${LLM_HOST:-your-32gb-box}" "profile -Name qwenu-r3" qwenu-r3 '' qwenu-r3 262144 '' 81920
 llm_variant "R1, Qwen TWIN-TURBO, gabarit de l'auteur avec modes de réflexion, réflexion active, machine 32 Go" \
   "${LLM_HOST:-your-32gb-box}" "profile -Name qwent-r1" qwent-r1 '' qwent-r1 262144 '' 81920
 llm_variant "R2, Qwen TWIN-TURBO, réflexion désactivée, gabarit alternatif, machine 32 Go" \
   "${LLM_HOST:-your-32gb-box}" "profile -Name qwent-r2" qwent-r2 '' qwent-r2 262144 '' 8192
-llm_variant "R3, Qwen TWIN-TURBO, fenêtre étendue, débit de traitement plus large, sous surveillance mémoire, machine 32 Go" \
-  "${LLM_HOST:-your-32gb-box}" "profile -Name qwent-r3" qwent-r3 '' qwent-r3 393216 '' 131072
+llm_variant "R3, Qwen TWIN-TURBO, gabarit Qwen3.8 de base, machine 32 Go" \
+  "${LLM_HOST:-your-32gb-box}" "profile -Name qwent-r3" qwent-r3 '' qwent-r3 262144 '' 81920
 llm_variant "R1, Qwen candidat qwenf, gabarit de l'auteur, réflexion par défaut, machine 32 Go" \
   "${LLM_HOST:-your-32gb-box}" "profile -Name qwenf-r1" qwenf-r1 '' qwenf-r1 262144 '' 81920
 llm_variant "R2, Qwen candidat qwenf, réflexion désactivée, machine 32 Go" \

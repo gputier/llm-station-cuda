@@ -1,13 +1,13 @@
 machine: "99"
 model: hemmingway
 variant: R1
-label: "fidele a la fiche (seul sampling publie, generation_config.json) ; Q5_K_M choisi pour loger 262144 avec KV q8_0 sur cette carte ; MTP embarque active (--spec-type draft-mtp)"
+label: "fidele a la fiche (seul sampling publie, generation_config.json) ; Q5_K_S depuis le 25/09 pour loger 262144 avec KV q8_0 sur cette carte (Q5_K_M la remplissait) ; MTP embarque active (--spec-type draft-mtp)"
 exe: 'D:\LLM-Setup\llama-cpp-b11156\llama-server.exe'
 workdir: 'D:\LLM-Setup\llama-cpp-b11156'
 cudabin: null
 args:
   - '-m'
-  - 'D:\models\hemmingway-1\Altworld_Hemmingway-1-Q5_K_M.gguf'
+  - 'D:\models\hemmingway-1\Altworld_Hemmingway-1-Q5_K_S.gguf'
   - '--spec-type'
   - 'draft-mtp'
   - '--n-gpu-layers'
@@ -17,6 +17,8 @@ args:
   - '--flash-attn'
   - 'on'
   - '--jinja'
+  - '--chat-template-file'
+  - 'D:\models\hemmingway-1\chat-template-system-anywhere.jinja'
   - '--host'
   - '0.0.0.0'
   - '--port'
@@ -50,3 +52,18 @@ sources:
   min_p: "absent de generation_config.json, lu le 2026-09-24 : defaut transformers.GenerationConfig.min_p=None"
   max_tokens: "https://huggingface.co/Altworld/Hemmingway-1, README complet (seuls exemples max_new_tokens=512 et 40, illustratifs, pas de recommandation pour le raisonnement ou l'agentique), lu le 2026-09-24 : aucun budget de jetons publie par les auteurs ; 65536 garde les cellules long-contexte a 128K actives (docs/phase0-2026-09.md, section Budget de sortie, 24/09), meme convention que bonsai et veriloop"
 ctx_proven: null
+# 2026-09-25: the template embedded in this model's GGUF raises 'System
+# message must be at the beginning' on a late system turn, which Claude Code
+# sends mid-session. Read from the GGUF header on the station, and seen as an
+# HTTP 500 by the audit of every 99 profile. The file loaded here is that
+# embedded template with the raising line alone replaced by an ordinary
+# ChatML system turn, the fix already applied to the APEX quants; sampling,
+# thinking and every other line of the template are unchanged.
+# 2026-09-25: with the Q5_K_M quant, KV q8_0 and the embedded MTP head, this
+# setting filled the card (32158 of 32607 MiB) and read a 12k prompt at
+# 2969 tok/s against 3277 for R3. Placement rule: every setting runs fully
+# on the GPU at 262144, so it moves to bartowski/Altworld_Hemmingway-1-GGUF
+# Altworld_Hemmingway-1-Q5_K_S.gguf, 19566913600 bytes, sha256
+# bef192279e5c3cd4452ba47419bb217e8cb1f579b7cbc101e67b09acbd99d4cc (read
+# from /api/models/<repo>?blobs=true on 2026-09-25). R2 and R3 fit with
+# the Q5_K_M and keep it.
