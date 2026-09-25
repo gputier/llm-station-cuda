@@ -139,8 +139,17 @@ _llm_load() {
   return 1
 }
 
-llm_launch() {
-  local n=${#_llm_labels[@]} choice i answer
+# llm_choose LABEL... asks which variant to run and leaves its index in
+# _llm_choice_index. Labels arrive ready to print, already decorated by the
+# caller (llm_launch marks what a machine already serves).
+#
+# The index comes back in a variable rather than on stdout, because a function
+# whose result is captured by $( ) runs in a subshell, where its exit would only
+# kill that subshell and let the caller carry on with an empty answer.
+_llm_choice_index=
+
+llm_choose() {
+  local n=$# choice i
 
   # LLM_CHOICE skips the menu. Without a terminal it is required: a menu read
   # from a pipe would take the caller's input as a choice.
@@ -150,25 +159,36 @@ llm_launch() {
     # A launcher with one variant has nothing to ask, on a terminal or not.
     choice=1
   elif [[ -t 0 ]]; then
-    for (( i = 0; i < n; i++ )); do
-      if _llm_serves "$i"; then
-        err "  $(( i + 1 ))) ${_llm_labels[$i]}, déjà chargé"
-      else
-        err "  $(( i + 1 ))) ${_llm_labels[$i]}"
-      fi
+    for (( i = 1; i <= n; i++ )); do
+      err "  ${i}) ${!i}"
     done
-    read -r -p "Lequel ? [1-${n}] " choice || { err "Abandon."; exit 1; }
+    read -r -p "Lequel ? [1-${n}] " choice || { err "Abandon."; return 1; }
   else
     err "Pas de terminal pour choisir : fixe LLM_CHOICE entre 1 et ${n}."
-    exit 1
+    return 1
   fi
   # Two digits at most: a longer number overflows bash arithmetic and slips past
   # the bound, then crashes on the array index (found by review on 2026-09-14).
   if [[ ! "$choice" =~ ^[1-9][0-9]?$ ]] || (( choice > n )); then
     err "Choix invalide : ${choice}."
-    exit 1
+    return 1
   fi
-  i=$(( choice - 1 ))
+  _llm_choice_index=$(( choice - 1 ))
+}
+
+llm_launch() {
+  local n=${#_llm_labels[@]} i answer
+  local -a lines=()
+
+  for (( i = 0; i < n; i++ )); do
+    if [[ -t 0 && -z "${LLM_CHOICE:-}" ]] && _llm_serves "$i"; then
+      lines+=("${_llm_labels[$i]}, déjà chargé")
+    else
+      lines+=("${_llm_labels[$i]}")
+    fi
+  done
+  llm_choose "${lines[@]}" || exit 1
+  i=$_llm_choice_index
 
   local host=${_llm_hosts[$i]} state
   state=$(_llm_state "$host")
