@@ -6,7 +6,7 @@ at it.
 
 ```bash
 export LLM_HOST=your-32gb-box            # the 5090 box, every launcher
-export LLM_HOST_16GB=your-16gb-box       # the second box, tiel and qwen only
+export LLM_HOST_16GB=your-16gb-box       # the second box, tiel, qwen and the three APEX launchers
 export LLM_SSH_USER=your-ssh-user
 export LLM_SSH_KEY=~/.ssh/id_ed25519     # optional, see below
 
@@ -18,13 +18,13 @@ export LLM_SSH_KEY=~/.ssh/id_ed25519     # optional, see below
 ./spark       # 4B, last on every measure
 ./muse        # agentic, vision, faithful OCR
 ./qwen        # Qwen3.8 aligned, uncensored, TWIN-TURBO or the qwenf candidate on the 32 GB box, Qwen3.6 on the 16 GB one
-./hemmingway  # bench only, 32 GB box
-./veriloop    # bench only, 32 GB box
-./xing        # bench only, 32 GB box
+./hemmingway  # Altworld Hemmingway-1, candidate since 2026-09-26
+./veriloop    # VeriLoop-E2, no speculation, candidate since 2026-09-26
+./xing        # Xing 4.0 29B-A4B, candidate since 2026-09-26, its own engine
+./qwen36apex  # Qwen3.6-35B-A3B requantised by APEX, asks which box
+./katapex     # KAT-Coder-V2.5-Dev requantised by APEX, asks which box
+./occamy      # Occamy 1.0 requantised by APEX, vision, asks which box
 ./qwen36      # bench only, 16 GB box
-./qwen36apex  # bench only, full quant on the 32 GB box, lighter quant on the 16 GB box
-./katapex     # bench only, full quant on the 32 GB box, lighter quant on the 16 GB box
-./occamy      # bench only, full quant on the 32 GB box, lighter quant on the 16 GB box
 ```
 
 ## One body for all fifteen
@@ -40,17 +40,17 @@ A launcher sets two things of its own when the default does not suit it:
 `LLM_LOAD_TIMEOUT`, see below, and `LLM_MCP`, `none` here, or `mail-imap` for a
 mail server this repository does not ship.
 
-## tiel, qwen and bonsai ask which model
+## tiel, qwen, the three APEX launchers and bonsai ask which model
 
-The same families now live on two boxes, so `tiel` and `qwen` open with a
-numbered menu instead of carrying one script per model per machine. `bonsai`
-does the same since 2026-09-18 for a different reason: its two generations both
-sit on the 32 GB box, on two different engines, and the second ingests sixty
-times faster than the first for the same generation speed. The menu
-marks the variant already loaded, if any. `LLM_CHOICE=2 ./tiel -p "..."` skips
-it, and a run without a terminal must set it: a menu read from a pipe would take
-the caller's input as a choice. A launcher that declares one variant shows no
-menu.
+The same families live on two boxes, so `tiel`, `qwen`, `qwen36apex`, `katapex`
+and `occamy` open with a numbered menu instead of carrying one script per model
+per machine. `bonsai` does the same since 2026-09-18 for a different reason:
+its two generations both sit on the 32 GB box, on two different engines, and
+the second ingests sixty times faster than the first for the same generation
+speed. The menu marks the variant already loaded, if any.
+`LLM_CHOICE=2 ./tiel -p "..."` skips it, and a run without a terminal must set
+it: a menu read from a pipe would take the caller's input as a choice. A
+launcher that declares one variant shows no menu.
 
 Proven on 2026-09-14 against both boxes: an out-of-range choice is refused, a
 box serving another model triggers the swap question and a "no" leaves it
@@ -89,11 +89,17 @@ station able to read its draft model. These entries sit after the
 hand-written entries already there for `tiel`, `kat`, `muse`, `nex`, `ornith`,
 `spark`, `bonsai` (bonsai and bonsai2) and `qwen` (qwen, qwenu, qwent and the
 qwenf candidate, all four Qwen3.8-27B builds sharing one file, per the
-one-launcher-per-family rule above); and as a dedicated launcher for every
-model the bench compared that had none: `hemmingway`, `veriloop`, `xing` on
-the 32 GB box, `qwen36` on the 16 GB one, and `qwen36apex`, `katapex`, `occamy`
-on both boxes. `tiel` and `bonsai2` also run on both boxes, so their bench
-entries appear twice, once per machine.
+one-launcher-per-family rule above), and, since 2026-09-26, `hemmingway`,
+`veriloop` and `xing` on the 32 GB box and `qwen36apex`, `katapex` and
+`occamy` on both boxes. `qwen36` alone keeps a launcher with bench entries
+only, on the 16 GB box: its permanent profile sits in `qwen`'s menu. `tiel`,
+`bonsai2` and the three APEX models run on both boxes, so their bench entries
+appear twice, once per machine.
+
+Our hand-written entries and the bench ones never take each other for the
+loaded model: `_llm_matches` also requires the served alias to equal the last
+word of the entry's action, `tiel` for the everyday profile, `tiel-r1` for
+the bench one.
 
 `qwen36apex`, `katapex` and `occamy` moved to both boxes on 2026-09-25, once
 each was found to spill out of the 16 GB card at the full 262,144 window
@@ -119,10 +125,11 @@ model can share the exact same weights file, differing only in sampling or
 chat template, and `model_path` alone cannot tell them apart in that case. See
 "they check which model is loaded" below for how `_llm_state` now reads both.
 
-A bench profile also sets its own output-token budget, the ninth argument to
+A bench profile also sets its own output-token budget, the eighth argument to
 `llm_variant`, taken from its config's `max_tokens` rather than the global
-`LLM_OUTPUT_TOKENS`: one fixed constant cannot fit sixty-three different
-profiles' own figures.
+`LLM_OUTPUT_TOKENS` (81,920 for our entries): one fixed constant cannot fit
+sixty-three different profiles' own figures. It was the ninth until
+2026-09-26, when the per-variant compaction trigger that sat eighth went.
 
 These profile files are written and deployed by
 `bench/scripts/deploy-profiles.sh --machine 99|97 --env <file>`, which also
@@ -143,7 +150,7 @@ alone otherwise.
 
 Put them somewhere on your `PATH` to call them by name, with `llm-launch.sh` next
 to them. They pass their arguments through, so `kat -p "..."` works
-as expected, and `LLM_CHOICE=1 qwen -p "..."` for the three launchers with a
+as expected, and `LLM_CHOICE=1 qwen -p "..."` for the six launchers with a
 menu.
 
 ## They check which model is loaded, not just whether one is
@@ -164,7 +171,7 @@ was taken for the aligned one in turn. Each `qwen` variant now matches on its
 own model directory, and needs no EXCLUDE field:
 
 ```bash
-llm_variant "Qwen3.8-27B sur la machine 32 Go, fenêtre 393k" "${LLM_HOST:-your-32gb-box}" qwen qwen3.8-27b-nvfp4 '' qwen3.8-27b 393216
+llm_variant "Qwen3.8-27B sur la machine 32 Go, fenêtre 262k" "${LLM_HOST:-your-32gb-box}" qwen qwen3.8-27b-nvfp4 '' qwen3.8-27b 262144
 ```
 
 Checked on 2026-09-19 against the live `/props` of the 32 GB box and the paths

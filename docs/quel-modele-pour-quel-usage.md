@@ -94,6 +94,13 @@ sa vitesse en contexte long n'est pas mesurée. Le détail est dans le
 fois moins de paramètres et occupe la moitié de la mémoire. C'est le seul modèle
 à mobiliser un moteur compilé pour lui seul, celui qui porte les noyaux NVFP4.
 
+**Six candidats hors de ce tableau, depuis le 26/09/2026 : `hemmingway`,
+`veriloop`, `xing`, `qwen36apex`, `katapex` et `occamy`.** Un banc les a
+comparés ce jour-là pour choisir leur moteur et leurs réglages
+d'échantillonnage, détaillé dans [tuning-log.md](tuning-log.md), mais aucun n'a
+passé la campagne MMLU et GSM8K du 10/09 : aucune ligne du tableau ci-dessus ne
+les concerne, et rien ici ne dit où ils se classent.
+
 ## Ce qu'il faudrait mesurer pour combler les deux trous
 
 **Un banc agentique.** Une tâche multi-tours avec appels d'outils, où l'on compte

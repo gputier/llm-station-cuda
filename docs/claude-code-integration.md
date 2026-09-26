@@ -40,8 +40,8 @@ export ANTHROPIC_DEFAULT_SONNET_MODEL="qwen3.8-27b"
 export ANTHROPIC_DEFAULT_HAIKU_MODEL="qwen3.8-27b"
 export ANTHROPIC_SMALL_FAST_MODEL="qwen3.8-27b"
 
-export CLAUDE_CODE_MAX_CONTEXT_TOKENS=376832   # a 393,216 window minus the output budget
-export CLAUDE_CODE_MAX_OUTPUT_TOKENS=16384
+export CLAUDE_CODE_MAX_CONTEXT_TOKENS=180224   # a 262,144 window minus the output budget
+export CLAUDE_CODE_MAX_OUTPUT_TOKENS=81920
 export CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1  # read for presence: "0" turns it on too
 ```
 
@@ -65,10 +65,11 @@ because compacting is itself a request, and one that asks for 16,384 tokens of
 room to write its summary.
 
 The value is `default_generation_settings.n_ctx` from `/props`, **minus**
-`CLAUDE_CODE_MAX_OUTPUT_TOKENS`. For a 393,216 window with 16,384 of output,
-that is 376,832. Change one, change the other. Never read the number you passed
-to `--ctx-size`: we briefly set 524288 on a server capped at 262144 and caught
-it the same day.
+`CLAUDE_CODE_MAX_OUTPUT_TOKENS`. For the 262,144 window every profile serves
+since 2026-09-26, with the shared output budget of 81,920, that is 180,224.
+Change one, change the other. Never read the number you passed to
+`--ctx-size`: we briefly set 524288 on a server capped at 262144 and caught it
+the same day.
 
 **An `env` block in `~/.claude/settings.json` beats an exported variable.** The
 client applies that block over its own process environment. A
@@ -88,14 +89,21 @@ client stops trying for the rest of the session, then refuses the next turn
 with `Context limit reached`. A manual `/compact` may still succeed once the
 context is lower.
 
-The launchers answer this per variant: an optional eighth field of
-`llm_variant` sets where compaction starts, and `llm-launch.sh` turns it into
-`CLAUDE_CODE_AUTO_COMPACT_WINDOW`, that size plus the output budget plus the
-client's 13,000-token summary buffer. Only the trigger moves; the client still
-refuses a turn at the real window. The Qwen3.6-35B-A3B variant of `qwen` starts
-at 180,000, checked against a stub server on 2026-09-15 (effective window
-193,000, `level=compact` past 180,000, no refusal below the real limit). That
-the model writes its summary at 180,000 is not proven; it did at 186,351 once.
+Until 2026-09-26 the launchers answered this per variant: an optional eighth
+field of `llm_variant` set where compaction started, and `llm-launch.sh` turned
+it into `CLAUDE_CODE_AUTO_COMPACT_WINDOW`, that size plus the output budget
+plus the client's 13,000-token summary buffer. The Qwen3.6-35B-A3B variant of
+`qwen` started at 180,000, checked against a stub server on 2026-09-15
+(effective window 193,000, `level=compact` past 180,000, no refusal below the
+real limit). That the model wrote its summary at 180,000 was not proven; it did
+at 186,351 once.
+
+That field is gone. Claude Code triggers compaction on its own, read in the
+2.1.283 binary on 2026-09-26: the announced window minus the smaller of the
+output budget and 20,000, minus a 13,000-token summary buffer. With every
+profile now at 262,144 and the shared 81,920 output budget, that lands near
+147,224 tokens, well below the 180,000 the removed field used to set. The
+per-variant trigger had stopped doing anything, so it went.
 
 **A second slot forces you to divide it, and that is why there is no second
 slot.** Every profile here runs `--parallel 1`, so `/props` and this variable
