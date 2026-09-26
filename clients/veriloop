@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# veriloop - Claude Code on VeriLoop-E2, served by the 32 GB box.
+#
+# Added on 2026-09-26 after the bench compared it. Q6_K, no speculation,
+# 262,144 window, reasoning effort xhigh as its template defaults to (llm-ctl.ps1).
+#
+# Scope: the exported variables live in this process only. A plain `claude` in
+# another shell keeps talking to Anthropic.
+
+source "$(dirname "${BASH_SOURCE[0]}")/llm-launch.sh"
+
+llm_variant "VeriLoop-E2 sur la machine 32 Go, fenêtre 262k" "${LLM_HOST:-your-32gb-box}" veriloop veriloop-e2 '' veriloop-e2 262144
+
+llm_launch "$@"

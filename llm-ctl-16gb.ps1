@@ -1,5 +1,5 @@
 param(
-  [ValidateSet('tiel','qwen36','stop','status','logs')]
+  [ValidateSet('katapex','occamy','qwen36','qwen36apex','tiel','stop','status','logs')]
   [string]$Action,
   [string]$Name,   # optional: for 'stop' and 'logs', targets a named instance
   [int]$Tail = 40, # for 'logs': history lines to show before following live
@@ -48,6 +48,12 @@ New-Item -ItemType Directory -Force -Path $instDir, $logDir | Out-Null
 $builds = @{
   tiel   = @{ Exe = "$RootDir\beellama-v0.4.6\llama-server.exe"; WorkDir = "$RootDir\beellama-v0.4.6" }
   qwen36 = @{ Exe = "$RootDir\beellama-v0.4.6\llama-server.exe"; WorkDir = "$RootDir\beellama-v0.4.6" }
+  # The three models added on 2026-09-26, on the upstream release b11156 (2026-09-24,
+  # CUDA 13.4 zip plus its own cudart, unpacked flat) they were proven on at the full
+  # window. They need no KVarN cache: a lighter quantisation keeps them on the card.
+  qwen36apex = @{ Exe = "$RootDir\llama-cpp-b11156\llama-server.exe"; WorkDir = "$RootDir\llama-cpp-b11156" }
+  katapex    = @{ Exe = "$RootDir\llama-cpp-b11156\llama-server.exe"; WorkDir = "$RootDir\llama-cpp-b11156" }
+  occamy     = @{ Exe = "$RootDir\llama-cpp-b11156\llama-server.exe"; WorkDir = "$RootDir\llama-cpp-b11156" }
 }
 
 function Quote($s) {
@@ -331,6 +337,19 @@ $cardRecipe = @(
 # 76k tokens. At 16384, 243,053 tokens read in 278 to 371 s, needle 3/3.
 $cardEnv = @{ GGML_KVARN_WINDOW_CHUNK = '16384' }
 
+# Shared by the three APEX requantisations added on 2026-09-26, 'qwen36apex',
+# 'katapex' and 'occamy', the same as $apexRecipe in llm-ctl.ps1: q8_0 cache,
+# no speculation, the thinking-mode sampling their three base cards agree on.
+# Each loads a template with the one line fixed that lets Claude Code send a
+# system message mid-session.
+$apexRecipe = @(
+  '--n-gpu-layers','99','--flash-attn','on','--jinja',
+  '--host','0.0.0.0','--port','8080','--parallel','1','--ctx-size','262144',
+  '-b','512','-ub','512',
+  '--cache-type-k','q8_0','--cache-type-v','q8_0',
+  '--temp','1.0','--top-p','0.95','--top-k','20','--min-p','0','--presence-penalty','1.5'
+)
+
 switch ($Action) {
 
   # ---------------------------------------------------------------------------
@@ -372,13 +391,13 @@ switch ($Action) {
     # proves nothing at depth. If it shows the same step drop, the same setting
     # applies, with --load-mode none alongside: qwen36 measured the two together.
     #
-    # Sampling copied from the 5090 tiel profile: temp 0.3 set there by hand on
-    # real usage and read back, never 0 on these weights. Embedded template
-    # kept: on the 5090 box tiel needs no derived template.
+    # Sampling of the model card (huggingface.co/ornith-ai/Ornith-1.5-35B-A3B, read
+    # 2026-09-23), 0.6 for general use, like the 5090 tiel profile; never 0 on these
+    # weights. Embedded template kept: on the 5090 box tiel needs no derived template.
     Start-LLM 'tiel' (@(
       '-m',"$ModelsDir\tiel-coder-35b-a3b-mtp\Tiel-Coder-35B-A3B-MTP-UD-IQ3_XXS.gguf"
     ) + $cardRecipe + @(
-      '--temp','0.3','--top-p','0.95','--top-k','20','--min-p','0'
+      '--temp','0.6','--top-p','0.95','--top-k','20','--min-p','0'
     )) -envVars $cardEnv
     break
   }
@@ -387,10 +406,10 @@ switch ($Action) {
     # Qwen3.6-35B-A3B, unsloth UD-IQ3_XXS with MTP head (14.1 GB), the
     # publisher's own MoE.
     #
-    # Sampling from unsloth's page for the thinking mode, read 2026-09-14:
-    # temp 1.0, top-p 0.95, top-k 20, min-p 0. The page also lists
-    # presence_penalty 1.5, which the 5090 qwen profile never set; left unset
-    # here for the same reason, so that a bench compares like with like.
+    # Thinking-mode sampling of the model card (huggingface.co/Qwen/Qwen3.6-35B-A3B,
+    # read 2026-09-24): temp 1.0, top-p 0.95, top-k 20, min-p 0, presence penalty
+    # 1.5. The penalty was left out until 2026-09-26 so that a bench would compare
+    # like with like against the 5090 qwen profile; the card's full set now applies.
     #
     # Embedded template kept. It accepts a system message after the first user
     # turn, checked on 2026-09-14 with a direct request and then through Claude
@@ -417,13 +436,52 @@ switch ($Action) {
       # mode is unmeasured. Re-evaluate the two together.
       '--load-mode','none'
     ) + $cardRecipe + @(
-      '--temp','1.0','--top-p','0.95','--top-k','20','--min-p','0'
+      '--temp','1.0','--top-p','0.95','--top-k','20','--min-p','0','--presence-penalty','1.5'
     )) -envVars $cardEnv
+    break
+  }
+
+  # ---------------------------------------------------------------------------
+  # The three models added on 2026-09-26, in the lighter quantisation of the
+  # same weights that keeps each entirely on this card at 262144: at the full
+  # quant all three spilled out of it (about 30 tok/s instead of 130). Their full
+  # quant runs on the 5090 box. Weights, cache and batch are those of each
+  # model's bench reference profile (bench/configs/97/<model>/R1.yaml on the
+  # bench branch); sampling and thinking are the authors', as on the 5090 box,
+  # where each block cites its source. The shared part is $apexRecipe.
+  # ---------------------------------------------------------------------------
+
+  'qwen36apex' {
+    # Qwen3.6-35B-A3B requantised by APEX, NanoPlus.
+    Start-LLM 'qwen36apex' (@(
+      '-m',"$ModelsDir\qwen36apex-nano\Qwen3.6-35B-A3B.APEX-I-NanoPlus.gguf",
+      '--chat-template-file',"$ModelsDir\qwen36apex-nano\chat-template-system-anywhere.jinja"
+    ) + $apexRecipe)
+    break
+  }
+
+  'katapex' {
+    # KAT-Coder-V2.5-Dev requantised by APEX, dynamic v2.
+    Start-LLM 'katapex' (@(
+      '-m',"$ModelsDir\katapex-dyn\KAT-Coder-V2.5-Dev-APEX-dynamic-v2.gguf",
+      '--chat-template-file',"$ModelsDir\katapex-dyn\chat-template-system-anywhere.jinja"
+    ) + $apexRecipe)
+    break
+  }
+
+  'occamy' {
+    # Accio-Lab Occamy 1.0 requantised by APEX, NanoPlus, with its image projector.
+    Start-LLM 'occamy' (@(
+      '-m',"$ModelsDir\occamy-nano\Occamy-1.0.APEX-I-NanoPlus.gguf",
+      '--mmproj',"$ModelsDir\occamy-nano\mmproj-Q8_0.gguf",
+      '--chat-template-file',"$ModelsDir\occamy-nano\chat-template-system-anywhere.jinja",
+      '--chat-template-kwargs','{"enable_thinking":true,"preserve_thinking":true}'
+    ) + $apexRecipe)
     break
   }
 
   'stop'   { if ($Name) { Stop-One $Name } else { Stop-All }; break }
   'status' { Get-Status; break }
   'logs'   { Show-Logs $Name $Tail; break }
-  default  { Write-Output "USAGE: llm-ctl.ps1 -Action tiel|qwen36|stop|status|logs" }
+  default  { Write-Output "USAGE: llm-ctl.ps1 -Action tiel|qwen36|qwen36apex|katapex|occamy|stop|status|logs" }
 }

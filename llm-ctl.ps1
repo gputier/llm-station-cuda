@@ -1,5 +1,5 @@
 param(
-  [ValidateSet('bonsai','bonsai2','embed','kat','muse','nex','ornith','qwen','qwenf','qwent','qwenu','spark','tiel','stop','status','logs')]
+  [ValidateSet('bonsai','bonsai2','embed','hemmingway','kat','katapex','muse','nex','occamy','ornith','qwen','qwen36apex','qwenf','qwent','qwenu','spark','tiel','veriloop','xing','stop','status','logs')]
   [string]$Action,
   [string]$Name,  # optional: for 'stop' and 'logs', targets a named instance
   [int]$Tail = 40, # for 'logs': history lines to show before following live
@@ -117,6 +117,19 @@ $workDirB10883 = "$RootDir\llama-cpp-b10883"
 $exeDflash2     = "$RootDir\llama-cpp-prism-dflash2\llama\build-win\bin\llama-server.exe"
 $workDirDflash2 = "$RootDir\llama-cpp-prism-dflash2\llama\build-win\bin"
 
+# Official release b11156 (2026-09-24), the CUDA 13.4 Windows zip plus its own flat cudart,
+# unpacked into one directory, no compilation. Serves the five models added on 2026-09-26,
+# 'hemmingway', 'veriloop', 'qwen36apex', 'katapex' and 'occamy', each on the build it was
+# measured on. Nothing older was moved here.
+$exeB11156     = "$RootDir\llama-cpp-b11156\llama-server.exe"
+$workDirB11156 = "$RootDir\llama-cpp-b11156"
+
+# Compiled on this box from llama.cpp pull request #29012 (branch xing4_0-port), the only
+# engine that reads Xing 4.0's architecture. Serves 'xing' only. Build recipe in
+# docs/building-llama-cpp.md.
+$exeXing     = "$RootDir\llama-cpp-xing-pr29012\build-win\bin\llama-server.exe"
+$workDirXing = "$RootDir\llama-cpp-xing-pr29012\build-win\bin"
+
 $instDir   = "$RootDir\instances"
 New-Item -ItemType Directory -Force -Path $instDir | Out-Null
 
@@ -160,6 +173,13 @@ $builds = @{
   bonsai = @{ Exe = $exeB10883;   WorkDir = $workDirB10883;   CudaBin = $cudaBinUp }
   # The one row pointing at a build compiled here. See the $exeDflash2 block above.
   bonsai2 = @{ Exe = $exeDflash2; WorkDir = $workDirDflash2;  CudaBin = $cudaBinUp }
+  # The models added on 2026-09-26. See the $exeB11156 and $exeXing blocks above.
+  hemmingway = @{ Exe = $exeB11156; WorkDir = $workDirB11156; CudaBin = $cudaBinUp }
+  veriloop   = @{ Exe = $exeB11156; WorkDir = $workDirB11156; CudaBin = $cudaBinUp }
+  qwen36apex = @{ Exe = $exeB11156; WorkDir = $workDirB11156; CudaBin = $cudaBinUp }
+  katapex    = @{ Exe = $exeB11156; WorkDir = $workDirB11156; CudaBin = $cudaBinUp }
+  occamy     = @{ Exe = $exeB11156; WorkDir = $workDirB11156; CudaBin = $cudaBinUp }
+  xing       = @{ Exe = $exeXing;   WorkDir = $workDirXing;   CudaBin = $cudaBinUp }
 }
 
 function Quote($s) {
@@ -444,6 +464,20 @@ function Get-Status {
   if (-not $any) { Write-Output "NOT_RUNNING" }
 }
 
+# Shared by the three APEX requantisations added on 2026-09-26, 'qwen36apex',
+# 'katapex' and 'occamy': q8_0 cache as the APEX card's recipe gives it, no
+# speculation, and the thinking-mode sampling their three base cards agree on,
+# presence penalty included. Each loads a template with the one line fixed that
+# lets a system message arrive mid-session, which Claude Code sends and the
+# embedded template refuses.
+$apexRecipe = @(
+  '--n-gpu-layers','99','--flash-attn','on','--jinja',
+  '--host','0.0.0.0','--port','8080','--parallel','1','--ctx-size','262144',
+  '-b','512','-ub','512',
+  '--cache-type-k','q8_0','--cache-type-v','q8_0',
+  '--temp','1.0','--top-p','0.95','--top-k','20','--min-p','0','--presence-penalty','1.5'
+)
+
 switch ($Action) {
   'stop'   { if ($Name) { Stop-One $Name } else { Stop-All }; break }
   'status' { Get-Status; break }
@@ -625,41 +659,22 @@ switch ($Action) {
       # a late system message as an ordinary ChatML system turn, which the format
       # supports natively, instead of raising.
       '--chat-template-file',"$ModelsDir\qwen3.8-27b\chat-template-system-anywhere.jinja",
-      # 393216 since 2026-09-01, and it takes TWO flags, not one. The GGUF declares
-      # context_length=262144: llama.cpp caps the slot on that value and ignores a
-      # larger --ctx-size, in a single log line, exactly as it did on muse. The
-      # override lifts the declared value, --ctx-size then sizes both the slot and
-      # the buffers on it. Verified in /props: default_generation_settings.n_ctx
-      # reads 393216, and the log prints n_ctx_slot with no capping line.
-      #
-      # 384k IS FREE ON THIS CARD, 512k IS NOT, and the two were measured rather
-      # than reasoned about. Same 50,480-token prompt, 800 tokens forced, fixed
-      # seed, cold prefill on a fresh process each time:
+      # 262144 since 2026-09-26, the window the GGUF declares and the one every
+      # hand-written profile serves. It ran at 393216 from 2026-09-01, which took
+      # an --override-kv qwen35.context_length=int:393216 on top of --ctx-size:
+      # llama.cpp caps the slot on the declared value and ignores a larger
+      # --ctx-size in a single log line. Measured then, same 50,480-token prompt,
+      # 800 tokens forced, fixed seed, cold prefill on a fresh process each time:
       #   262144 ... VRAM 27,110 MiB ... decode 123.6 tok/s ... prefill 4,007 tok/s
       #   393216 ... VRAM 31,291 MiB ... decode 122.5 tok/s ... prefill 4,035 tok/s
       #   524288 ... VRAM 31,858 MiB ... decode  94.2 tok/s ... prefill 2,308 tok/s
-      # Half the extra window costs 4.2 GB of VRAM and NOTHING else. The full
-      # doubling costs a quarter of the decode and 43% of the prefill, and it also
-      # stops being reproducible: six runs at 512k spread from 71.9 to 94.9 tok/s
-      # decode and 1,716 to 2,333 prefill, where 262k and 384k both hold within 1%.
-      # The throttling wall on this card therefore sits BETWEEN 31.3 and 31.9 GB,
-      # not at the ~29 GB the q8_0 cache reading had suggested: that earlier figure
-      # was the point where a heavier KV cache started costing, not a hard edge.
-      #
-      # Only 1,316 MiB of VRAM are left free here. This profile has little
-      # headroom: another GPU tenant pushes it out of memory.
-      #
-      # RECALL PAST 262144 IS NOT PROVEN. A window the server accepts says nothing
-      # about what the model still finds in it, and 262144 is where the model was
-      # trained. A needle-in-a-haystack run at 300k+ was attempted on 2026-09-01
-      # and abandoned when the client dropped the connection mid-prefill; the
-      # server was fine. Treat the top third of this window as unproven.
+      # 262144 is also where the model was trained, the only part of a window
+      # whose recall is not in question.
       #
       # CLAUDE_CODE_MAX_CONTEXT_TOKENS in the client launcher must move with this
       # value, in the same commit: a client promised more than the server serves is
       # truncated server-side with no warning.
-      '--override-kv','qwen35.context_length=int:393216',
-      '--host','0.0.0.0','--port','8080','--ctx-size','393216',
+      '--host','0.0.0.0','--port','8080','--ctx-size','262144',
       # --parallel 1: speculative decoding is a SINGLE-STREAM optimisation, its
       # gain evaporates past a few concurrent streams.
       #
@@ -881,7 +896,7 @@ switch ($Action) {
       # "ca arrete pas de niquer mes sous agents". A slot that makes a caller compact early is
       # worse than a caller that waits its turn.
       #
-      # So: one slot, the whole 393216 for whoever holds it, concurrent callers queue. The cost is
+      # So: one slot, the whole window for whoever holds it, concurrent callers queue. The cost is
       # real and accepted, a second caller waits instead of running at half speed.
       #
       # What the two-slot measurement of 2026-09-06 established, kept because it stays true if the
@@ -891,23 +906,21 @@ switch ($Action) {
       # the moment --parallel exceeds 1, since without it llama-server splits -c between slots
       # while /props still announces the total.
       '--host','0.0.0.0','--port','8080','--parallel','1',
-      # The GGUF declares context_length 262144 and llama.cpp caps on the file,
-      # not on --ctx-size. This override is the ONLY lock, same as on muse, and
-      # no YaRN flag is needed. Recall verified 2026-09-01 by needle-in-haystack
-      # at 269,274 then 378,540 tokens, needle at 10/50/90% depth, 6 hits out of
-      # 6. VRAM then sits at 31,617 MB of 32,607: about 990 MB of headroom, NOT
-      # yet exercised with an image on input while the projector is loaded.
-      '--override-kv','qwen35moe.context_length=int:393216',
-      '--ctx-size','393216',
+      # 262144 since 2026-09-26, the window the GGUF declares, so no override is
+      # needed. It ran at 393216 from 2026-09-01, through --override-kv
+      # qwen35moe.context_length=int:393216, with recall verified at 378,540
+      # tokens; every hand-written profile now serves the same 262144 window, a
+      # rule of this station, and each launcher announces it.
+      '--ctx-size','262144',
       '-b','4096','-ub','2048',
       '--cache-type-k','q4_0','--cache-type-v','q4_0',
       '-cram','24576',
-      # temp 0.3 since 2026-09-10, down from 0.6, down from 1.0 before that. Ornith's model card
-      # recommends 0.6 for general use and reserves 1.0 for reproducing its benchmarks, so 0.3 is
-      # below what the authors document. It was set on the box by hand, as a trial on real usage,
-      # and read back from there into this file. Do NOT go to 0: Qwen documents that greedy
-      # decoding on these weights degrades quality and produces endless repetitions.
-      '--temp','0.3','--top-p','0.95','--top-k','20','--min-p','0'
+      # The sampling of the model card (huggingface.co/ornith-ai/Ornith-1.5-35B-A3B, read
+      # 2026-09-23): 0.6 for general use, 1.0 kept for reproducing its benchmarks. Back to the
+      # card on 2026-09-26 after a trial at 0.3 set on the box by hand from 2026-09-10. Do NOT
+      # go to 0: Qwen documents that greedy decoding on these weights degrades quality and
+      # produces endless repetitions.
+      '--temp','0.6','--top-p','0.95','--top-k','20','--min-p','0'
     )
   }
 
@@ -950,10 +963,10 @@ switch ($Action) {
       '-b','4096','-ub','2048',
       '--cache-type-k','q4_0','--cache-type-v','q4_0',
       '-cram','24576',
-      # temp 0.6 since 2026-09-10, not 1.0. Set on the box by hand and read back from there. The
-      # model card reserves 1.0 for reproducing benchmarks and recommends 0.6 for general use,
-      # which is what this profile actually serves.
-      '--temp','0.6','--top-p','0.95','--top-k','20','--min-p','0'
+      # 1.0, the general-use value of this model's own card (huggingface.co/ornith-ai/Ornith-1.5-9B,
+      # read 2026-09-23), since 2026-09-26. It ran at 0.6 from 2026-09-10, the value the 35B
+      # card gives, not this one's.
+      '--temp','1.0','--top-p','0.95','--top-k','20','--min-p','0'
     )
   }
 
@@ -988,14 +1001,15 @@ switch ($Action) {
       # One slot, like tiel and for the same reason: a shared pool forces the launcher to announce
       # half a window, which makes a session's agents compact early. See the tiel block.
       '--host','0.0.0.0','--port','8080','--parallel','1',
-      '--override-kv','qwen35moe.context_length=int:393216',
-      '--ctx-size','393216',
+      # 262144 since 2026-09-26, the window the GGUF declares, like tiel.
+      '--ctx-size','262144',
       '-b','4096','-ub','2048',
       '--cache-type-k','q4_0','--cache-type-v','q4_0',
       '-cram','24576',
-      # temp 0.3 since 2026-09-10, not 0.6. Set on the box by hand alongside tiel, same trial,
-      # and read back from there. Never 0 on these weights, see the tiel block.
-      '--temp','0.3','--top-p','0.95','--top-k','20','--min-p','0'
+      # Thinking-mode sampling of the model card (huggingface.co/Kwaipilot/KAT-Coder-V2.5-Dev,
+      # read 2026-09-23), presence penalty included. Back to the card on 2026-09-26 after the
+      # 0.3 trial it shared with tiel. Never 0 on these weights, see the tiel block.
+      '--temp','1.0','--top-p','0.95','--top-k','20','--min-p','0','--presence-penalty','1.5'
     )
   }
 
@@ -1062,7 +1076,11 @@ switch ($Action) {
       # generation quality, we recommend temperature 0.7, top_p 0.95, top_k 40". This
       # profile ran at 0.6 and top-k 20 for its first hours because it was written by
       # copying the shape of the Qwen profiles without opening this model's card.
-      '--temp','0.7','--top-p','0.95','--top-k','40','--min-p','0'
+      '--temp','0.7','--top-p','0.95','--top-k','40','--min-p','0',
+      # Reasoning effort 'medium', the level the card's Thinking Modes section describes
+      # (huggingface.co/nex-agi/Nex-N2.5-mini, read 2026-09-23), set explicitly since
+      # 2026-09-26 rather than left to whatever the template defaults to.
+      '--chat-template-kwargs','{"reasoning_effort":"medium"}'
     )
   }
 
@@ -1090,10 +1108,10 @@ switch ($Action) {
       # top-k 0, meaning the filter is OFF, and that is what this model asks for: its
       # generation_config.json carries top_k -1 with temperature 1.0. It ran at 0.6 and
       # top-k 20 for its first hours, bridled by a profile copied from the Qwen models
-      # without opening its own configuration. Temperature stays at 0.6 rather than the
-      # published 1.0 until the sampling sweep says otherwise, since 1.0 is what publishers
-      # quote for reproducing their own benchmarks more often than for daily use.
-      '--temp','0.6','--top-p','0.95','--top-k','0','--min-p','0'
+      # without opening its own configuration. Temperature 1.0 since 2026-09-26, the
+      # thinking-mode value of the card (huggingface.co/XHToken/Spark-X2.5-4B, read
+      # 2026-09-23), after a stay at 0.6.
+      '--temp','1.0','--top-p','0.95','--top-k','0','--min-p','0'
     )
   }
 
@@ -1224,9 +1242,106 @@ switch ($Action) {
       # 1.0 and not the 0.7 of the first Bonsai. The card gives two sets and says which is which:
       # these are the thinking-mode values, and thinking mode is what produced its published
       # figures. The model thinks by default at 'xhigh' effort and its authors state that 'low'
-      # is not supported, behaving close to xhigh when asked for.
+      # is not supported, behaving close to xhigh when asked for. min-p 0.05 as the card's
+      # Generation Parameters give it (huggingface.co/prism-ml/Ternary-Bonsai-2-27B-gguf, read
+      # 2026-09-24), since 2026-09-26.
+      '--temp','1.0','--top-p','0.95','--top-k','20','--min-p','0.05'
+    )
+  }
+
+  # -------------------------------------------------------------------------
+  # The six models added on 2026-09-26, first compared on the bench. Weights,
+  # build, cache and batch are those of each model's bench reference profile
+  # (bench/configs/99/<model>/R1.yaml on the bench branch), the one proven to sit
+  # entirely on this card at 262144. Sampling and thinking settings are the
+  # authors', each with the page it was read on.
+  # -------------------------------------------------------------------------
+  'hemmingway' {
+    # Altworld Hemmingway-1, Q5_K_S: Q5_K_M filled the card at 262144 with a q8_0 cache.
+    # Its own MTP head is on. The only sampling its authors publish is generation_config.json
+    # (huggingface.co/Altworld/Hemmingway-1, read 2026-09-24), no min_p in it.
+    Start-LLM 'hemmingway' @(
+      '-m',"$ModelsDir\hemmingway-1\Altworld_Hemmingway-1-Q5_K_S.gguf",
+      '--spec-type','draft-mtp',
+      '--n-gpu-layers','99','--load-mode','mlock','--flash-attn','on','--jinja',
+      '--chat-template-file',"$ModelsDir\hemmingway-1\chat-template-system-anywhere.jinja",
+      '--host','0.0.0.0','--port','8080','--parallel','1','--ctx-size','262144',
+      '-b','2048','-ub','512',
+      '--cache-type-k','q8_0','--cache-type-v','q8_0',
+      '-cram','24576',
       '--temp','1.0','--top-p','0.95','--top-k','20','--min-p','0'
     )
+  }
+
+  'veriloop' {
+    # VeriLoop-E2, Q6_K: Q8_0 (26.63 GiB) spilled out of the card. No speculation.
+    # Sampling from generation_config.json, reasoning effort 'xhigh' from the default its
+    # own chat_template.jinja resolves to (huggingface.co/tsinghua-sigs-robot-lab/VeriLoop-E2,
+    # read 2026-09-24), passed explicitly so a template change cannot move it.
+    Start-LLM 'veriloop' @(
+      '-m',"$ModelsDir\veriloop-e2\VeriLoop-E2-Q6_K.gguf",
+      '--n-gpu-layers','99','--load-mode','mlock','--flash-attn','on','--jinja',
+      '--chat-template-file',"$ModelsDir\veriloop-e2\chat-template-system-anywhere.jinja",
+      '--host','0.0.0.0','--port','8080','--parallel','1','--ctx-size','262144',
+      '-b','2048','-ub','512',
+      '--cache-type-k','q4_0','--cache-type-v','q4_0',
+      '-cram','24576',
+      '--temp','1.0','--top-p','0.95','--top-k','20','--min-p','0',
+      '--chat-template-kwargs','{"reasoning_effort":"xhigh"}'
+    )
+  }
+
+  'xing' {
+    # Xing 4.0 29B-A4B, IQ4_NL, on the one engine that reads it (see $exeXing). No
+    # speculation. Parameters from the GGUF card's Recommended Parameters table, line
+    # 'Complex reasoning / general tasks', and repetition_penalty 1.05 from the base
+    # model's generation_config.json (huggingface.co/XingChen-AGI/Xing4.0-29B-A4B-GGUF and
+    # Xing4.0-29B-A4B, read 2026-09-24). Thinking is on by default in the card's example,
+    # set explicitly here.
+    Start-LLM 'xing' @(
+      '-m',"$ModelsDir\xing4.0-29b-a4b\xing4_0-29b-IQ4_NL.gguf",
+      '--n-gpu-layers','999','--flash-attn','on','--jinja',
+      '--host','0.0.0.0','--port','8080','--parallel','1','--ctx-size','262144',
+      '-b','4096','-ub','2048',
+      '--cache-type-k','q8_0','--cache-type-v','q8_0',
+      '-cram','24576',
+      '--temp','1.0','--top-p','0.95','--top-k','50','--min-p','0','--repeat-penalty','1.05',
+      '--chat-template-kwargs','{"enable_thinking":true}'
+    )
+  }
+
+  # The three APEX requantisations share $apexRecipe, see there.
+  'qwen36apex' {
+    # Qwen3.6-35B-A3B requantised by APEX, MiniPlus V2.1. Thinking-mode sampling of the base
+    # model's card (huggingface.co/Qwen/Qwen3.6-35B-A3B, read 2026-09-24), presence penalty
+    # included.
+    Start-LLM 'qwen36apex' (@(
+      '-m',"$ModelsDir\qwen36apex\Qwen3.6-35B-A3B.APEX-I-MiniPlus-V2.1.gguf",
+      '--chat-template-file',"$ModelsDir\qwen36apex\chat-template-system-anywhere.jinja"
+    ) + $apexRecipe)
+  }
+
+  'katapex' {
+    # KAT-Coder-V2.5-Dev requantised by APEX, MiniPlus V2.1. Thinking-mode sampling of the base
+    # card's Text-Only Input example (huggingface.co/Kwaipilot/KAT-Coder-V2.5-Dev, read
+    # 2026-09-24), the same values as 'kat'.
+    Start-LLM 'katapex' (@(
+      '-m',"$ModelsDir\katapex\KAT-Coder-V2.5-Dev.APEX-I-MiniPlus-V2.1.gguf",
+      '--chat-template-file',"$ModelsDir\katapex\chat-template-system-anywhere.jinja"
+    ) + $apexRecipe)
+  }
+
+  'occamy' {
+    # Accio-Lab Occamy 1.0 requantised by APEX, MiniPlus V2.1, with its image projector.
+    # Sampling and thinking from the card's Model Usage example
+    # (huggingface.co/Accio-Lab/occamy-1.0, read 2026-09-24): thinking on, and the reasoning
+    # kept across turns, which the card asks for in multi-turn agent runs.
+    Start-LLM 'occamy' (@(
+      '-m',"$ModelsDir\occamy\Occamy-1.0.APEX-I-MiniPlus-V2.1.gguf",
+      '--mmproj',"$ModelsDir\occamy\mmproj-Accio-Lab_occamy-1.0-Q8_0.gguf",
+      '--chat-template-file',"$ModelsDir\occamy\chat-template-system-anywhere.jinja",
+      '--chat-template-kwargs','{"enable_thinking":true,"preserve_thinking":true}'
+    ) + $apexRecipe)
   }
 
   'embed' {

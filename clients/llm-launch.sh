@@ -25,7 +25,11 @@ LLM_PORT=8080
 LLM_CTL='D:\LLM-Setup\llm-ctl.ps1'
 # The largest value the per-model launchers used before this one.
 LLM_LOAD_TIMEOUT=240
-LLM_OUTPUT_TOKENS=16384
+# The same output budget for every model, 81920 since 2026-09-26: the value most
+# model cards give for long reasoning and code, so an answer is not cut short. It
+# was 16384 before. Claude Code accepts up to 128000 for a model it does not
+# know, read in the 2.1.283 binary.
+LLM_OUTPUT_TOKENS=81920
 # Which MCP servers Claude Code keeps. "none" gives it no server at all;
 # "mail-imap" keeps a mail server expected at ~/.claude/bin/mail-imap-mcp, which
 # this repository does not ship. A launcher overrides it between sourcing this
@@ -33,24 +37,22 @@ LLM_OUTPUT_TOKENS=16384
 LLM_MCP=none
 
 _llm_labels=(); _llm_hosts=(); _llm_actions=(); _llm_match=(); _llm_exclude=()
-_llm_ids=(); _llm_windows=(); _llm_compact_at=()
-
-# Tokens Claude Code keeps between its compaction trigger and the window it
-# compacts against, read in the 2.1.271 binary on 2026-09-15.
-LLM_SUMMARY_BUFFER=13000
+_llm_ids=(); _llm_windows=()
 
 err() { printf '%s\n' "$*" >&2; }
 
-# llm_variant LABEL HOST ACTION MATCH EXCLUDE MODEL_ID WINDOW [COMPACT_AT]
+# llm_variant LABEL HOST ACTION MATCH EXCLUDE MODEL_ID WINDOW
 #   ACTION      the llm-ctl.ps1 action that loads the model on HOST
 #   MATCH       lowercase text the served model_path must contain
 #   EXCLUDE     lowercase text it must NOT contain, or '' when none is needed
 #   WINDOW      the window the server really serves, n_ctx in /props
-#   COMPACT_AT  optional: the context size where automatic compaction starts,
-#               for a model that stops writing its summary past that size
+#
+# A per-variant compaction trigger (CLAUDE_CODE_AUTO_COMPACT_WINDOW) lived here
+# until 2026-09-26, for Qwen3.6-35B-A3B at 180,000. The 81,920 output budget
+# puts every variant's default trigger near 147,000, below it, and it went.
 llm_variant() {
   _llm_labels+=("$1"); _llm_hosts+=("$2"); _llm_actions+=("$3"); _llm_match+=("$4")
-  _llm_exclude+=("$5"); _llm_ids+=("$6"); _llm_windows+=("$7"); _llm_compact_at+=("${8:-}")
+  _llm_exclude+=("$5"); _llm_ids+=("$6"); _llm_windows+=("$7")
 }
 
 # What port 8080 on HOST says, printed as one of three states:
@@ -187,15 +189,9 @@ llm_launch() {
   # --settings wins over the user file.
   local context_tokens=$(( ${_llm_windows[$i]} - LLM_OUTPUT_TOKENS ))
   local budget="\"CLAUDE_CODE_MAX_OUTPUT_TOKENS\":\"${LLM_OUTPUT_TOKENS}\",\"CLAUDE_CODE_MAX_CONTEXT_TOKENS\":\"${context_tokens}\""
-  # CLAUDE_CODE_AUTO_COMPACT_WINDOW moves only the compaction trigger: the
-  # client still refuses a turn at the real window. The trigger sits at that
-  # window minus the output budget and the summary buffer, so the variable is
-  # derived back from the size wanted. Without it the gap between trigger and
-  # refusal is about 10,000 tokens, a few turns.
-  local compact_at=${_llm_compact_at[$i]}
-  if [[ -n "$compact_at" ]]; then
-    budget="${budget},\"CLAUDE_CODE_AUTO_COMPACT_WINDOW\":\"$(( compact_at + LLM_OUTPUT_TOKENS + LLM_SUMMARY_BUFFER ))\""
-  fi
+  # Compaction starts at that input budget minus min(output, 20000) and a
+  # 13,000-token summary buffer (2.1.283 binary, read 2026-09-26): about 147,000
+  # tokens for a 262,144 window and an 81,920 output budget.
   budget="{\"env\":{${budget}}}"
 
   # Read for PRESENCE, not for value: any non-empty string turns the disabling

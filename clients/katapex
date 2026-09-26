@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# katapex - Claude Code on KAT-Coder-V2.5-Dev requantised by APEX, on the box
+# picked at start-up.
+#
+# Added on 2026-09-26 after the bench compared it. MiniPlus V2.1 on the 32 GB
+# box, dynamic v2 on the 16 GB one: the full quant spilled out of that card at
+# the 262,144 window. Thinking-mode sampling of the KAT card on both
+# (llm-ctl.ps1, llm-ctl-16gb.ps1).
+#
+# LLM_HOST names the 32 GB box and LLM_HOST_16GB the second one. LLM_CHOICE=1
+# or 2 skips the menu, which a run without a terminal requires.
+
+source "$(dirname "${BASH_SOURCE[0]}")/llm-launch.sh"
+
+llm_variant "KAT APEX sur la machine 32 Go, fenêtre 262k" "${LLM_HOST:-your-32gb-box}" katapex kat-coder-v2.5-dev.apex-i-miniplus '' kat-coder-v25-apex 262144
+llm_variant "KAT APEX, version allégée, sur la machine 16 Go, fenêtre 262k" "${LLM_HOST_16GB:-your-16gb-box}" katapex kat-coder-v2.5-dev-apex-dynamic '' kat-coder-v25-apex 262144
+
+llm_launch "$@"

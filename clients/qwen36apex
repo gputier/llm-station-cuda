@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# qwen36apex - Claude Code on Qwen3.6-35B-A3B requantised by APEX, on the box
+# picked at start-up.
+#
+# Added on 2026-09-26 after the bench compared it. MiniPlus V2.1 on the 32 GB
+# box, NanoPlus on the 16 GB one: the full quant spilled out of that card at the
+# 262,144 window. Thinking-mode sampling of the Qwen3.6 card on both
+# (llm-ctl.ps1, llm-ctl-16gb.ps1).
+#
+# LLM_HOST names the 32 GB box and LLM_HOST_16GB the second one. LLM_CHOICE=1
+# or 2 skips the menu, which a run without a terminal requires.
+
+source "$(dirname "${BASH_SOURCE[0]}")/llm-launch.sh"
+
+llm_variant "Qwen3.6 APEX sur la machine 32 Go, fenêtre 262k" "${LLM_HOST:-your-32gb-box}" qwen36apex qwen3.6-35b-a3b.apex-i-miniplus '' qwen3.6-35b-a3b-apex 262144
+llm_variant "Qwen3.6 APEX, version allégée, sur la machine 16 Go, fenêtre 262k" "${LLM_HOST_16GB:-your-16gb-box}" qwen36apex qwen3.6-35b-a3b.apex-i-nanoplus '' qwen3.6-35b-a3b-apex 262144
+
+llm_launch "$@"

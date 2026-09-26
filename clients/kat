@@ -9,11 +9,12 @@
 # Scope: the exported variables live in this process only. A plain `claude` in
 # another shell keeps talking to Anthropic.
 #
-# One variant, so no menu and nothing to answer. Everything else lives in
-# llm-launch.sh.
+# One variant, so no menu and nothing to answer. It matches on its own model
+# directory, kat-coder-v25: the APEX build served by katapex carries
+# "kat-coder" too. Everything else lives in llm-launch.sh.
 
 source "$(dirname "${BASH_SOURCE[0]}")/llm-launch.sh"
 
-llm_variant "KAT-Coder sur la machine 32 Go, fenêtre 393k" "${LLM_HOST:-your-32gb-box}" kat kat-coder '' kat-coder-v25-35b-a3b 393216
+llm_variant "KAT-Coder sur la machine 32 Go, fenêtre 262k" "${LLM_HOST:-your-32gb-box}" kat kat-coder-v25 '' kat-coder-v25-35b-a3b 262144
 
 llm_launch "$@"

@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # tiel - Claude Code on Tiel-Coder-35B-A3B, on the box picked at start-up.
 #
-# The same model is served on two boxes. The 32 GB one runs UD-Q4_K_XL at a
-# 393,216 window, recall proven at 378,540 tokens on 2026-09-01. The 16 GB one
-# runs UD-IQ3_XXS at 262,144 (llm-ctl-16gb.ps1): 139.3 tok/s decode and 85.8% on
+# The same model is served on two boxes, both at a 262,144 window since
+# 2026-09-26. The 32 GB one runs UD-Q4_K_XL, and ran at 393,216 before that. The
+# 16 GB one runs UD-IQ3_XXS (llm-ctl-16gb.ps1): 139.3 tok/s decode and 85.8% on
 # the 500-question MMLU set on 2026-09-14, against 86.6% for the 32 GB build on
 # 2026-09-10, so the 3-bit tier costs no measurable quality.
 #
@@ -13,7 +13,7 @@
 
 source "$(dirname "${BASH_SOURCE[0]}")/llm-launch.sh"
 
-llm_variant "Tiel-Coder sur la machine 32 Go, fenêtre 393k" "${LLM_HOST:-your-32gb-box}" tiel tiel-coder '' tiel-coder-35b-a3b 393216
+llm_variant "Tiel-Coder sur la machine 32 Go, fenêtre 262k" "${LLM_HOST:-your-32gb-box}" tiel tiel-coder '' tiel-coder-35b-a3b 262144
 llm_variant "Tiel-Coder sur la machine 16 Go, fenêtre 262k" "${LLM_HOST_16GB:-your-16gb-box}" tiel tiel-coder '' tiel-coder-35b-a3b 262144
 
 llm_launch "$@"
