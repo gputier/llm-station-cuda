@@ -14,3 +14,15 @@ RUN pip install --no-cache-dir --no-deps -e . \
     && pip install --no-cache-dir -r /tmp/requirements.txt soundfile \
     && rm /tmp/requirements.txt
 COPY bfcl_run.py /bfcl_run.py
+# Non-root (trivy DS-0002). bfcl_run.py's --limit path (mini/medium/large,
+# benchrun.suites.bfcl) writes bfcl_eval's own TEST_IDS_TO_GENERATE_PATH,
+# a fixed path INSIDE the pinned package tree
+# (bfcl_eval.constants.eval_config, read live: "/gorilla/berkeley-function-
+# call-leaderboard/test_case_ids_to_generate.json"), not something the
+# launcher can point elsewhere (rule 3, no fork). RESULT_PATH/SCORE_PATH
+# default into the same tree too, but the suite adapter always passes its
+# own --result-dir/--score-dir (the bind-mounted /out), so only the WORKDIR
+# itself needs to be writable, not a second, separate location.
+RUN useradd --create-home --shell /usr/sbin/nologin bench \
+    && chown -R bench:bench /gorilla
+USER bench

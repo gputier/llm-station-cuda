@@ -61,3 +61,11 @@ RUN useradd --create-home --shell /bin/bash agent \
     && chown -R agent:agent /usr/local/rustup /usr/local/cargo
 WORKDIR /repo
 RUN chown agent:agent /repo
+# Every "docker run" that starts this image already passes "--user agent"
+# (benchrun.suites.agentic, both the private-task and the swe/ container):
+# this USER only sets the default a bare "docker run bench-agent ..." would
+# get, and closes trivy's DS-0002 (a Dockerfile must name a non-root user of
+# its own, the explicit --user flag at run time does not satisfy the static
+# check). No prepare_cmd, agent phase or test_cmd in this suite ever needs
+# root: HOME=/home/agent is passed alongside --user agent at every call site.
+USER agent

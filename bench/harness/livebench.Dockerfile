@@ -18,3 +18,16 @@ ENV PYTHONPATH=/livebench_sitecustomize
 # this README). A -v source built from that path fails with exit 125,
 # "invalid mount config", proven live on the 99, 2026-09-24.
 COPY livebench_select_ids.py /select_ids.py
+# Non-root (trivy DS-0002). benchrun.suites.livebench bind-mounts the real
+# write target itself (data_dir at /livebench/livebench/data), but
+# gen_api_answer.py/gen_ground_truth_judgment.py (read at LIVEBENCH_SHA)
+# resolve every answer/judgment path from the question's own relative
+# "answer_file" field, always under that same "data/..." tree, so owning
+# /livebench covers every write this harness makes on its own filesystem.
+# HOME stays /root: the HF dataset cache is bind-mounted at the fixed path
+# "/root/.cache/huggingface" by the suite adapter (not something this
+# Dockerfile can change), the same reasoning as bench/harness/lcb.Dockerfile.
+RUN useradd --uid 1000 --no-create-home --home-dir /root --shell /usr/sbin/nologin bench \
+    && mkdir -p /root/.cache/huggingface \
+    && chown -R bench:bench /livebench /root
+USER bench

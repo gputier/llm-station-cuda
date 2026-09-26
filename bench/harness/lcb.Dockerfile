@@ -16,3 +16,19 @@ COPY lcb_stub_torch /lcb_stub_torch
 ENV PYTHONPATH=/lcb_stub_torch
 COPY lcb_run.py /lcb_run.py
 WORKDIR /lcb
+# Non-root (trivy DS-0002). Two real write targets, read from the pinned
+# source (lcb_runner/utils/path_utils.py at LCB_SHA), neither overridable by
+# an argument: get_output_path() writes "output/<model>/..." (bind-mounted
+# by benchrun.suites.lcb at /lcb/output, covered by chowning WORKDIR), but
+# get_cache_path() ALSO writes a sibling "cache/<model>/..." under the same
+# relative root, never bind-mounted, so /lcb itself (not just its output
+# subtree) has to be owned by the runtime user. HOME stays /root on
+# purpose: benchrun.suites.lcb bind-mounts the shared HF dataset cache at
+# the fixed path "/root/.cache/huggingface" (not something this Dockerfile
+# can change), and huggingface_hub's own cache resolution keys off $HOME,
+# so a non-root user with a different HOME would silently stop sharing that
+# cache rather than fail loudly.
+RUN useradd --uid 1000 --no-create-home --home-dir /root --shell /usr/sbin/nologin bench \
+    && mkdir -p /root/.cache/huggingface \
+    && chown -R bench:bench /lcb /root
+USER bench
