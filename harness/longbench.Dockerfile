@@ -17,3 +17,10 @@ RUN wget -q -O /longbench_v2_data.json "${LONGBENCH_V2_DATA_URL}" \
     && echo "${LONGBENCH_V2_DATA_SHA256}  /longbench_v2_data.json" | sha256sum -c -
 COPY longbench_run.py /longbench_run.py
 WORKDIR /longbench
+# Non-root (trivy DS-0002). Every write longbench_run.py makes (read at its
+# own source: save_dir.mkdir, the skipped-ids report, the pred jsonl) goes
+# through --save-dir, always the bind-mounted /out (benchrun.suites.longbench):
+# no cache directory, no HOME write, nothing else on this image's own
+# filesystem is ever touched at runtime, unlike lcb/livebench's HF cache.
+RUN useradd --uid 1000 --create-home --shell /usr/sbin/nologin bench
+USER bench

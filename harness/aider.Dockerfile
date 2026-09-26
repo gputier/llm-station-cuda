@@ -25,3 +25,24 @@ RUN git clone https://github.com/Aider-AI/polyglot-benchmark /polyglot && cd /po
 COPY aider_sitecustomize /aider_sitecustomize
 ENV PYTHONPATH=/aider_sitecustomize
 WORKDIR /aider
+# Non-root (trivy DS-0002). The pinned aider itself, not just benchmark.py,
+# touches the home directory on every invocation regardless of the
+# --output/--keywords flags benchmark.py passes: aider/versioncheck.py's
+# check_version() unconditionally mkdir+touch's
+# ~/.aider/caches/versioncheck in its own "finally" block (not guarded by
+# the try above it), and aider/analytics.py writes ~/.aider/analytics.json
+# the first time telemetry is recorded; both read at AIDER_SHA. A non-root
+# user therefore needs an OWNED home directory, not just write access to
+# the bind-mounted results dir benchmark.py itself uses.
+#
+# benchmark.py's own main() also opens the /aider clone as a GitPython repo
+# (git.Repo(search_parent_directories=True), cwd /aider) to read its commit
+# hash for the results file: git itself refuses to touch a repository owned
+# by a different uid ("dubious ownership", proven live switching to a
+# non-root user before this chown existed), so /aider's ownership has to
+# move to the same user that runs it, not just get a safe.directory
+# exception (which only silences the check, still leaves a root-owned tree
+# a non-root process cannot otherwise write to if aider itself ever does).
+RUN useradd --create-home --shell /usr/sbin/nologin bench \
+    && chown -R bench:bench /aider
+USER bench
