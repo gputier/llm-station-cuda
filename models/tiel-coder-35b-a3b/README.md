@@ -10,15 +10,15 @@ model of this box.
 .\llm-ctl.ps1 -Action tiel
 ```
 
-| | |
-|---|---|
-| Weights | `Tiel-Coder-35B-A3B-MTP-UD-Q4_K_XL.gguf` |
-| Vision projector | `mmproj-BF16.gguf` |
-| Context | 262,144, the GGUF's declared ceiling. Ran at 393,216 with `--override-kv` until 2026-09-26. |
-| KV cache | `q4_0` |
-| VRAM | 29,198 MB, measured 2026-09-26 at the 262,144 window |
-| Slots | 1. It ran 2 from 2026-09-06 to 2026-09-08, see below. |
-| Build | `b10826` (2026-09-06), official release binary, no compilation. Only build serving this profile. |
+|                  |                                                                                                  |
+| ---------------- | ------------------------------------------------------------------------------------------------ |
+| Weights          | `Tiel-Coder-35B-A3B-MTP-UD-Q4_K_XL.gguf`                                                         |
+| Vision projector | `mmproj-BF16.gguf`                                                                               |
+| Context          | 262,144, the GGUF's declared ceiling. Ran at 393,216 with `--override-kv` until 2026-09-26.      |
+| KV cache         | `q4_0`                                                                                           |
+| VRAM             | 29,198 MB, measured 2026-09-26 at the 262,144 window                                             |
+| Slots            | 1. It ran 2 from 2026-09-06 to 2026-09-08, see below.                                            |
+| Build            | `b10826` (2026-09-06), official release binary, no compilation. Only build serving this profile. |
 
 ## On the 16 GB box
 
@@ -45,15 +45,15 @@ Measured 2026-09-01 against the `qwen` profile, same 37,981-token prompt, seed
 42, three runs, median, plus a fresh 500-question MMLU set spanning 25 subjects
 and 60 GSM8K problems, temperature 0, both models on the identical set:
 
-| | qwen | tiel | |
-|---|---|---|---|
-| Decode | 104.53 tok/s | 161.43 tok/s | +54.4% |
-| Prefill | 4,264 tok/s | 8,616 tok/s | x2.02 |
-| VRAM | 30,952 MB | 29,465 MB | |
-| MMLU | 82.0% | 82.2% | one question in five hundred |
-| MMLU, re-run 2026-09-10 | 78.8% | **86.6%** | the old bench was lost, both figures moved |
-| GSM8K, re-run 2026-09-10 | 57/60 | 53/60 | tiel's weak spot, `kat` scores 60/60 |
-| GSM8K | 52/60 | 58/60 | |
+|                          | qwen         | tiel         |                                            |
+| ------------------------ | ------------ | ------------ | ------------------------------------------ |
+| Decode                   | 104.53 tok/s | 161.43 tok/s | +54.4%                                     |
+| Prefill                  | 4,264 tok/s  | 8,616 tok/s  | x2.02                                      |
+| VRAM                     | 30,952 MB    | 29,465 MB    |                                            |
+| MMLU                     | 82.0%        | 82.2%        | one question in five hundred               |
+| MMLU, re-run 2026-09-10  | 78.8%        | **86.6%**    | the old bench was lost, both figures moved |
+| GSM8K, re-run 2026-09-10 | 57/60        | 53/60        | tiel's weak spot, `kat` scores 60/60       |
+| GSM8K                    | 52/60        | 58/60        |                                            |
 
 The gain is structural: far fewer bytes reread per token, which is exactly the
 bandwidth ceiling this machine runs into.
@@ -68,12 +68,12 @@ Swept on this model on 2026-09-03, production flags otherwise, one
 38,000-token prompt of real llama.cpp sources, fixed seed, 3 runs, median
 decode:
 
-| n-max | Decode | Acceptance |
-|---|---|---|
-| **2** | **184.8 tok/s** | 46.9% |
-| 3 | 181.9 tok/s | 40.1% |
-| 4 | 156.8 tok/s | 27.2% (was in production) |
-| 6 | 133.3 tok/s | 18.4% |
+| n-max | Decode          | Acceptance                |
+| ----- | --------------- | ------------------------- |
+| **2** | **184.8 tok/s** | 46.9%                     |
+| 3     | 181.9 tok/s     | 40.1%                     |
+| 4     | 156.8 tok/s     | 27.2% (was in production) |
+| 6     | 133.3 tok/s     | 18.4%                     |
 
 Raising `--spec-draft-p-min` to 0.40 or 0.60 lifts acceptance to 50-66% and
 halves throughput: acceptance is not the target, throughput is. This sweep was
@@ -115,11 +115,11 @@ The two-slot measurements are kept here, because they stay true if the question
 is ever reopened. Measured 2026-09-06 on b10826, 400 tokens forced, pure
 generation:
 
-| Streams | Per stream | Total |
-|---|---|---|
-| 1 | 260 tok/s | 260 |
-| 2 | 202 + 188 tok/s | 390 |
-| 4 | 97 to 104 tok/s each | 400 (card saturated) |
+| Streams | Per stream           | Total                |
+| ------- | -------------------- | -------------------- |
+| 1       | 260 tok/s            | 260                  |
+| 2       | 202 + 188 tok/s      | 390                  |
+| 4       | 97 to 104 tok/s each | 400 (card saturated) |
 
 The cost is the prefill: while one slot reads a 40k prompt (4 to 5 s), the
 other's generation drops to 15 to 50 tok/s. Four slots were rejected: no gain
@@ -148,10 +148,10 @@ on the next: 49 to 88 tok/s against 180 to 208 immediately after. A run without
 speculation shows nothing of the sort. Tested by sending a second prompt built
 from a different slice of the sources to a warm server:
 
-| | prompt A, cold | prompt A, cached | prompt B, new context | prompt B, cached |
-|---|---|---|---|---|
-| speculation on | 55.82 tok/s | 200.20 | 190.10 | 191.83 |
-| speculation off | 196.96 | 195.98 | 187.63 | 193.15 |
+|                 | prompt A, cold | prompt A, cached | prompt B, new context | prompt B, cached |
+| --------------- | -------------- | ---------------- | --------------------- | ---------------- |
+| speculation on  | 55.82 tok/s    | 200.20           | 190.10                | 191.83           |
+| speculation off | 196.96         | 195.98           | 187.63                | 193.15           |
 
 A new context costs nothing; only the first request after a start does, and
 only under speculation. Discard run 1 of any speculative bench on this model.

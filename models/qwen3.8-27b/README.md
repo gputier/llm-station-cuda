@@ -8,15 +8,15 @@ of this box.
 .\llm-ctl.ps1 -Action qwen
 ```
 
-| | |
-|---|---|
-| Weights | `Qwen3.8-27B-NVFP4-MTP-LOW.gguf`, 14.5 GiB |
-| Vision projector | `mmproj-BF16.gguf`, 0.87 GiB |
-| Context | 262,144, the native ceiling. Ran at 393,216 with `--override-kv` until 2026-09-26. |
-| KV cache | `q4_0` |
-| VRAM | 26,453 MB of 32,607 at native context; 26,594 MB measured 2026-09-26 at the 262,144 window |
-| Throughput | 123.4 tok/s decode, 4,267 tok/s prefill |
-| Build | **2026-08-27 only.** NVFP4 kernels do not exist in older builds. |
+|                  |                                                                                            |
+| ---------------- | ------------------------------------------------------------------------------------------ |
+| Weights          | `Qwen3.8-27B-NVFP4-MTP-LOW.gguf`, 14.5 GiB                                                 |
+| Vision projector | `mmproj-BF16.gguf`, 0.87 GiB                                                               |
+| Context          | 262,144, the native ceiling. Ran at 393,216 with `--override-kv` until 2026-09-26.         |
+| KV cache         | `q4_0`                                                                                     |
+| VRAM             | 26,453 MB of 32,607 at native context; 26,594 MB measured 2026-09-26 at the 262,144 window |
+| Throughput       | 123.4 tok/s decode, 4,267 tok/s prefill                                                    |
+| Build            | **2026-08-27 only.** NVFP4 kernels do not exist in older builds.                           |
 
 ## Why NVFP4
 
@@ -25,11 +25,11 @@ Measured against the previous `UD-Q5_K_XL`, same prompt, same protocol, with
 speculation **disabled on both sides** to isolate the structural gain from
 acceptance noise:
 
-| | Q5_K_XL | NVFP4 LOW | |
-|---|---|---|---|
-| Decode | 58.84 tok/s | 70.64 tok/s | +20.1% |
-| Prefill | 3,015 tok/s | 4,584 tok/s | +52.0% |
-| VRAM | 28.5 GB | 24.4 GB | 4.1 GB freed |
+|         | Q5_K_XL     | NVFP4 LOW   |              |
+| ------- | ----------- | ----------- | ------------ |
+| Decode  | 58.84 tok/s | 70.64 tok/s | +20.1%       |
+| Prefill | 3,015 tok/s | 4,584 tok/s | +52.0%       |
+| VRAM    | 28.5 GB     | 24.4 GB     | 4.1 GB freed |
 
 **The gain comes from size, which is direct confirmation that the ceiling is
 memory bandwidth**: fewer bytes to re-read per token. The operational corollary
@@ -60,8 +60,7 @@ full (150k) context, the ranking inverts and 4 wins three cases out of four, by
 7.6 to 11.4%. The full table is in [../../docs/tuning-log.md](../../docs/tuning-log.md).
 
 The published community setting that recommended 4 was still not transposable:
-on the short prompt it was measured on, it gave 108.66 tok/s against 123.03 at
-3. It happened to name the value this box later settled on, for a reason its
+on the short prompt it was measured on, it gave 108.66 tok/s against 123.03 at 3. It happened to name the value this box later settled on, for a reason its
 own benchmark could not see.
 
 ### 2. The embedded chat template blocks agentic clients
@@ -81,10 +80,10 @@ with `--chat-template-file`.
 
 ### 3. The reasoning switch is not the same key as on muse
 
-| Model | Key |
-|---|---|
-| Muse Glimmer | `chat_template_kwargs.reasoning_strength` |
-| Qwen3.8-27B | `enable_thinking` (boolean) or `reasoning_effort` |
+| Model        | Key                                               |
+| ------------ | ------------------------------------------------- |
+| Muse Glimmer | `chat_template_kwargs.reasoning_strength`         |
+| Qwen3.8-27B  | `enable_thinking` (boolean) or `reasoning_effort` |
 
 Using the wrong key raises **no error**: the parameter is ignored and the model
 reasons unbounded. Verified: 0 characters of reasoning with
@@ -107,10 +106,10 @@ a single log line, **but still sizes its buffers on the value you requested**.
 This profile once asked for 524288 with no override and paid the memory of a
 window it never had:
 
-| Requested | Real window | VRAM | Decode | Prefill |
-|---|---|---|---|---|
-| 262144 | 262144 | 27.2 GB | **123.03** | **4,241** |
-| 524288 | 262144 | 31.9 GB | 99.76 | 2,462 |
+| Requested | Real window | VRAM    | Decode     | Prefill   |
+| --------- | ----------- | ------- | ---------- | --------- |
+| 262144    | 262144      | 27.2 GB | **123.03** | **4,241** |
+| 524288    | 262144      | 31.9 GB | 99.76      | 2,462     |
 
 Twenty-three percent of decode and 72% of prefill lost for nothing.
 
@@ -120,11 +119,11 @@ this profile went back to the GGUF's own 262,144 ceiling. Measured on
 2026-09-01, same 50,480-token prompt, 800 tokens forced, fixed seed, cold
 prefill on a fresh process, override in place then:
 
-| Window | VRAM | Decode | Prefill |
-|---|---|---|---|
-| 262,144 | 27,110 MB | 123.6 tok/s | 4,007 tok/s |
+| Window      | VRAM          | Decode          | Prefill         |
+| ----------- | ------------- | --------------- | --------------- |
+| 262,144     | 27,110 MB     | 123.6 tok/s     | 4,007 tok/s     |
 | **393,216** | **31,291 MB** | **122.5 tok/s** | **4,035 tok/s** |
-| 524,288 | 31,858 MB | 94.2 tok/s | 2,308 tok/s |
+| 524,288     | 31,858 MB     | 94.2 tok/s      | 2,308 tok/s     |
 
 **The cost is not linear, and that is the finding.** Half again as much window
 costs 4.2 GB of VRAM and nothing else, inside the noise on both throughput
@@ -155,11 +154,11 @@ server-side with no warning.
 This is a VRAM trade, not a quality trade, and it was measured. At 262k, `q8_0`
 leaves 675 MB of headroom out of 32.6 GB and throughput **collapses**:
 
-| Cache | Window | VRAM | Throughput |
-|---|---|---|---|
-| `q8_0` | 262k | 31,932 MB | 73.81 tok/s |
+| Cache      | Window   | VRAM          | Throughput       |
+| ---------- | -------- | ------------- | ---------------- |
+| `q8_0`     | 262k     | 31,932 MB     | 73.81 tok/s      |
 | **`q4_0`** | **262k** | **28,370 MB** | **100.32 tok/s** |
-| `q8_0` | 131k | 26,846 MB | 99.00 tok/s |
+| `q8_0`     | 131k     | 26,846 MB     | 99.00 tok/s      |
 
 Below ~29 GB throughput saturates around 100 tok/s: `q4_0` at 262k and `q8_0` at
 131k run at the same speed, and the former gives twice the window.

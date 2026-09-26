@@ -12,14 +12,14 @@ box does its work, and the trial is what decides whether it takes over.
 .\llm-ctl.ps1 -Action kat
 ```
 
-| | |
-|---|---|
-| Weights | `KAT-Philly-MTP-Q4_K_M.gguf` |
-| Vision projector | none published for these weights: text only |
-| Context | 262,144, the GGUF's declared ceiling. Ran at 393,216 with `--override-kv`, same mechanism as `tiel`, until 2026-09-26. |
-| KV cache | `q4_0` |
-| VRAM | 29,702 MB in the 2026-09-08 bench, 26,822 MB measured 2026-09-26 at the 262,144 window |
-| Build | `b10826`, same as `tiel` |
+|                  |                                                                                                                        |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| Weights          | `KAT-Philly-MTP-Q4_K_M.gguf`                                                                                           |
+| Vision projector | none published for these weights: text only                                                                            |
+| Context          | 262,144, the GGUF's declared ceiling. Ran at 393,216 with `--override-kv`, same mechanism as `tiel`, until 2026-09-26. |
+| KV cache         | `q4_0`                                                                                                                 |
+| VRAM             | 29,702 MB in the 2026-09-08 bench, 26,822 MB measured 2026-09-26 at the 262,144 window                                 |
+| Build            | `b10826`, same as `tiel`                                                                                               |
 
 ## Running it stops `tiel`
 
@@ -41,12 +41,12 @@ the model path changing, no projector on either side including the control,
 `bench.ps1`, 150,000 characters of real llama.cpp sources (about 38,000
 tokens), 512 tokens, seed 42, three runs, median.
 
-| | tiel (control) | kat-coder |
-|---|---|---|
-| Decode | 199.71 tok/s | 197.71 tok/s |
-| Prefill | 8,758 tok/s | 8,072 tok/s |
-| VRAM | 30,936 MB | 29,702 MB |
-| MTP accepted | 56.2% | 52.8% |
+|              | tiel (control) | kat-coder    |
+| ------------ | -------------- | ------------ |
+| Decode       | 199.71 tok/s   | 197.71 tok/s |
+| Prefill      | 8,758 tok/s    | 8,072 tok/s  |
+| VRAM         | 30,936 MB      | 29,702 MB    |
+| MTP accepted | 56.2%          | 52.8%        |
 
 On generated code specifically, `kat` wins: 295.1 tok/s writing PowerShell
 against 284.3 for `tiel`.

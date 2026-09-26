@@ -1,22 +1,24 @@
 # Building llama.cpp for CUDA on Windows
 
-Eight builds coexist on this machine, on purpose. They are **not
+Nine builds coexist on this machine, on purpose. They are **not
 interchangeable**, and picking the wrong one fails silently rather than loudly.
-Four are official llama.cpp releases. Of the four others, two come from forks,
+Five are official llama.cpp releases. Of the four others, two come from forks,
 one frozen since 2026-04-07 and one taken as a published archive, and two were
 compiled here from source; the last sections say why each had to be. Counted on
-the machine 2026-09-20, eight directories under `D:\LLM-Setup`, the table below
-naming all eight.
+the machine 2026-09-26, nine directories under `D:\LLM-Setup`, the table below
+naming all nine.
 
-| Build                      | Date              | CUDA | Serves                            | Why it exists                                                                                                                                                                                                                                                                                                                                                 |
-| -------------------------- | ----------------- | ---- | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `llama-cpp-turboquant-win` | frozen 2026-04-07 | 12.8 | `embed`                           | A custom fork kept for a cache-quant feature of a model since removed. It has no remaining technical justification and could be retired once the embedder is validated on upstream.                                                                                                                                                                           |
-| `llama-cpp-upstream`       | 2026-08-11        | 13.3 | `muse`, `qwenu`, `qwenf`, `qwent` | Official build. The only one of the first two that knows the `muse-glimmer` architecture.                                                                                                                                                                                                                                                                     |
-| `llama-cpp-20260827`       | 2026-08-27        | 13.3 | `qwen`                            | The only build with NVFP4 CUDA kernels. See below. It also served `ornith` until 2026-09-08; that profile is Q5_K_M and never needed those kernels.                                                                                                                                                                                                           |
-| `llama-cpp-b10826`         | 2026-09-06        | 13.3 | `tiel`, `ornith`, `kat`           | The official release zip and its cudart, unzipped flat, no compilation. Neutral in decode and +5% in prefill on Tiel against the 2026-08-27 build; strictly neutral on Ornith, which moved here on 2026-09-08 to stop owing a profile to the NVFP4 build. See [tuning-log.md](tuning-log.md). `kat` was added here on 2026-09-08 and never ran anywhere else. |
-| `llama-cpp-b10883`         | 2026-09-09        | 13.3 | `nex`, `spark`, `bonsai`          | Same recipe as b10826, official zip plus cudart unzipped flat. Installed 2026-09-10 for three candidate models and serving only those. See below.                                                                                                                                                                                                             |
-| `llama-cpp-prism-b10685`   | 2026-09-15        | 13.3 | nothing                           | **Not upstream.** PrismML's fork, release `prism-b10685-7dffb15`, `win-cuda-13.3-x64` archive unpacked flat. Served `bonsai2` until 2026-09-20, kept only as the reference for what the published fork can and cannot read.                                                                                                                                   |
-| `llama-cpp-prism-dflash2`  | 2026-09-20        | 13.3 | `bonsai2`                         | **Not a release.** PrismML's fork carrying upstream DFlash2, published as source by the drafter's author and compiled here. The only engine that reads both Bonsai 2's rotated weights and its drafter. See the last section.                                                                                                                                 |
+| Build                      | Date              | CUDA | Serves                                                      | Why it exists                                                                                                                                                                                                                                                                                                                                                 |
+| -------------------------- | ----------------- | ---- | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `llama-cpp-turboquant-win` | frozen 2026-04-07 | 12.8 | `embed`                                                     | A custom fork kept for a cache-quant feature of a model since removed. It has no remaining technical justification and could be retired once the embedder is validated on upstream.                                                                                                                                                                           |
+| `llama-cpp-upstream`       | 2026-08-11        | 13.3 | `muse`, `qwenu`, `qwenf`, `qwent`                           | Official build. The only one of the first two that knows the `muse-glimmer` architecture.                                                                                                                                                                                                                                                                     |
+| `llama-cpp-20260827`       | 2026-08-27        | 13.3 | `qwen`                                                      | The only build with NVFP4 CUDA kernels. See below. It also served `ornith` until 2026-09-08; that profile is Q5_K_M and never needed those kernels.                                                                                                                                                                                                           |
+| `llama-cpp-b10826`         | 2026-09-06        | 13.3 | `tiel`, `ornith`, `kat`                                     | The official release zip and its cudart, unzipped flat, no compilation. Neutral in decode and +5% in prefill on Tiel against the 2026-08-27 build; strictly neutral on Ornith, which moved here on 2026-09-08 to stop owing a profile to the NVFP4 build. See [tuning-log.md](tuning-log.md). `kat` was added here on 2026-09-08 and never ran anywhere else. |
+| `llama-cpp-b10883`         | 2026-09-09        | 13.3 | `nex`, `spark`, `bonsai`                                    | Same recipe as b10826, official zip plus cudart unzipped flat. Installed 2026-09-10 for three candidate models and serving only those. See below.                                                                                                                                                                                                             |
+| `llama-cpp-prism-b10685`   | 2026-09-15        | 13.3 | nothing                                                     | **Not upstream.** PrismML's fork, release `prism-b10685-7dffb15`, `win-cuda-13.3-x64` archive unpacked flat. Served `bonsai2` until 2026-09-20, kept only as the reference for what the published fork can and cannot read.                                                                                                                                   |
+| `llama-cpp-prism-dflash2`  | 2026-09-20        | 13.3 | `bonsai2`                                                   | **Not a release.** PrismML's fork carrying upstream DFlash2, published as source by the drafter's author and compiled here. The only engine that reads both Bonsai 2's rotated weights and its drafter. See the last section.                                                                                                                                 |
+| `llama-cpp-xing-pr29012`   | 2026-09-24        | 13.3 | `xing`                                                      | **Not a release.** Compiled here from llama.cpp pull request #29012, the only engine that reads Xing 4.0. See the pull request section.                                                                                                                                                                                                                       |
+| `llama-cpp-b11156`         | 2026-09-24        | 13.4 | `hemmingway`, `veriloop`, `qwen36apex`, `katapex`, `occamy` | Official release zip with its own cudart, unzipped flat. Laid down for the bench and serving, since 2026-09-26, the five models that bench added, each on the build it was measured on. The 16 GB box carries the same release for its three APEX profiles.                                                                                                   |
 
 ## b10883: taken for one architecture, not for speed
 
@@ -162,7 +164,7 @@ dspark drafter into a format current binaries load. That converter is what made
 it possible to test the first generation's drafter against the second, and to
 close the question: see [tuning-log.md](tuning-log.md).
 
-## The pull request build: the first engine compiled here, and since deleted
+## The pull request build: the first engine compiled here, deleted, then rebuilt
 
 Xing4.0-29B-A4B (China Telecom, 2026-09-16) combines MLA attention, a MoE and
 an op of its own called mHC. No release knows that combination, upstream or
@@ -201,8 +203,12 @@ deleted on 2026-09-21** and the `xing` profile left the control script with it:
 5.15 GB held for a model no longer on the box, behind a profile that could only
 fail at load. This section stays because the recipe above is the whole cost of
 serving an architecture no release knows, and that cost is what a future
-candidate has to be weighed against. Rebuilding it is the command above plus a
-new download.
+candidate has to be weighed against.
+
+It was rebuilt on 2026-09-24 with the command above, for the bench that
+compared Xing again, and since 2026-09-26 it serves the `xing` profile of the
+control script once more. Present on the machine that day, read by directory
+listing.
 
 ## The DFlash2 build: compiled because the drafter would not load
 

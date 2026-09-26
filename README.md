@@ -42,27 +42,27 @@ weights were reposed for the 2026-09-26 bench and its engine rebuilt on
 [docs/tuning-log.md](docs/tuning-log.md), which is the point of having measured
 it.
 
-| Action       | Model                                                       | Context | Role                                                                                                                         |
-| ------------ | ------------------------------------------------------------ | ------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| `tiel`       | Tiel-Coder-35B-A3B, MTP UD-Q4_K_XL                          | 262,144 | In service. Coding and reasoning, vision                                                                                     |
-| `kat`        | KAT-Coder-V2.5-Dev-35B-A3B, MTP Q4_K_M                       | 262,144 | On trial since 2026-09-08. Text only, no projector                                                                           |
-| `ornith`     | Ornith-1.5-9B, Q5_K_M                                       | 262,144 | Fast second opinion and short tasks, a third of the VRAM                                                                     |
-| `muse`       | Muse Glimmer 30B, UD-Q4_K_XL                                | 262,144 | Agentic multi-turn, vision, faithful OCR                                                                                     |
-| `qwen`       | Qwen3.8-27B, NVFP4 LOW                                      | 262,144 | Reasoning and coding, superseded by `tiel`                                                                                   |
-| `qwenu`      | Qwen3.8-27B Uncensored, Q5_K_M                              | 262,144 | Used only when the aligned model refuses a legitimate task                                                                   |
-| `qwenf`      | Qwen3.8-27B TURBO Fable Cold-Fusion Heretic, MTP Q5_K_M     | 262,144 | Candidate, benched 2026-09-19: ties `qwenu` on the unpublished set, not adopted                                              |
-| `qwent`      | Qwen3.8-27B TWIN-TURBO Fable Cold-Fusion 709-L, MTP Q5_K_M  | 262,144 | Candidate, benched 2026-09-19: best of the three on the unpublished set (225/235), long-context speed not yet measured       |
-| `embed`      | nomic-embed-text-v1.5, Q8_0                                 | 131,072 | 768-dimension embeddings                                                                                                     |
-| `nex`        | Nex-N2.5-mini, i1-Q4_K_M                                    | 262,144 | Candidate since 2026-09-10. Vision, no speculation                                                                           |
-| `spark`      | Spark-X2.5-4B, Q8_0                                         | 262,144 | Candidate since 2026-09-10. Agentic, text only                                                                               |
-| `bonsai`     | Ternary-Bonsai-27B, Q2_g64                                  | 262,144 | Candidate since 2026-09-10. Ternary weights, vision                                                                          |
-| `bonsai2`    | Ternary-Bonsai-2-27B, PQ2_0                                 | 262,144 | Candidate since 2026-09-18. Ternary weights, vision, speculation since 2026-09-20, and fifty times the ingestion of `bonsai` |
-| `hemmingway` | Altworld Hemmingway-1, Q5_K_S, own MTP head                 | 262,144 | Candidate since 2026-09-26                                                                                                   |
-| `veriloop`   | VeriLoop-E2, Q6_K                                           | 262,144 | Candidate since 2026-09-26. No speculation, reasoning effort xhigh                                                           |
-| `xing`       | Xing 4.0 29B-A4B, IQ4_NL                                    | 262,144 | Candidate since 2026-09-26. Rejected 2026-09-19, back with its engine rebuilt for llama.cpp pull request #29012              |
-| `qwen36apex` | Qwen3.6-35B-A3B requantised by APEX, MiniPlus V2.1          | 262,144 | Candidate since 2026-09-26. Also served on the 16 GB box in NanoPlus                                                        |
-| `katapex`    | KAT-Coder-V2.5-Dev requantised by APEX, MiniPlus V2.1       | 262,144 | Candidate since 2026-09-26. Also served on the 16 GB box in dynamic v2                                                      |
-| `occamy`     | Accio-Lab Occamy 1.0 requantised by APEX, MiniPlus V2.1     | 262,144 | Candidate since 2026-09-26. Vision, also served on the 16 GB box in NanoPlus                                                |
+| Action       | Model                                                      | Context | Role                                                                                                                         |
+| ------------ | ---------------------------------------------------------- | ------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `tiel`       | Tiel-Coder-35B-A3B, MTP UD-Q4_K_XL                         | 262,144 | In service. Coding and reasoning, vision                                                                                     |
+| `kat`        | KAT-Coder-V2.5-Dev-35B-A3B, MTP Q4_K_M                     | 262,144 | On trial since 2026-09-08. Text only, no projector                                                                           |
+| `ornith`     | Ornith-1.5-9B, Q5_K_M                                      | 262,144 | Fast second opinion and short tasks, a third of the VRAM                                                                     |
+| `muse`       | Muse Glimmer 30B, UD-Q4_K_XL                               | 262,144 | Agentic multi-turn, vision, faithful OCR                                                                                     |
+| `qwen`       | Qwen3.8-27B, NVFP4 LOW                                     | 262,144 | Reasoning and coding, superseded by `tiel`                                                                                   |
+| `qwenu`      | Qwen3.8-27B Uncensored, Q5_K_M                             | 262,144 | Used only when the aligned model refuses a legitimate task                                                                   |
+| `qwenf`      | Qwen3.8-27B TURBO Fable Cold-Fusion Heretic, MTP Q5_K_M    | 262,144 | Candidate, benched 2026-09-19: ties `qwenu` on the unpublished set, not adopted                                              |
+| `qwent`      | Qwen3.8-27B TWIN-TURBO Fable Cold-Fusion 709-L, MTP Q5_K_M | 262,144 | Candidate, benched 2026-09-19: best of the three on the unpublished set (225/235), long-context speed not yet measured       |
+| `embed`      | nomic-embed-text-v1.5, Q8_0                                | 131,072 | 768-dimension embeddings                                                                                                     |
+| `nex`        | Nex-N2.5-mini, i1-Q4_K_M                                   | 262,144 | Candidate since 2026-09-10. Vision, no speculation                                                                           |
+| `spark`      | Spark-X2.5-4B, Q8_0                                        | 262,144 | Candidate since 2026-09-10. Agentic, text only                                                                               |
+| `bonsai`     | Ternary-Bonsai-27B, Q2_g64                                 | 262,144 | Candidate since 2026-09-10. Ternary weights, vision                                                                          |
+| `bonsai2`    | Ternary-Bonsai-2-27B, PQ2_0                                | 262,144 | Candidate since 2026-09-18. Ternary weights, vision, speculation since 2026-09-20, and fifty times the ingestion of `bonsai` |
+| `hemmingway` | Altworld Hemmingway-1, Q5_K_S, own MTP head                | 262,144 | Candidate since 2026-09-26                                                                                                   |
+| `veriloop`   | VeriLoop-E2, Q6_K                                          | 262,144 | Candidate since 2026-09-26. No speculation, reasoning effort xhigh                                                           |
+| `xing`       | Xing 4.0 29B-A4B, IQ4_NL                                   | 262,144 | Candidate since 2026-09-26. Rejected 2026-09-19, back with its engine rebuilt for llama.cpp pull request #29012              |
+| `qwen36apex` | Qwen3.6-35B-A3B requantised by APEX, MiniPlus V2.1         | 262,144 | Candidate since 2026-09-26. Also served on the 16 GB box in NanoPlus                                                         |
+| `katapex`    | KAT-Coder-V2.5-Dev requantised by APEX, MiniPlus V2.1      | 262,144 | Candidate since 2026-09-26. Also served on the 16 GB box in dynamic v2                                                       |
+| `occamy`     | Accio-Lab Occamy 1.0 requantised by APEX, MiniPlus V2.1    | 262,144 | Candidate since 2026-09-26. Vision, also served on the 16 GB box in NanoPlus                                                 |
 
 `nex`, `spark` and `bonsai` were installed on 2026-09-10 and measured the same
 day. They run on their own engine, `b10883`, which serves nothing else, and each
@@ -153,18 +153,18 @@ portable.
 
 ## Documentation
 
-| File                                                                       | What it covers                                                                                        |
-| -------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| [docs/INDEX.md](docs/INDEX.md)                                             | The twelve documents of this folder, each with the question it answers                                |
-| [docs/prerequisites.md](docs/prerequisites.md)                             | Everything that must be installed before a first build                                                |
-| [docs/building-llama-cpp.md](docs/building-llama-cpp.md)                   | The eight CUDA builds, why four are official releases and the four others forks or local compilations |
-| [docs/claude-code-integration.md](docs/claude-code-integration.md)         | How a local server replaces the Anthropic API, and what that costs                                    |
-| [docs/api-usage.md](docs/api-usage.md)                                     | Calling the server directly: sampling per model, vision, embeddings                                   |
-| [docs/tuning-log.md](docs/tuning-log.md)                                   | Every measurement campaign, including the ones that found nothing                                     |
-| [docs/campagne-mesures-2026-09-10.md](docs/campagne-mesures-2026-09-10.md) | Nine models through one bench in one day. **Supersedes every quality figure published before it.**    |
-| [docs/quel-modele-pour-quel-usage.md](docs/quel-modele-pour-quel-usage.md) | Which model to reach for, per use, and what is measured against what is inferred                      |
-| [models/](models/)                                                         | One page per model: profile, measurements, model-specific traps                                       |
-| [clients/](clients/)                                                       | The launcher scripts and how they decide to reload                                                    |
+| File                                                                       | What it covers                                                                                       |
+| -------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| [docs/INDEX.md](docs/INDEX.md)                                             | The twelve documents of this folder, each with the question it answers                               |
+| [docs/prerequisites.md](docs/prerequisites.md)                             | Everything that must be installed before a first build                                               |
+| [docs/building-llama-cpp.md](docs/building-llama-cpp.md)                   | The nine CUDA builds, why five are official releases and the four others forks or local compilations |
+| [docs/claude-code-integration.md](docs/claude-code-integration.md)         | How a local server replaces the Anthropic API, and what that costs                                   |
+| [docs/api-usage.md](docs/api-usage.md)                                     | Calling the server directly: sampling per model, vision, embeddings                                  |
+| [docs/tuning-log.md](docs/tuning-log.md)                                   | Every measurement campaign, including the ones that found nothing                                    |
+| [docs/campagne-mesures-2026-09-10.md](docs/campagne-mesures-2026-09-10.md) | Nine models through one bench in one day. **Supersedes every quality figure published before it.**   |
+| [docs/quel-modele-pour-quel-usage.md](docs/quel-modele-pour-quel-usage.md) | Which model to reach for, per use, and what is measured against what is inferred                     |
+| [models/](models/)                                                         | One page per model: profile, measurements, model-specific traps                                      |
+| [clients/](clients/)                                                       | The launcher scripts and how they decide to reload                                                   |
 
 ## Seven findings that cost the most to establish
 
