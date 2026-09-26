@@ -91,6 +91,12 @@ $cudaBinUp = "$CudaRoot\v13.3\bin"
 $exeNew     = "$RootDir\llama-cpp-20260827\build-win\bin\Release\llama-server.exe"
 $workDirNew = "$RootDir\llama-cpp-20260827\build-win\bin\Release"
 
+# Since 2026-09-26 every engine below runs from a "-toolorder" copy: the same
+# source (release tag, fork commit or tree) rebuilt with the tool_result order
+# fix described at $exeUp, by outils\build-all-toolorder.cmd on the box. The
+# releases were zips; their rebuilds are static, Ninja, sm_120a, CUDA 13.3, and
+# take cudart and cuBLAS from the CUDA bin directory on the PATH. The original
+# directories stay in place.
 # Official binary b10826 (2026-09-06), CUDA 13.3, flat layout like llama-cpp-b10740: the zip and
 # its cudart unpacked into one directory, no compilation. Serves 'tiel' since 2026-09-06. Control
 # against the 2026-08-27 build, same 65,615-token prompt, 400 tokens, seed 42, 3 runs, temperature
@@ -98,8 +104,8 @@ $workDirNew = "$RootDir\llama-cpp-20260827\build-win\bin\Release"
 # 31,550 MiB, MTP counters within noise (339/229 against 341/228). Two behaviour changes it brings, both logged at startup:
 # preserve_reasoning is on by default (turn off with --no-reasoning-preserve if prompts grow), and
 # it recommends --image-min-tokens 1024 for this vision model.
-$exeB10826     = "$RootDir\llama-cpp-b10826\llama-server.exe"
-$workDirB10826 = "$RootDir\llama-cpp-b10826"
+$exeB10826     = "$RootDir\llama-cpp-b10826-toolorder\build-win\bin\llama-server.exe"
+$workDirB10826 = "$RootDir\llama-cpp-b10826-toolorder\build-win\bin"
 
 # Official binary b10883 (2026-09-09), CUDA 13.3, same flat layout: release zip and its cudart
 # unpacked into one directory, no compilation. Installed 2026-09-10 for three candidate models that
@@ -113,8 +119,8 @@ $workDirB10826 = "$RootDir\llama-cpp-b10826"
 # It has NOT been benchmarked against b10826 on the production models. Do not move tiel, ornith or
 # kat here on the assumption that newer is faster; the 2026-08-27 build taught that lesson at a
 # cost of two full compilations for a gain of nothing.
-$exeB10883     = "$RootDir\llama-cpp-b10883\llama-server.exe"
-$workDirB10883 = "$RootDir\llama-cpp-b10883"
+$exeB10883     = "$RootDir\llama-cpp-b10883-toolorder\build-win\bin\llama-server.exe"
+$workDirB10883 = "$RootDir\llama-cpp-b10883-toolorder\build-win\bin"
 
 # A FORK BUILT ON THIS BOX, and the second binary compiled here. It is PrismML's
 # fork of llama.cpp, which alone undoes Bonsai 2's Hadamard rotation, carrying
@@ -126,22 +132,22 @@ $workDirB10883 = "$RootDir\llama-cpp-b10883"
 # transform the patch adds, so the patch applies it twice and acceptance collapses.
 # Build recipe, the measurement behind that warning, and the archive kept on disk
 # as the reference for what the published fork can read: docs/building-llama-cpp.md.
-$exeDflash2     = "$RootDir\llama-cpp-prism-dflash2\llama\build-win\bin\llama-server.exe"
-$workDirDflash2 = "$RootDir\llama-cpp-prism-dflash2\llama\build-win\bin"
+$exeDflash2     = "$RootDir\llama-cpp-prism-dflash2-toolorder\llama\build-win\bin\llama-server.exe"
+$workDirDflash2 = "$RootDir\llama-cpp-prism-dflash2-toolorder\llama\build-win\bin"
 
 # Official release b11156 (2026-09-24), the CUDA 13.4 Windows zip plus its own flat cudart,
 # unpacked into one directory, no compilation, for phase 0 of the bench (task 14): ancestor
 # of bfd73a876 checked ahead/identical via the GitHub compare API before the download. Serves
 # the five models added on 2026-09-26, 'hemmingway', 'veriloop', 'qwen36apex', 'katapex' and
 # 'occamy', each on the build it was measured on. Nothing older was moved here.
-$exeB11156     = "$RootDir\llama-cpp-b11156\llama-server.exe"
-$workDirB11156 = "$RootDir\llama-cpp-b11156"
+$exeB11156     = "$RootDir\llama-cpp-b11156-toolorder\build-win\bin\llama-server.exe"
+$workDirB11156 = "$RootDir\llama-cpp-b11156-toolorder\build-win\bin"
 
 # Compiled on this box from llama.cpp pull request #29012 (branch xing4_0-port), the only
 # engine that reads Xing 4.0's architecture. Serves 'xing' only. Build recipe in
 # docs/building-llama-cpp.md.
-$exeXing     = "$RootDir\llama-cpp-xing-pr29012\build-win\bin\llama-server.exe"
-$workDirXing = "$RootDir\llama-cpp-xing-pr29012\build-win\bin"
+$exeXing     = "$RootDir\llama-cpp-xing-pr29012-toolorder\build-win\bin\llama-server.exe"
+$workDirXing = "$RootDir\llama-cpp-xing-pr29012-toolorder\build-win\bin"
 
 $instDir   = "$RootDir\instances"
 New-Item -ItemType Directory -Force -Path $instDir | Out-Null
