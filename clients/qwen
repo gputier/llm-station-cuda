@@ -10,9 +10,8 @@
 #   3. Qwen3.6-35B-A3B UD-IQ3_XXS on the 16 GB box, 137.1 tok/s decode and 90.2%
 #      on the 500-question MMLU set on 2026-09-14, 262,144 window. Replayed at
 #      222,000 on 2026-09-15, the model answered the summary request with a shell
-#      command instead of a summary. It compacted at 180,000 from then on; since
-#      the 81,920 output budget of 2026-09-26 every variant compacts near
-#      147,000, below that point, and the setting went.
+#      command instead of a summary. It compacted at 180,000 from then on,
+#      until 2026-09-26; the default trigger is near 196,000 since then.
 #   4. Qwen3.8-27B TWIN-TURBO 709-L on the 32 GB box, on trial since 2026-09-19:
 #      225/235 on the unpublished set against 221 for the uncensored build, but
 #      31.6 GB of VRAM at load, so long-context speed is unproven. 262,144 window.

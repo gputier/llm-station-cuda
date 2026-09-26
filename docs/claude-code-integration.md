@@ -40,8 +40,8 @@ export ANTHROPIC_DEFAULT_SONNET_MODEL="qwen3.8-27b"
 export ANTHROPIC_DEFAULT_HAIKU_MODEL="qwen3.8-27b"
 export ANTHROPIC_SMALL_FAST_MODEL="qwen3.8-27b"
 
-export CLAUDE_CODE_MAX_CONTEXT_TOKENS=180224   # a 262,144 window minus the output budget
-export CLAUDE_CODE_MAX_OUTPUT_TOKENS=81920
+export CLAUDE_CODE_MAX_CONTEXT_TOKENS=229376   # a 262,144 window minus the output budget
+export CLAUDE_CODE_MAX_OUTPUT_TOKENS=32768
 export CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1  # read for presence: "0" turns it on too
 ```
 
@@ -66,7 +66,7 @@ room to write its summary.
 
 The value is `default_generation_settings.n_ctx` from `/props`, **minus**
 `CLAUDE_CODE_MAX_OUTPUT_TOKENS`. For the 262,144 window every profile serves
-since 2026-09-26, with the shared output budget of 81,920, that is 180,224.
+since 2026-09-26, with the shared output budget of 32,768, that is 229,376.
 Change one, change the other. Never read the number you passed to
 `--ctx-size`: we briefly set 524288 on a server capped at 262144 and caught it
 the same day.
@@ -101,9 +101,11 @@ at 186,351 once.
 That field is gone. Claude Code triggers compaction on its own, read in the
 2.1.283 binary on 2026-09-26: the announced window minus the smaller of the
 output budget and 20,000, minus a 13,000-token summary buffer. With every
-profile now at 262,144 and the shared 81,920 output budget, that lands near
-147,224 tokens, well below the 180,000 the removed field used to set. The
-per-variant trigger had stopped doing anything, so it went.
+profile at 262,144 and the shared 32,768 output budget, that lands near
+196,376 tokens. The field went on 2026-09-26 while the budget was briefly
+81,920, which put the trigger near 147,224, below the 180,000 it used to set.
+That budget also made Claude Code refuse turns with "Prompt is too long" near
+157,000 tokens, and it came back down to 32,768 the same day.
 
 **A second slot forces you to divide it, and that is why there is no second
 slot.** Every profile here runs `--parallel 1`, so `/props` and this variable

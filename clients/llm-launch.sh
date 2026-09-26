@@ -25,11 +25,13 @@ LLM_PORT=8080
 LLM_CTL='D:\LLM-Setup\llm-ctl.ps1'
 # The largest value the per-model launchers used before this one.
 LLM_LOAD_TIMEOUT=240
-# The same output budget for every model, 81920 since 2026-09-26: the value most
-# model cards give for long reasoning and code, so an answer is not cut short. It
-# was 16384 before. Claude Code accepts up to 128000 for a model it does not
-# know, read in the 2.1.283 binary.
-LLM_OUTPUT_TOKENS=81920
+# The same output budget for every model, 32768 since 2026-09-26. The window
+# given to Claude Code is n_ctx minus this budget, and Claude Code refuses a
+# turn with "Prompt is too long" about 23,000 tokens below that. At 81920, tried
+# for a few hours that day, a 262,144 window stopped sessions near 157,000
+# tokens (qwent at 155,800, nex-r1 at 150,000); 32768 moves the stop near
+# 206,000 and still leaves room for long reasoning. It was 16384 before.
+LLM_OUTPUT_TOKENS=32768
 # Which MCP servers Claude Code keeps. "none" gives it no server at all;
 # "mail-imap" keeps a mail server expected at ~/.claude/bin/mail-imap-mcp, which
 # this repository does not ship. A launcher overrides it between sourcing this
@@ -56,8 +58,9 @@ err() { printf '%s\n' "$*" >&2; }
 #                  at once.
 #
 # A per-variant compaction trigger (CLAUDE_CODE_AUTO_COMPACT_WINDOW) lived here
-# until 2026-09-26, for Qwen3.6-35B-A3B at 180,000. The 81,920 output budget
-# puts every variant's default trigger near 147,000, below it, and it went.
+# until 2026-09-26, for Qwen3.6-35B-A3B at 180,000. It went when an 81,920
+# output budget put the default trigger near 147,000; with 32,768 the default
+# trigger is near 196,000 again, above that old value.
 llm_variant() {
   _llm_labels+=("$1"); _llm_hosts+=("$2"); _llm_actions+=("$3"); _llm_match+=("$4")
   _llm_exclude+=("$5"); _llm_ids+=("$6"); _llm_windows+=("$7"); _llm_output_tokens+=("${8:-}")
@@ -246,8 +249,8 @@ llm_launch() {
   local context_tokens=$(( ${_llm_windows[$i]} - output_tokens ))
   local budget="\"CLAUDE_CODE_MAX_OUTPUT_TOKENS\":\"${output_tokens}\",\"CLAUDE_CODE_MAX_CONTEXT_TOKENS\":\"${context_tokens}\""
   # Compaction starts at that input budget minus min(output, 20000) and a
-  # 13,000-token summary buffer (2.1.283 binary, read 2026-09-26): about 147,000
-  # tokens for a 262,144 window and an 81,920 output budget.
+  # 13,000-token summary buffer (2.1.283 binary, read 2026-09-26): about 196,000
+  # tokens for a 262,144 window and a 32,768 output budget.
   budget="{\"env\":{${budget}}}"
 
   # Read for PRESENCE, not for value: any non-empty string turns the disabling
