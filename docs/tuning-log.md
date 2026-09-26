@@ -9,6 +9,68 @@ hardware listed in [prerequisites.md](prerequisites.md).
 
 ---
 
+## 2026-09-26 : fenêtre unique à 262 144, réglages des auteurs, six profils de plus, et xing revient
+
+Tous les profils écrits à la main servaient une fenêtre de 262 144 jetons ; `tiel`, `kat` et `qwen`
+tournaient à part, à 393 216 avec un `--override-kv` sur la fenêtre. L'écart n'avait plus de raison
+d'être et l'override a été retiré : les trois rejoignent les autres à 262 144, la fenêtre que leur
+GGUF déclare.
+
+L'échantillonnage a été réaligné sur les fiches des auteurs, modèle par modèle : `tiel` passe à une
+température de 0,6 sur les deux machines (au lieu de 0,3), `kat` à 1,0 avec une pénalité de présence
+de 1,5, `ornith` et `spark` à 1,0 (au lieu de 0,6), `bonsai2` reçoit un min-p de 0,05, `qwen36` une
+pénalité de présence de 1,5, et `nex` un effort de réflexion `medium` désormais explicite plutôt que
+laissé au défaut du serveur.
+
+Six profils rejoignent le script après le banc du jour : `hemmingway` (Altworld Hemmingway-1),
+`veriloop` (VeriLoop-E2) et `xing` (Xing 4.0 29B-A4B) sur la machine 32 Go seulement ;
+`qwen36apex`, `katapex` et `occamy`, trois modèles requantisés par APEX, sur les deux machines
+(MiniPlus V2.1 sur la machine 32 Go, NanoPlus ou dynamic v2 sur celle de 16 Go). Le moteur `b11156`
+sert cinq des six ; `xing` a besoin du moteur compilé pour la pull request llama.cpp #29012. `xing`
+avait été noté rejeté le 19/09 et ses poids supprimés le soir même (entrée du 21/09, plus bas) : les
+poids ont été reposés pour ce banc et le moteur reconstruit le 24/09, il est de retour.
+
+Le budget de sortie passe à 81 920 jetons partout dans `clients/llm-launch.sh`, contre 16 384. La
+fenêtre annoncée à Claude Code devient 262 144 moins 81 920, soit 180 224. Le déclencheur de
+compaction par variante (huitième argument `COMPACT_AT` de `llm_variant`, et son cas particulier
+`CLAUDE_CODE_AUTO_COMPACT_WINDOW=180000` pour `qwen36`) a été retiré : lu dans le binaire 2.1.283 le
+26/09, Claude Code compacte de lui-même à la fenêtre annoncée moins le plus petit de la sortie et de
+20 000, moins 13 000 jetons de marge pour son résumé, soit environ 147 224 jetons ici, en dessous du
+seuil que portait `qwen36`. Le réglage par variante n'avait donc plus d'effet.
+
+`kat` reconnaît désormais son propre dossier de poids, `kat-coder-v25`, et `qwen36` le sien,
+`qwen3.6-35b-a3b-mtp` : les deux versions APEX du même modèle portent aussi `kat-coder` et
+`qwen3.6-35b` dans leur chemin, et le motif de correspondance devait se resserrer pour ne pas les
+confondre.
+
+### Preuve par exécution, station .99
+
+Treize profils chargés l'un après l'autre : `n_ctx` lu à 262 144 dans `/props` pour chacun, les
+réglages d'échantillonnage lus dans `/props` conformes à ce qui précède, et une réponse obtenue pour
+chacun avec un message système placé tard dans la conversation. VRAM relevée au `nvidia-smi`, carte
+de 32 607 MiB :
+
+| Profil       | VRAM (MiB) |
+| ------------ | ---------- |
+| `tiel`       | 29 198     |
+| `kat`        | 26 822     |
+| `qwen`       | 26 594     |
+| `ornith`     | 14 872     |
+| `spark`      | 12 572     |
+| `bonsai2`    | 25 292     |
+| `nex`        | 26 760     |
+| `hemmingway` | 31 078     |
+| `veriloop`   | 27 308     |
+| `xing`       | 26 692     |
+| `qwen36apex` | 18 612     |
+| `katapex`    | 18 612     |
+| `occamy`     | 19 448     |
+
+La machine 16 Go (.97) n'a pas été testée dans cette passe, occupée au moment du banc : rien de
+mesuré ici ne vaut pour elle.
+
+---
+
 ## 2026-09-21 : deux profils rejetés quittent le script, et un moteur de 5,15 Go avec
 
 `whittle` et `xing` avaient été rejetés le 19/09 et leurs poids supprimés le soir même, mais les

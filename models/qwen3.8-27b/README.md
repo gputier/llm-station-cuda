@@ -12,9 +12,9 @@ of this box.
 |---|---|
 | Weights | `Qwen3.8-27B-NVFP4-MTP-LOW.gguf`, 14.5 GiB |
 | Vision projector | `mmproj-BF16.gguf`, 0.87 GiB |
-| Context | 393,216 (`--override-kv`; 262,144 is the native ceiling) |
+| Context | 262,144, the native ceiling. Ran at 393,216 with `--override-kv` until 2026-09-26. |
 | KV cache | `q4_0` |
-| VRAM | 26,453 MB of 32,607 |
+| VRAM | 26,453 MB of 32,607 at native context; 26,594 MB measured 2026-09-26 at the 262,144 window |
 | Throughput | 123.4 tok/s decode, 4,267 tok/s prefill |
 | Build | **2026-08-27 only.** NVFP4 kernels do not exist in older builds. |
 
@@ -100,7 +100,7 @@ it worse**, so the defect comes from the model and not from the image.
 
 Use [muse](../muse-glimmer-30b/) for OCR.
 
-## `--ctx-size 393216`, and why not 524288
+## `--ctx-size 393216`, and why not 524288 (until 2026-09-26)
 
 The GGUF declares `context_length = 262144`. llama.cpp caps the window there, in
 a single log line, **but still sizes its buffers on the value you requested**.
@@ -114,9 +114,11 @@ window it never had:
 
 Twenty-three percent of decode and 72% of prefill lost for nothing.
 
-Lifting the ceiling for real takes `--override-kv qwen35.context_length`, exactly
-like muse's override. Measured on 2026-09-01, same 50,480-token prompt, 800
-tokens forced, fixed seed, cold prefill on a fresh process, override in place:
+Lifting the ceiling for real used to take `--override-kv qwen35.context_length`,
+exactly like muse's override, until the override was dropped on 2026-09-26 and
+this profile went back to the GGUF's own 262,144 ceiling. Measured on
+2026-09-01, same 50,480-token prompt, 800 tokens forced, fixed seed, cold
+prefill on a fresh process, override in place then:
 
 | Window | VRAM | Decode | Prefill |
 |---|---|---|---|
@@ -135,8 +137,8 @@ So the throttling wall on this card sits **between 31.3 and 31.9 GB**, not at th
 ~29 GB the `q8_0` cache reading below had suggested. That earlier figure marked
 where a heavier KV cache began to cost, not a hard edge.
 
-Only 1,316 MB of VRAM are left free at 393,216. This profile has no room for
-another GPU tenant.
+Only 1,316 MB of VRAM were left free at 393,216. This profile now runs at
+262,144, its native ceiling, and has room to spare again.
 
 **Recall past 262,144 is not proven.** A window the server accepts says nothing
 about what the model still finds in it, and 262,144 is where the model was

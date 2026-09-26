@@ -16,9 +16,9 @@ box does its work, and the trial is what decides whether it takes over.
 |---|---|
 | Weights | `KAT-Philly-MTP-Q4_K_M.gguf` |
 | Vision projector | none published for these weights: text only |
-| Context | 393,216 (`--override-kv`, same mechanism as `tiel`) |
+| Context | 262,144, the GGUF's declared ceiling. Ran at 393,216 with `--override-kv`, same mechanism as `tiel`, until 2026-09-26. |
 | KV cache | `q4_0` |
-| VRAM | 29,702 MB in the 2026-09-08 bench |
+| VRAM | 29,702 MB in the 2026-09-08 bench, 26,822 MB measured 2026-09-26 at the 262,144 window |
 | Build | `b10826`, same as `tiel` |
 
 ## Running it stops `tiel`
