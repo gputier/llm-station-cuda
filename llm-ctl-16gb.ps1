@@ -64,15 +64,24 @@ New-Item -ItemType Directory -Force -Path $instDir, $logDir | Out-Null
 
 # Which build serves which profile, and nothing else: a model's own settings
 # live in its switch branch.
+#
+# Since 2026-09-26 both builds run from a "-toolorder" copy: the same source
+# (BeeLlama commit 78af83265, release tag b11156) rebuilt ON THIS BOX for sm_89
+# with the fix that makes the Anthropic endpoint put tool results before the
+# text of the same user message (see $exeUp in llm-ctl.ps1). Sources under
+# D:\LLM-Setup\src. Each copy holds the static llama-server.exe and the CUDA
+# runtime DLLs of the original, which stays in place. Built on the .99 first,
+# they crashed here (0xc000001d): a native build there uses AVX-512, which
+# this i7-14700KF lacks. Same speed as the originals, measured 2026-09-26.
 $builds = @{
-  tiel   = @{ Exe = "$RootDir\beellama-v0.4.6\llama-server.exe"; WorkDir = "$RootDir\beellama-v0.4.6" }
-  qwen36 = @{ Exe = "$RootDir\beellama-v0.4.6\llama-server.exe"; WorkDir = "$RootDir\beellama-v0.4.6" }
+  tiel   = @{ Exe = "$RootDir\beellama-v0.4.6-toolorder\llama-server.exe"; WorkDir = "$RootDir\beellama-v0.4.6-toolorder" }
+  qwen36 = @{ Exe = "$RootDir\beellama-v0.4.6-toolorder\llama-server.exe"; WorkDir = "$RootDir\beellama-v0.4.6-toolorder" }
   # The three models added on 2026-09-26, on the upstream release b11156 (2026-09-24,
   # CUDA 13.4 zip plus its own cudart, unpacked flat) they were proven on at the full
   # window. They need no KVarN cache: a lighter quantisation keeps them on the card.
-  qwen36apex = @{ Exe = "$RootDir\llama-cpp-b11156\llama-server.exe"; WorkDir = "$RootDir\llama-cpp-b11156" }
-  katapex    = @{ Exe = "$RootDir\llama-cpp-b11156\llama-server.exe"; WorkDir = "$RootDir\llama-cpp-b11156" }
-  occamy     = @{ Exe = "$RootDir\llama-cpp-b11156\llama-server.exe"; WorkDir = "$RootDir\llama-cpp-b11156" }
+  qwen36apex = @{ Exe = "$RootDir\llama-cpp-b11156-toolorder\llama-server.exe"; WorkDir = "$RootDir\llama-cpp-b11156-toolorder" }
+  katapex    = @{ Exe = "$RootDir\llama-cpp-b11156-toolorder\llama-server.exe"; WorkDir = "$RootDir\llama-cpp-b11156-toolorder" }
+  occamy     = @{ Exe = "$RootDir\llama-cpp-b11156-toolorder\llama-server.exe"; WorkDir = "$RootDir\llama-cpp-b11156-toolorder" }
 }
 
 function Quote($s) {
