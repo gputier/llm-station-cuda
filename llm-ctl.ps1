@@ -88,8 +88,11 @@ $cudaBinUp = "$CudaRoot\v13.3\bin"
 #    launched from its own directory, which Start-LLM does via workDirPath.
 #  - Linking FAILS if an instance is still running on this build (LNK1104,
 #    cannot open ggml-cuda.dll). Stop the server before recompiling.
-$exeNew     = "$RootDir\llama-cpp-20260827\build-win\bin\Release\llama-server.exe"
-$workDirNew = "$RootDir\llama-cpp-20260827\build-win\bin\Release"
+# Rebuilt 2026-09-26 as llama-cpp-20260827-toolorder, same commit plus the
+# tool_result order fix described at $exeUp, through build-llama.bat (Ninja):
+# the Visual Studio generator now fails on this tree. Same options otherwise.
+$exeNew     = "$RootDir\llama-cpp-20260827-toolorder\build-win\bin\llama-server.exe"
+$workDirNew = "$RootDir\llama-cpp-20260827-toolorder\build-win\bin"
 
 # Since 2026-09-26 every engine below runs from a "-toolorder" copy: the same
 # source (release tag, fork commit or tree) rebuilt with the tool_result order
