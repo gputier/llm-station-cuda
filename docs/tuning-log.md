@@ -11,10 +11,9 @@ hardware listed in [prerequisites.md](prerequisites.md).
 
 ## 2026-09-26 : fenêtre unique à 262 144, réglages des auteurs, six profils de plus, et xing revient
 
-Tous les profils écrits à la main servaient une fenêtre de 262 144 jetons ; `tiel`, `kat` et `qwen`
-tournaient à part, à 393 216 avec un `--override-kv` sur la fenêtre. L'écart n'avait plus de raison
-d'être et l'override a été retiré : les trois rejoignent les autres à 262 144, la fenêtre que leur
-GGUF déclare.
+Tous les profils écrits à la main servaient une fenêtre de 262 144 jetons, sauf `tiel`, `kat` et
+`qwen`, à 393 216 avec un `--override-kv` sur la fenêtre. Guillaume a fixé une fenêtre unique de
+262 144 : les trois reviennent à celle que déclare leur GGUF, et l'override disparaît.
 
 L'échantillonnage a été réaligné sur les fiches des auteurs, modèle par modèle : `tiel` passe à une
 température de 0,6 sur les deux machines (au lieu de 0,3), `kat` à 1,0 avec une pénalité de présence
@@ -45,10 +44,9 @@ confondre.
 
 ### Preuve par exécution, station .99
 
-Treize profils chargés l'un après l'autre : `n_ctx` lu à 262 144 dans `/props` pour chacun, les
-réglages d'échantillonnage lus dans `/props` conformes à ce qui précède, et une réponse obtenue pour
-chacun avec un message système placé tard dans la conversation. VRAM relevée au `nvidia-smi`, carte
-de 32 607 MiB :
+Treize profils chargés l'un après l'autre. Pour chacun, `/props` annonçait un `n_ctx` de 262 144 et
+les réglages d'échantillonnage décrits plus haut, et le modèle a répondu malgré un message système
+glissé en fin de conversation. VRAM relevée au `nvidia-smi`, carte de 32 607 MiB :
 
 | Profil       | VRAM (MiB) |
 | ------------ | ---------- |
@@ -66,8 +64,9 @@ de 32 607 MiB :
 | `katapex`    | 18 612     |
 | `occamy`     | 19 448     |
 
-La machine 16 Go (.97) n'a pas été testée dans cette passe, occupée au moment du banc : rien de
-mesuré ici ne vaut pour elle.
+La machine 16 Go (.97) traitait des données ce jour-là : son nouveau script a été déposé sans charger
+aucun modèle, et rien de mesuré ici ne vaut pour elle. Le contrôle en charge de ses cinq profils est
+suivi dans l'issue 3 du dépôt.
 
 ---
 
