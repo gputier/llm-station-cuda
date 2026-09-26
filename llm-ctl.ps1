@@ -54,8 +54,15 @@ $exe       = "$RootDir\llama-cpp-turboquant-win\build-win\bin\llama-server.exe"
 $workDir   = "$RootDir\llama-cpp-turboquant-win\build-win\bin"
 $cudaBin   = "$CudaRoot\v12.8\bin"
 
-$exeUp     = "$RootDir\llama-cpp-upstream\build-win\bin\Release\llama-server.exe"
-$workDirUp = "$RootDir\llama-cpp-upstream\build-win\bin\Release"
+# Commit 153d324 plus one fix, built 2026-09-26 in its own worktree: the
+# Anthropic endpoint put a user message's text before its tool results, so a
+# compaction request sent right after a tool call ended on the tool result and
+# the model called another tool instead of summarising. Replaying one captured
+# request: summary 2 times out of 12 before, 6 out of 8 in the fixed order.
+# The fix is still missing upstream on that day. The unpatched build stays in
+# llama-cpp-upstream.
+$exeUp     = "$RootDir\llama-cpp-upstream-toolorder\build-win\bin\Release\llama-server.exe"
+$workDirUp = "$RootDir\llama-cpp-upstream-toolorder\build-win\bin\Release"
 $cudaBinUp = "$CudaRoot\v13.3\bin"
 
 # Build of 2026-08-27 (0.3.0-dev, build 479, commit 192067b72), in a SEPARATE
