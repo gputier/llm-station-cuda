@@ -12,10 +12,10 @@ source "$(dirname "${BASH_SOURCE[0]}")/llm-launch.sh"
 
 # Profils du banc (bench/benchrun/profiles.py), un par config bench/configs.
 llm_variant "R1, réglage complet de la fiche, pénalité de répétition restaurée, machine 16 Go" \
-  "${LLM_HOST_16GB:-your-16gb-box}" "profile -Name qwen36-r1" qwen36-r1 '' qwen36-r1 262144 '' 81920
+  "${LLM_HOST_16GB:-your-16gb-box}" "profile -Name qwen36-r1" qwen36-r1 '' qwen36-r1 262144 81920
 llm_variant "R2, répartition mémoire ciblée, lancé sans le réglage d'origine, machine 16 Go" \
-  "${LLM_HOST_16GB:-your-16gb-box}" "profile -Name qwen36-r2" qwen36-r2 '' qwen36-r2 262144 '' 81920
+  "${LLM_HOST_16GB:-your-16gb-box}" "profile -Name qwen36-r2" qwen36-r2 '' qwen36-r2 262144 81920
 llm_variant "R3, gabarit de dialogue alternatif, hypothèse non confirmée, machine 16 Go" \
-  "${LLM_HOST_16GB:-your-16gb-box}" "profile -Name qwen36-r3" qwen36-r3 '' qwen36-r3 262144 '' 81920
+  "${LLM_HOST_16GB:-your-16gb-box}" "profile -Name qwen36-r3" qwen36-r3 '' qwen36-r3 262144 81920
 
 llm_launch "$@"

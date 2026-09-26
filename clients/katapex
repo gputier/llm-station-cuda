@@ -1,29 +1,32 @@
 #!/usr/bin/env bash
-# katapex - Claude Code on KAT APEX, served by the 32 GB box in its
-# full quant, and by the 16 GB box in a smaller one that fits its card.
+# katapex - Claude Code on KAT-Coder-V2.5-Dev requantised by APEX, on the box
+# picked at start-up.
 #
-# Bench-only model: no hand-written production profile exists for it, only the
-# three profiles the bench compared, per machine (bench/configs/99/katapex and
-# bench/configs/97/katapex). The menu below
-# asks which one to load.
+# Added on 2026-09-26 after the bench compared it. MiniPlus V2.1 on the 32 GB
+# box, dynamic v2 on the 16 GB one: the full quant spilled out of that card at
+# the 262,144 window. Thinking-mode sampling of the KAT card on both
+# (llm-ctl.ps1, llm-ctl-16gb.ps1).
 #
-# Scope: the exported variables live in this process only. A plain `claude` in
-# another shell keeps talking to Anthropic.
+# LLM_HOST names the 32 GB box and LLM_HOST_16GB the second one. LLM_CHOICE=1
+# or 2 skips the menu, which a run without a terminal requires.
 
 source "$(dirname "${BASH_SOURCE[0]}")/llm-launch.sh"
 
+llm_variant "KAT APEX sur la machine 32 Go, fenêtre 262k" "${LLM_HOST:-your-32gb-box}" katapex kat-coder-v2.5-dev.apex-i-miniplus '' kat-coder-v25-apex 262144
+llm_variant "KAT APEX, version allégée, sur la machine 16 Go, fenêtre 262k" "${LLM_HOST_16GB:-your-16gb-box}" katapex kat-coder-v2.5-dev-apex-dynamic '' kat-coder-v25-apex 262144
+
 # Profils du banc (bench/benchrun/profiles.py), un par config bench/configs.
 llm_variant "R1, sampling de base, réflexion active, machine 32 Go" \
-  "${LLM_HOST:-your-32gb-box}" "profile -Name katapex-r1" katapex-r1 '' katapex-r1 262144 '' 81920
+  "${LLM_HOST:-your-32gb-box}" "profile -Name katapex-r1" katapex-r1 '' katapex-r1 262144 81920
 llm_variant "R2, réflexion préservée après réponse, sourcé, machine 32 Go" \
-  "${LLM_HOST:-your-32gb-box}" "profile -Name katapex-r2" katapex-r2 '' katapex-r2 262144 '' 32768
+  "${LLM_HOST:-your-32gb-box}" "profile -Name katapex-r2" katapex-r2 '' katapex-r2 262144 32768
 llm_variant "R3, cache mémoire réduit, non confirmé, machine 32 Go" \
-  "${LLM_HOST:-your-32gb-box}" "profile -Name katapex-r3" katapex-r3 '' katapex-r3 262144 '' 81920
+  "${LLM_HOST:-your-32gb-box}" "profile -Name katapex-r3" katapex-r3 '' katapex-r3 262144 81920
 llm_variant "R1, sampling de base, réflexion active, version allégée, machine 16 Go" \
-  "${LLM_HOST_16GB:-your-16gb-box}" "profile -Name katapex-r1" katapex-r1 '' katapex-r1 262144 '' 81920
+  "${LLM_HOST_16GB:-your-16gb-box}" "profile -Name katapex-r1" katapex-r1 '' katapex-r1 262144 81920
 llm_variant "R2, réflexion préservée après réponse, sourcé, version allégée, machine 16 Go" \
-  "${LLM_HOST_16GB:-your-16gb-box}" "profile -Name katapex-r2" katapex-r2 '' katapex-r2 262144 '' 32768
+  "${LLM_HOST_16GB:-your-16gb-box}" "profile -Name katapex-r2" katapex-r2 '' katapex-r2 262144 32768
 llm_variant "R3, cache mémoire réduit, non confirmé, version allégée, machine 16 Go" \
-  "${LLM_HOST_16GB:-your-16gb-box}" "profile -Name katapex-r3" katapex-r3 '' katapex-r3 262144 '' 81920
+  "${LLM_HOST_16GB:-your-16gb-box}" "profile -Name katapex-r3" katapex-r3 '' katapex-r3 262144 81920
 
 llm_launch "$@"

@@ -3,14 +3,16 @@
 #
 # Replaces the qwen and qwenu launchers since 2026-09-14.
 #
-#   1. Qwen3.8-27B NVFP4 on the 32 GB box, reasoning and coding, 393,216 window.
-#      Recall past the native 262,144 is NOT proven on these weights.
+#   1. Qwen3.8-27B NVFP4 on the 32 GB box, reasoning and coding, 262,144 window,
+#      393,216 until 2026-09-26.
 #   2. Qwen3.8-27B Uncensored on the 32 GB box, only when the aligned build
 #      refuses a legitimate task, 262,144 window.
 #   3. Qwen3.6-35B-A3B UD-IQ3_XXS on the 16 GB box, 137.1 tok/s decode and 90.2%
-#      on the 500-question MMLU set on 2026-09-14, 262,144 window. Compaction
-#      starts at 180,000: replayed at 222,000 on 2026-09-15, the model answered
-#      the summary request with a shell command instead of a summary.
+#      on the 500-question MMLU set on 2026-09-14, 262,144 window. Replayed at
+#      222,000 on 2026-09-15, the model answered the summary request with a shell
+#      command instead of a summary. It compacted at 180,000 from then on; since
+#      the 81,920 output budget of 2026-09-26 every variant compacts near
+#      147,000, below that point, and the setting went.
 #   4. Qwen3.8-27B TWIN-TURBO 709-L on the 32 GB box, on trial since 2026-09-19:
 #      225/235 on the unpublished set against 221 for the uncensored build, but
 #      31.6 GB of VRAM at load, so long-context speed is unproven. 262,144 window.
@@ -20,15 +22,18 @@
 # uncensored build for the aligned one until 2026-09-14, then the TWIN-TURBO
 # one, whose file says "Uncen", until 2026-09-19.
 #
+# Qwen3.6-35B-A3B matches on its own directory too, qwen3.6-35b-a3b-mtp: the
+# APEX build served by qwen36apex carries "qwen3.6-35b" as well.
+#
 # LLM_HOST names the 32 GB box and LLM_HOST_16GB the second one. LLM_CHOICE=1
 # to 4 skips the menu, which a run without a terminal requires. Everything else
 # lives in llm-launch.sh.
 
 source "$(dirname "${BASH_SOURCE[0]}")/llm-launch.sh"
 
-llm_variant "Qwen3.8-27B sur la machine 32 Go, fenêtre 393k" "${LLM_HOST:-your-32gb-box}" qwen qwen3.8-27b-nvfp4 '' qwen3.8-27b 393216
+llm_variant "Qwen3.8-27B sur la machine 32 Go, fenêtre 262k" "${LLM_HOST:-your-32gb-box}" qwen qwen3.8-27b-nvfp4 '' qwen3.8-27b 262144
 llm_variant "Qwen3.8-27B Uncensored sur la machine 32 Go, si l'aligné refuse, fenêtre 262k" "${LLM_HOST:-your-32gb-box}" qwenu qwen3.8-27b-uncensored '' qwen3.8-27b-uncensored 262144
-llm_variant "Qwen3.6-35B-A3B sur la machine 16 Go, fenêtre 262k" "${LLM_HOST_16GB:-your-16gb-box}" qwen36 qwen3.6-35b '' qwen3.6-35b-a3b 262144 180000
+llm_variant "Qwen3.6-35B-A3B sur la machine 16 Go, fenêtre 262k" "${LLM_HOST_16GB:-your-16gb-box}" qwen36 qwen3.6-35b-a3b-mtp '' qwen3.6-35b-a3b 262144
 llm_variant "Qwen3.8-27B TWIN-TURBO sur la machine 32 Go, à l'essai, fenêtre 262k" "${LLM_HOST:-your-32gb-box}" qwent qwen3.8-27b-twin-turbo-709l '' qwen3.8-27b-twin-turbo 262144
 
 # Profils du banc (bench/benchrun/profiles.py), un par config bench/configs.
@@ -36,28 +41,28 @@ llm_variant "Qwen3.8-27B TWIN-TURBO sur la machine 32 Go, à l'essai, fenêtre 2
 # modèles Qwen3.8-27B de la machine 32 Go : un fichier par famille, pas un par
 # modèle (choix de conception du 2026-09-14, voir l'en-tête de llm-launch.sh).
 llm_variant "R1, Qwen, palier intermédiaire, cache mémoire large, machine 32 Go" \
-  "${LLM_HOST:-your-32gb-box}" "profile -Name qwen-r1" qwen-r1 '' qwen-r1 262144 '' 81920
+  "${LLM_HOST:-your-32gb-box}" "profile -Name qwen-r1" qwen-r1 '' qwen-r1 262144 81920
 llm_variant "R2, Qwen, palier léger, gabarit de dialogue alternatif, effort moyen, machine 32 Go" \
-  "${LLM_HOST:-your-32gb-box}" "profile -Name qwen-r2" qwen-r2 '' qwen-r2 393216 '' 32768
+  "${LLM_HOST:-your-32gb-box}" "profile -Name qwen-r2" qwen-r2 '' qwen-r2 393216 32768
 llm_variant "R3, Qwen, palier léger, cache mémoire réduit, moteur récent, non confirmé, machine 32 Go" \
-  "${LLM_HOST:-your-32gb-box}" "profile -Name qwen-r3" qwen-r3 '' qwen-r3 262144 '' 81920
+  "${LLM_HOST:-your-32gb-box}" "profile -Name qwen-r3" qwen-r3 '' qwen-r3 262144 81920
 llm_variant "R1, Qwen Uncensored, gabarit embarqué, réflexion désactivée, machine 32 Go" \
-  "${LLM_HOST:-your-32gb-box}" "profile -Name qwenu-r1" qwenu-r1 '' qwenu-r1 262144 '' 8192
+  "${LLM_HOST:-your-32gb-box}" "profile -Name qwenu-r1" qwenu-r1 '' qwenu-r1 262144 8192
 llm_variant "R2, Qwen Uncensored, cache mémoire réduit, gabarit alternatif, machine 32 Go" \
-  "${LLM_HOST:-your-32gb-box}" "profile -Name qwenu-r2" qwenu-r2 '' qwenu-r2 262144 '' 8192
+  "${LLM_HOST:-your-32gb-box}" "profile -Name qwenu-r2" qwenu-r2 '' qwenu-r2 262144 8192
 llm_variant "R3, Qwen Uncensored, cache mémoire réduit, gabarit alternatif, non confirmé, machine 32 Go" \
-  "${LLM_HOST:-your-32gb-box}" "profile -Name qwenu-r3" qwenu-r3 '' qwenu-r3 262144 '' 81920
+  "${LLM_HOST:-your-32gb-box}" "profile -Name qwenu-r3" qwenu-r3 '' qwenu-r3 262144 81920
 llm_variant "R1, Qwen TWIN-TURBO, gabarit de l'auteur avec modes de réflexion, réflexion active, machine 32 Go" \
-  "${LLM_HOST:-your-32gb-box}" "profile -Name qwent-r1" qwent-r1 '' qwent-r1 262144 '' 81920
+  "${LLM_HOST:-your-32gb-box}" "profile -Name qwent-r1" qwent-r1 '' qwent-r1 262144 81920
 llm_variant "R2, Qwen TWIN-TURBO, réflexion désactivée, gabarit alternatif, machine 32 Go" \
-  "${LLM_HOST:-your-32gb-box}" "profile -Name qwent-r2" qwent-r2 '' qwent-r2 262144 '' 8192
+  "${LLM_HOST:-your-32gb-box}" "profile -Name qwent-r2" qwent-r2 '' qwent-r2 262144 8192
 llm_variant "R3, Qwen TWIN-TURBO, gabarit Qwen3.8 de base, machine 32 Go" \
-  "${LLM_HOST:-your-32gb-box}" "profile -Name qwent-r3" qwent-r3 '' qwent-r3 262144 '' 81920
+  "${LLM_HOST:-your-32gb-box}" "profile -Name qwent-r3" qwent-r3 '' qwent-r3 262144 81920
 llm_variant "R1, Qwen candidat qwenf, gabarit de l'auteur, réflexion par défaut, machine 32 Go" \
-  "${LLM_HOST:-your-32gb-box}" "profile -Name qwenf-r1" qwenf-r1 '' qwenf-r1 262144 '' 81920
+  "${LLM_HOST:-your-32gb-box}" "profile -Name qwenf-r1" qwenf-r1 '' qwenf-r1 262144 81920
 llm_variant "R2, Qwen candidat qwenf, réflexion désactivée, machine 32 Go" \
-  "${LLM_HOST:-your-32gb-box}" "profile -Name qwenf-r2" qwenf-r2 '' qwenf-r2 262144 '' 8192
+  "${LLM_HOST:-your-32gb-box}" "profile -Name qwenf-r2" qwenf-r2 '' qwenf-r2 262144 8192
 llm_variant "R3, Qwen candidat qwenf, modèle brouillon renforcé, non mesuré jusqu'ici, machine 32 Go" \
-  "${LLM_HOST:-your-32gb-box}" "profile -Name qwenf-r3" qwenf-r3 '' qwenf-r3 262144 '' 81920
+  "${LLM_HOST:-your-32gb-box}" "profile -Name qwenf-r3" qwenf-r3 '' qwenf-r3 262144 81920
 
 llm_launch "$@"

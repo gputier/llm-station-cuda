@@ -21,10 +21,10 @@ llm_variant "Muse Glimmer 30B sur la machine 32 Go, fenêtre 262k" "${LLM_HOST:-
 
 # Profils du banc (bench/benchrun/profiles.py), un par config bench/configs.
 llm_variant "R1, réglage de référence, tel que publié, machine 32 Go" \
-  "${LLM_HOST:-your-32gb-box}" "profile -Name muse-r1" muse-r1 '' muse-r1 262144 '' 65536
+  "${LLM_HOST:-your-32gb-box}" "profile -Name muse-r1" muse-r1 '' muse-r1 262144 65536
 llm_variant "R2, fenêtre étendue au million de jetons, à reprouver, machine 32 Go" \
-  "${LLM_HOST:-your-32gb-box}" "profile -Name muse-r2" muse-r2 '' muse-r2 1048576 '' 65536
+  "${LLM_HOST:-your-32gb-box}" "profile -Name muse-r2" muse-r2 '' muse-r2 1048576 65536
 llm_variant "R3, encodeur d'image alternatif, écarté à l'origine faute de mémoire, machine 32 Go" \
-  "${LLM_HOST:-your-32gb-box}" "profile -Name muse-r3" muse-r3 '' muse-r3 262144 '' 65536
+  "${LLM_HOST:-your-32gb-box}" "profile -Name muse-r3" muse-r3 '' muse-r3 262144 65536
 
 llm_launch "$@"

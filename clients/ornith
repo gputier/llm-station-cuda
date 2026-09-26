@@ -16,10 +16,10 @@ llm_variant "Ornith-1.5-9B sur la machine 32 Go, fenêtre 262k" "${LLM_HOST:-you
 
 # Profils du banc (bench/benchrun/profiles.py), un par config bench/configs.
 llm_variant "R1, réglage de référence, usage général, machine 32 Go" \
-  "${LLM_HOST:-your-32gb-box}" "profile -Name ornith-r1" ornith-r1 '' ornith-r1 262144 '' 81920
+  "${LLM_HOST:-your-32gb-box}" "profile -Name ornith-r1" ornith-r1 '' ornith-r1 262144 81920
 llm_variant "R2, cache mémoire ajusté, non confirmé pour ce modèle, machine 32 Go" \
-  "${LLM_HOST:-your-32gb-box}" "profile -Name ornith-r2" ornith-r2 '' ornith-r2 262144 '' 81920
+  "${LLM_HOST:-your-32gb-box}" "profile -Name ornith-r2" ornith-r2 '' ornith-r2 262144 81920
 llm_variant "R3, fenêtre étendue, rappel non prouvé, machine 32 Go" \
-  "${LLM_HOST:-your-32gb-box}" "profile -Name ornith-r3" ornith-r3 '' ornith-r3 393216 '' 131072
+  "${LLM_HOST:-your-32gb-box}" "profile -Name ornith-r3" ornith-r3 '' ornith-r3 393216 131072
 
 llm_launch "$@"

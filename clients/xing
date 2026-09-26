@@ -1,21 +1,23 @@
 #!/usr/bin/env bash
-# xing - Claude Code on Xing, served by the 32 GB box.
+# xing - Claude Code on Xing 4.0 29B-A4B, served by the 32 GB box.
 #
-# Bench-only model: no hand-written production profile exists for it, only the
-# three profiles the bench compared (bench/configs/99/xing). The menu below
-# asks which one to load.
+# Added on 2026-09-26 after the bench compared it. IQ4_NL on the engine built
+# from llama.cpp pull request #29012, the only one that reads it; 262,144
+# window, thinking on, sampling of its card (llm-ctl.ps1).
 #
 # Scope: the exported variables live in this process only. A plain `claude` in
 # another shell keeps talking to Anthropic.
 
 source "$(dirname "${BASH_SOURCE[0]}")/llm-launch.sh"
 
+llm_variant "Xing 4.0 sur la machine 32 Go, fenêtre 262k" "${LLM_HOST:-your-32gb-box}" xing xing4_0-29b '' xing-4.0-29b-a4b 262144
+
 # Profils du banc (bench/benchrun/profiles.py), un par config bench/configs.
 llm_variant "R1, réglage de référence de l'éditeur, sans réflexion accélérée, machine 32 Go" \
-  "${LLM_HOST:-your-32gb-box}" "profile -Name xing-r1" xing-r1 '' xing-r1 262144 '' 65536
+  "${LLM_HOST:-your-32gb-box}" "profile -Name xing-r1" xing-r1 '' xing-r1 262144 65536
 llm_variant "R2, réflexion accélérée activée, sourcé, machine 32 Go" \
-  "${LLM_HOST:-your-32gb-box}" "profile -Name xing-r2" xing-r2 '' xing-r2 262144 '' 65536
+  "${LLM_HOST:-your-32gb-box}" "profile -Name xing-r2" xing-r2 '' xing-r2 262144 65536
 llm_variant "R3, réflexion accélérée et cache mémoire réduit, non confirmé, machine 32 Go" \
-  "${LLM_HOST:-your-32gb-box}" "profile -Name xing-r3" xing-r3 '' xing-r3 262144 '' 65536
+  "${LLM_HOST:-your-32gb-box}" "profile -Name xing-r3" xing-r3 '' xing-r3 262144 65536
 
 llm_launch "$@"

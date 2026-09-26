@@ -1,29 +1,32 @@
 #!/usr/bin/env bash
-# qwen36apex - Claude Code on Qwen3.6-35B-A3B APEX, served by the 32 GB box in its
-# full quant, and by the 16 GB box in a smaller one that fits its card.
+# qwen36apex - Claude Code on Qwen3.6-35B-A3B requantised by APEX, on the box
+# picked at start-up.
 #
-# A separate model from qwen36 (its own weights, APEX-MTP), not a variant of
-# it: kept in its own launcher rather than folded into qwen36's menu.
-# Bench-only entries, from bench/configs/99/qwen36apex and
-# bench/configs/97/qwen36apex.
+# Added on 2026-09-26 after the bench compared it. MiniPlus V2.1 on the 32 GB
+# box, NanoPlus on the 16 GB one: the full quant spilled out of that card at the
+# 262,144 window. Thinking-mode sampling of the Qwen3.6 card on both
+# (llm-ctl.ps1, llm-ctl-16gb.ps1).
 #
-# Scope: the exported variables live in this process only. A plain `claude` in
-# another shell keeps talking to Anthropic.
+# LLM_HOST names the 32 GB box and LLM_HOST_16GB the second one. LLM_CHOICE=1
+# or 2 skips the menu, which a run without a terminal requires.
 
 source "$(dirname "${BASH_SOURCE[0]}")/llm-launch.sh"
 
+llm_variant "Qwen3.6 APEX sur la machine 32 Go, fenêtre 262k" "${LLM_HOST:-your-32gb-box}" qwen36apex qwen3.6-35b-a3b.apex-i-miniplus '' qwen3.6-35b-a3b-apex 262144
+llm_variant "Qwen3.6 APEX, version allégée, sur la machine 16 Go, fenêtre 262k" "${LLM_HOST_16GB:-your-16gb-box}" qwen36apex qwen3.6-35b-a3b.apex-i-nanoplus '' qwen3.6-35b-a3b-apex 262144
+
 # Profils du banc (bench/benchrun/profiles.py), un par config bench/configs.
 llm_variant "R1, réglage de base, sans modèle brouillon, machine 32 Go" \
-  "${LLM_HOST:-your-32gb-box}" "profile -Name qwen36apex-r1" qwen36apex-r1 '' qwen36apex-r1 262144 '' 81920
+  "${LLM_HOST:-your-32gb-box}" "profile -Name qwen36apex-r1" qwen36apex-r1 '' qwen36apex-r1 262144 81920
 llm_variant "R2, modèle brouillon embarqué, sourcé, machine 32 Go" \
-  "${LLM_HOST:-your-32gb-box}" "profile -Name qwen36apex-r2" qwen36apex-r2 '' qwen36apex-r2 262144 '' 81920
+  "${LLM_HOST:-your-32gb-box}" "profile -Name qwen36apex-r2" qwen36apex-r2 '' qwen36apex-r2 262144 81920
 llm_variant "R3, gabarit de dialogue alternatif, non confirmé, machine 32 Go" \
-  "${LLM_HOST:-your-32gb-box}" "profile -Name qwen36apex-r3" qwen36apex-r3 '' qwen36apex-r3 262144 '' 81920
+  "${LLM_HOST:-your-32gb-box}" "profile -Name qwen36apex-r3" qwen36apex-r3 '' qwen36apex-r3 262144 81920
 llm_variant "R1, réglage de base, sans modèle brouillon, version allégée, machine 16 Go" \
-  "${LLM_HOST_16GB:-your-16gb-box}" "profile -Name qwen36apex-r1" qwen36apex-r1 '' qwen36apex-r1 262144 '' 81920
+  "${LLM_HOST_16GB:-your-16gb-box}" "profile -Name qwen36apex-r1" qwen36apex-r1 '' qwen36apex-r1 262144 81920
 llm_variant "R2, modèle brouillon embarqué, sourcé, version allégée, machine 16 Go" \
-  "${LLM_HOST_16GB:-your-16gb-box}" "profile -Name qwen36apex-r2" qwen36apex-r2 '' qwen36apex-r2 262144 '' 81920
+  "${LLM_HOST_16GB:-your-16gb-box}" "profile -Name qwen36apex-r2" qwen36apex-r2 '' qwen36apex-r2 262144 81920
 llm_variant "R3, gabarit de dialogue alternatif, non confirmé, version allégée, machine 16 Go" \
-  "${LLM_HOST_16GB:-your-16gb-box}" "profile -Name qwen36apex-r3" qwen36apex-r3 '' qwen36apex-r3 262144 '' 81920
+  "${LLM_HOST_16GB:-your-16gb-box}" "profile -Name qwen36apex-r3" qwen36apex-r3 '' qwen36apex-r3 262144 81920
 
 llm_launch "$@"

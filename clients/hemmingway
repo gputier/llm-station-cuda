@@ -1,21 +1,22 @@
 #!/usr/bin/env bash
-# hemmingway - Claude Code on Hemmingway, served by the 32 GB box.
+# hemmingway - Claude Code on Altworld Hemmingway-1, served by the 32 GB box.
 #
-# Bench-only model: no hand-written production profile exists for it, only the
-# three profiles the bench compared (bench/configs/99/hemmingway). The menu
-# below asks which one to load.
+# Added on 2026-09-26 after the bench compared it. Q5_K_S with its own MTP head,
+# 262,144 window, sampling of its generation_config.json (llm-ctl.ps1).
 #
 # Scope: the exported variables live in this process only. A plain `claude` in
 # another shell keeps talking to Anthropic.
 
 source "$(dirname "${BASH_SOURCE[0]}")/llm-launch.sh"
 
+llm_variant "Hemmingway-1 sur la machine 32 Go, fenêtre 262k" "${LLM_HOST:-your-32gb-box}" hemmingway hemmingway-1 '' hemmingway-1 262144
+
 # Profils du banc (bench/benchrun/profiles.py), un par config bench/configs.
 llm_variant "R1, réglage de référence de l'éditeur, réflexion embarquée activée, machine 32 Go" \
-  "${LLM_HOST:-your-32gb-box}" "profile -Name hemmingway-r1" hemmingway-r1 '' hemmingway-r1 262144 '' 65536
+  "${LLM_HOST:-your-32gb-box}" "profile -Name hemmingway-r1" hemmingway-r1 '' hemmingway-r1 262144 65536
 llm_variant "R2, réflexion embarquée désactivée pour comparaison, non confirmé, machine 32 Go" \
-  "${LLM_HOST:-your-32gb-box}" "profile -Name hemmingway-r2" hemmingway-r2 '' hemmingway-r2 262144 '' 65536
+  "${LLM_HOST:-your-32gb-box}" "profile -Name hemmingway-r2" hemmingway-r2 '' hemmingway-r2 262144 65536
 llm_variant "R3, cache mémoire réduit, réflexion embarquée conservée, non confirmé, machine 32 Go" \
-  "${LLM_HOST:-your-32gb-box}" "profile -Name hemmingway-r3" hemmingway-r3 '' hemmingway-r3 262144 '' 65536
+  "${LLM_HOST:-your-32gb-box}" "profile -Name hemmingway-r3" hemmingway-r3 '' hemmingway-r3 262144 65536
 
 llm_launch "$@"

@@ -1,29 +1,32 @@
 #!/usr/bin/env bash
-# occamy - Claude Code on Occamy, served by the 32 GB box in its
-# full quant, and by the 16 GB box in a smaller one that fits its card.
+# occamy - Claude Code on Accio-Lab Occamy 1.0 requantised by APEX, on the box
+# picked at start-up.
 #
-# Bench-only model: no hand-written production profile exists for it, only the
-# three profiles the bench compared, per machine (bench/configs/99/occamy and
-# bench/configs/97/occamy). The menu below
-# asks which one to load.
+# Added on 2026-09-26 after the bench compared it. MiniPlus V2.1 on the 32 GB
+# box, NanoPlus on the 16 GB one: the full quant spilled out of that card at the
+# 262,144 window. Image projector loaded, thinking on and kept across turns as
+# its card asks for agent runs (llm-ctl.ps1, llm-ctl-16gb.ps1).
 #
-# Scope: the exported variables live in this process only. A plain `claude` in
-# another shell keeps talking to Anthropic.
+# LLM_HOST names the 32 GB box and LLM_HOST_16GB the second one. LLM_CHOICE=1
+# or 2 skips the menu, which a run without a terminal requires.
 
 source "$(dirname "${BASH_SOURCE[0]}")/llm-launch.sh"
 
+llm_variant "Occamy sur la machine 32 Go, fenêtre 262k" "${LLM_HOST:-your-32gb-box}" occamy occamy-1.0.apex-i-miniplus '' occamy-1.0 262144
+llm_variant "Occamy, version allégée, sur la machine 16 Go, fenêtre 262k" "${LLM_HOST_16GB:-your-16gb-box}" occamy occamy-1.0.apex-i-nanoplus '' occamy-1.0 262144
+
 # Profils du banc (bench/benchrun/profiles.py), un par config bench/configs.
 llm_variant "R1, réglage de base, encodeur d'image chargé, machine 32 Go" \
-  "${LLM_HOST:-your-32gb-box}" "profile -Name occamy-r1" occamy-r1 '' occamy-r1 262144 '' 32768
+  "${LLM_HOST:-your-32gb-box}" "profile -Name occamy-r1" occamy-r1 '' occamy-r1 262144 32768
 llm_variant "R2, réglage précis contre les boucles de raisonnement, sourcé, machine 32 Go" \
-  "${LLM_HOST:-your-32gb-box}" "profile -Name occamy-r2" occamy-r2 '' occamy-r2 262144 '' 32768
+  "${LLM_HOST:-your-32gb-box}" "profile -Name occamy-r2" occamy-r2 '' occamy-r2 262144 32768
 llm_variant "R3, cache mémoire réduit, non confirmé, machine 32 Go" \
-  "${LLM_HOST:-your-32gb-box}" "profile -Name occamy-r3" occamy-r3 '' occamy-r3 262144 '' 32768
+  "${LLM_HOST:-your-32gb-box}" "profile -Name occamy-r3" occamy-r3 '' occamy-r3 262144 32768
 llm_variant "R1, réglage de base, encodeur d'image chargé, version allégée, machine 16 Go" \
-  "${LLM_HOST_16GB:-your-16gb-box}" "profile -Name occamy-r1" occamy-r1 '' occamy-r1 262144 '' 32768
+  "${LLM_HOST_16GB:-your-16gb-box}" "profile -Name occamy-r1" occamy-r1 '' occamy-r1 262144 32768
 llm_variant "R2, réglage précis contre les boucles de raisonnement, sourcé, version allégée, machine 16 Go" \
-  "${LLM_HOST_16GB:-your-16gb-box}" "profile -Name occamy-r2" occamy-r2 '' occamy-r2 262144 '' 32768
+  "${LLM_HOST_16GB:-your-16gb-box}" "profile -Name occamy-r2" occamy-r2 '' occamy-r2 262144 32768
 llm_variant "R3, cache mémoire réduit, non confirmé, version allégée, machine 16 Go" \
-  "${LLM_HOST_16GB:-your-16gb-box}" "profile -Name occamy-r3" occamy-r3 '' occamy-r3 262144 '' 32768
+  "${LLM_HOST_16GB:-your-16gb-box}" "profile -Name occamy-r3" occamy-r3 '' occamy-r3 262144 32768
 
 llm_launch "$@"
