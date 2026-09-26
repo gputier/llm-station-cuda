@@ -127,7 +127,7 @@ chat template, and `model_path` alone cannot tell them apart in that case. See
 
 A bench profile also sets its own output-token budget, the eighth argument to
 `llm_variant`, taken from its config's `max_tokens` rather than the global
-`LLM_OUTPUT_TOKENS` (81,920 for our entries): one fixed constant cannot fit
+`LLM_OUTPUT_TOKENS` (32,768 for our entries): one fixed constant cannot fit
 sixty-three different profiles' own figures. It was the ninth until
 2026-09-26, when the per-variant compaction trigger that sat eighth went.
 

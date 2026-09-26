@@ -62,7 +62,11 @@ last token, after which the server has no room left to write anything and
 returns an **empty response**. It hit at 372,738 tokens of 393,216, 95% full:
 `/compact` answered `summarization produced empty response` twice in a row,
 because compacting is itself a request, and one that asks for 16,384 tokens of
-room to write its summary.
+room to write its summary. That cause was probable, not proven. A second one,
+proven on 2026-09-26 far below a full window, is in llama-server itself: it
+rendered the summary request before the last tool result, and the model called
+a tool instead of summarising. Every engine here now runs with that fixed, see
+[building-llama-cpp.md](building-llama-cpp.md#the-tool_result-order-fix).
 
 The value is `default_generation_settings.n_ctx` from `/props`, **minus**
 `CLAUDE_CODE_MAX_OUTPUT_TOKENS`. For the 262,144 window every profile serves
