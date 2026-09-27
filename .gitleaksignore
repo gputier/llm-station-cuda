@@ -3,3 +3,6 @@
 # API, not a token. It was line 546 under commit 1ab4c3d, which only the
 # private bench history carries since the bench left on 2026-09-27.
 8b4ab58ba07ae4fc48ae01cdc3d9cca592d90965:docs/phase0-2026-09.md:generic-api-key:558
+1ab4c3d80cfa2120eb01f1e52f761e05323f3023:docs/phase0-2026-09.md:generic-api-key:546
+7aa9c9ffd903b32715f0fa98006ef96cafb87ab6:bench/harness/lcb_run.py:generic-api-key:100
+8d776e268f3668fca51cd6889a22e66614bc2a68:harness/lcb_run.py:generic-api-key:100
