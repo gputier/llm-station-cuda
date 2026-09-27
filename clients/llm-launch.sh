@@ -25,11 +25,13 @@ LLM_PORT=8080
 LLM_CTL='D:\LLM-Setup\llm-ctl.ps1'
 # The largest value the per-model launchers used before this one.
 LLM_LOAD_TIMEOUT=240
-# The same output budget for every model, 81920 since 2026-09-26: the value most
-# model cards give for long reasoning and code, so an answer is not cut short. It
-# was 16384 before. Claude Code accepts up to 128000 for a model it does not
-# know, read in the 2.1.283 binary.
-LLM_OUTPUT_TOKENS=81920
+# The same output budget for every model, 32768 since 2026-09-26. The window
+# given to Claude Code is n_ctx minus this budget, and Claude Code refuses a
+# turn with "Prompt is too long" about 23,000 tokens below that. At 81920, tried
+# for a few hours that day, a 262,144 window stopped sessions near 157,000
+# tokens (qwent at 155,800, nex-r1 at 150,000); 32768 moves the stop near
+# 206,000 and still leaves room for long reasoning. It was 16384 before.
+LLM_OUTPUT_TOKENS=32768
 # Which MCP servers Claude Code keeps. "none" gives it no server at all;
 # "mail-imap" keeps a mail server expected at ~/.claude/bin/mail-imap-mcp, which
 # this repository does not ship. A launcher overrides it between sourcing this
@@ -37,40 +39,78 @@ LLM_OUTPUT_TOKENS=81920
 LLM_MCP=none
 
 _llm_labels=(); _llm_hosts=(); _llm_actions=(); _llm_match=(); _llm_exclude=()
-_llm_ids=(); _llm_windows=()
+_llm_ids=(); _llm_windows=(); _llm_output_tokens=()
 
 err() { printf '%s\n' "$*" >&2; }
 
-# llm_variant LABEL HOST ACTION MATCH EXCLUDE MODEL_ID WINDOW
-#   ACTION      the llm-ctl.ps1 action that loads the model on HOST
-#   MATCH       lowercase text the served model_path must contain
+# llm_variant LABEL HOST ACTION MATCH EXCLUDE MODEL_ID WINDOW [OUTPUT_TOKENS]
+#   ACTION      the llm-ctl.ps1 action that loads the model on HOST. May carry
+#               its own argument, e.g. "profile -Name tiel-r1": the whole string
+#               is interpolated after "-Action " in the remote command (_llm_load).
+#   MATCH       lowercase text the served state (model_path, a space, the
+#               served alias: see _llm_state) must contain
 #   EXCLUDE     lowercase text it must NOT contain, or '' when none is needed
 #   WINDOW      the window the server really serves, n_ctx in /props
+#   OUTPUT_TOKENS  optional: this variant's own output budget, replacing
+#                  LLM_OUTPUT_TOKENS. A bench profile carries the max_tokens
+#                  its own config asks for
+#                  (bench-llm:bench/benchrun/profiles.py, private repository
+#                  bench-llm), which a single global constant cannot express
+#                  for every profile at once.
 #
 # A per-variant compaction trigger (CLAUDE_CODE_AUTO_COMPACT_WINDOW) lived here
-# until 2026-09-26, for Qwen3.6-35B-A3B at 180,000. The 81,920 output budget
-# puts every variant's default trigger near 147,000, below it, and it went.
+# until 2026-09-26, for Qwen3.6-35B-A3B at 180,000. It went when an 81,920
+# output budget put the default trigger near 147,000; with 32,768 the default
+# trigger is near 196,000 again, above that old value.
+#
+# LABEL never states the window: llm_variant appends it from WINDOW, so a menu
+# line cannot announce a size the server does not serve. Until 2026-09-27 the
+# hand-written entries wrote it into their label and the bench entries not at
+# all.
 llm_variant() {
-  _llm_labels+=("$1"); _llm_hosts+=("$2"); _llm_actions+=("$3"); _llm_match+=("$4")
-  _llm_exclude+=("$5"); _llm_ids+=("$6"); _llm_windows+=("$7")
+  local window_label
+  if (( $7 % 1048576 == 0 )); then
+    window_label="$(( $7 / 1048576 ))M"
+  else
+    window_label="$(( $7 / 1000 ))k"
+  fi
+  _llm_labels+=("$1, fenêtre ${window_label}"); _llm_hosts+=("$2"); _llm_actions+=("$3"); _llm_match+=("$4")
+  _llm_exclude+=("$5"); _llm_ids+=("$6"); _llm_windows+=("$7"); _llm_output_tokens+=("${8:-}")
 }
 
 # What port 8080 on HOST says, printed as one of three states:
-#   free          the connection is refused: nothing listens, nobody to disturb
-#   <model_path>  lowercased, the model answering /props
-#   unknown       anything else: a timeout, an error, a model still loading
+#   free              the connection is refused: nothing listens, nobody to disturb
+#   <model_path> <id> lowercased, /props' model_path and /v1/models' served id,
+#                      space separated
+#   unknown           anything else: a timeout, an error, a model still loading
 # Both servers are single-slot, so /props and not /health says WHICH model holds
 # the port. Only "free" lets a load go ahead without asking: a server busy on a
 # long prompt can miss a 3-second timeout, and reading that as "nothing running"
 # would load over whoever is using it. Found by review on 2026-09-14 and
 # reproduced with a stubbed curl; the per-model launchers before this one had
 # the same hole.
+#
+# The /v1/models id is appended for one reason: three bench-profile variants of
+# the same model can share the exact same weights file and differ only in their
+# flags (sampling, chat template), in which case model_path alone cannot tell
+# them apart. Every profile has run with --alias since 2026-09-20
+# (docs/api-usage.md), so /v1/models answers with the profile's own name; a
+# MATCH written against that alias (e.g. "tiel-r1") disambiguates where
+# model_path cannot. Every MATCH written against a model_path substring, as
+# every launcher before this change did, keeps matching exactly as before: it
+# is still a substring of this same combined string.
 _llm_state() {
-  local out rc=0 m
+  local out rc=0 m id
   out=$(curl -sS -m 3 "http://$1:${LLM_PORT}/props" 2>/dev/null) || rc=$?
   if (( rc == 7 )); then echo free; return; fi
   m=$(printf '%s' "$out" | sed -n 's/.*"model_path":"\([^"]*\)".*/\1/p' | tr '[:upper:]' '[:lower:]')
-  if (( rc == 0 )) && [[ -n "$m" ]]; then echo "$m"; else echo unknown; fi
+  if (( rc == 0 )) && [[ -n "$m" ]]; then
+    id=$(curl -sS -m 3 "http://$1:${LLM_PORT}/v1/models" 2>/dev/null \
+      | sed -n 's/.*"id":"\([^"]*\)".*/\1/p' | tr '[:upper:]' '[:lower:]')
+    echo "$m $id"
+  else
+    echo unknown
+  fi
 }
 
 _llm_up() { curl -sS -m 3 "http://$1:${LLM_PORT}/health" 2>/dev/null | grep -q '"status":"ok"'; }
@@ -78,9 +118,17 @@ _llm_up() { curl -sS -m 3 "http://$1:${LLM_PORT}/health" 2>/dev/null | grep -q '
 # _llm_matches INDEX STATE. Bash substring tests and not grep: under pipefail,
 # grep -q can close the pipe before printf has written, and a match then reads
 # as a failure.
+#
+# The served alias must also be this variant's own instance name, the last word
+# of its action ("qwen", or "qwen-r1" for "profile -Name qwen-r1"): llm-ctl
+# starts every instance with --alias set to that name. A MATCH on the weights
+# path alone took the qwen-r1 bench profile, same weights folder, for the
+# everyday qwen, skipped the reload and handed Claude Code the wrong window
+# and output budget (review of 2026-09-25).
 _llm_matches() {
   [[ "$2" != free && "$2" != unknown && "$2" == *"${_llm_match[$1]}"* ]] || return 1
-  [[ -z "${_llm_exclude[$1]}" || "$2" != *"${_llm_exclude[$1]}"* ]]
+  [[ -z "${_llm_exclude[$1]}" || "$2" != *"${_llm_exclude[$1]}"* ]] || return 1
+  [[ "${2##* }" == "${_llm_actions[$1]##* }" ]]
 }
 
 _llm_serves() { _llm_matches "$1" "$(_llm_state "${_llm_hosts[$1]}")"; }
@@ -111,12 +159,23 @@ _llm_load() {
     waited=$(( waited + 5 ))
   done
   err "Échec : le modèle n'a pas répondu en ${LLM_LOAD_TIMEOUT} s."
-  err "Journal : D:\\LLM-Setup\\logs\\llm-err-${_llm_actions[$i]}.log sur ${host}."
+  # llm-ctl names the log after the instance: the action itself ("tiel"), or
+  # the profile name that ends "profile -Name tiel-r1". Its last word is both.
+  err "Journal : D:\\LLM-Setup\\logs\\llm-err-${_llm_actions[$i]##* }.log sur ${host}."
   return 1
 }
 
-llm_launch() {
-  local n=${#_llm_labels[@]} choice i answer
+# llm_choose LABEL... asks which variant to run and leaves its index in
+# _llm_choice_index. Labels arrive ready to print, already decorated by the
+# caller (llm_launch marks what a machine already serves).
+#
+# The index comes back in a variable rather than on stdout, because a function
+# whose result is captured by $( ) runs in a subshell, where its exit would only
+# kill that subshell and let the caller carry on with an empty answer.
+_llm_choice_index=
+
+llm_choose() {
+  local n=$# choice i
 
   # LLM_CHOICE skips the menu. Without a terminal it is required: a menu read
   # from a pipe would take the caller's input as a choice.
@@ -126,25 +185,36 @@ llm_launch() {
     # A launcher with one variant has nothing to ask, on a terminal or not.
     choice=1
   elif [[ -t 0 ]]; then
-    for (( i = 0; i < n; i++ )); do
-      if _llm_serves "$i"; then
-        err "  $(( i + 1 ))) ${_llm_labels[$i]}, déjà chargé"
-      else
-        err "  $(( i + 1 ))) ${_llm_labels[$i]}"
-      fi
+    for (( i = 1; i <= n; i++ )); do
+      err "  ${i}) ${!i}"
     done
-    read -r -p "Lequel ? [1-${n}] " choice || { err "Abandon."; exit 1; }
+    read -r -p "Lequel ? [1-${n}] " choice || { err "Abandon."; return 1; }
   else
     err "Pas de terminal pour choisir : fixe LLM_CHOICE entre 1 et ${n}."
-    exit 1
+    return 1
   fi
   # Two digits at most: a longer number overflows bash arithmetic and slips past
   # the bound, then crashes on the array index (found by review on 2026-09-14).
   if [[ ! "$choice" =~ ^[1-9][0-9]?$ ]] || (( choice > n )); then
     err "Choix invalide : ${choice}."
-    exit 1
+    return 1
   fi
-  i=$(( choice - 1 ))
+  _llm_choice_index=$(( choice - 1 ))
+}
+
+llm_launch() {
+  local n=${#_llm_labels[@]} i answer
+  local -a lines=()
+
+  for (( i = 0; i < n; i++ )); do
+    if [[ -t 0 && -z "${LLM_CHOICE:-}" ]] && _llm_serves "$i"; then
+      lines+=("${_llm_labels[$i]}, déjà chargé")
+    else
+      lines+=("${_llm_labels[$i]}")
+    fi
+  done
+  llm_choose "${lines[@]}" || exit 1
+  i=$_llm_choice_index
 
   local host=${_llm_hosts[$i]} state
   state=$(_llm_state "$host")
@@ -187,11 +257,12 @@ llm_launch() {
   # this budget in every local session, measured on 2.1.271 on 2026-09-15:
   # exported 16384 plus a settings value of 64000 sends max_tokens 64000, while
   # --settings wins over the user file.
-  local context_tokens=$(( ${_llm_windows[$i]} - LLM_OUTPUT_TOKENS ))
-  local budget="\"CLAUDE_CODE_MAX_OUTPUT_TOKENS\":\"${LLM_OUTPUT_TOKENS}\",\"CLAUDE_CODE_MAX_CONTEXT_TOKENS\":\"${context_tokens}\""
+  local output_tokens=${_llm_output_tokens[$i]:-$LLM_OUTPUT_TOKENS}
+  local context_tokens=$(( ${_llm_windows[$i]} - output_tokens ))
+  local budget="\"CLAUDE_CODE_MAX_OUTPUT_TOKENS\":\"${output_tokens}\",\"CLAUDE_CODE_MAX_CONTEXT_TOKENS\":\"${context_tokens}\""
   # Compaction starts at that input budget minus min(output, 20000) and a
-  # 13,000-token summary buffer (2.1.283 binary, read 2026-09-26): about 147,000
-  # tokens for a 262,144 window and an 81,920 output budget.
+  # 13,000-token summary buffer (2.1.283 binary, read 2026-09-26): about 196,000
+  # tokens for a 262,144 window and a 32,768 output budget.
   budget="{\"env\":{${budget}}}"
 
   # Read for PRESENCE, not for value: any non-empty string turns the disabling
@@ -203,7 +274,7 @@ llm_launch() {
   # cache instead of re-reading the whole context.
   export CLAUDE_CODE_ATTRIBUTION_HEADER=0
 
-  err "Claude Code sur ${_llm_labels[$i]}, fenêtre annoncée ${context_tokens}."
+  err "Claude Code sur ${_llm_labels[$i]}, ${context_tokens} jetons annoncés au client."
   # At most one mail server. The others stay dropped: measured on muse, their 70
   # tool schemas weigh 108 KB of prompt, overhead that bites hard on a local
   # window. Skills, commands, memory and CLAUDE.md are untouched.

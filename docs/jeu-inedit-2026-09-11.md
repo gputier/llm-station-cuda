@@ -1,5 +1,7 @@
 # Un jeu d'épreuves que personne n'a vu, et ce qu'il révèle
 
+Depuis le 27/09/2026, les chemins bench/ de ce document vivent dans le dépôt privé bench-llm.
+
 Campagne du 11/09/2026. Quatre modèles, 235 épreuves écrites ici, jamais
 publiées. Ce document raconte pourquoi elles existent, comment elles ont été
 vérifiées, ce qu'elles mesurent, et surtout les **quatre défauts de protocole**
@@ -92,7 +94,7 @@ Sur un jeu inédit, **aucune source extérieure ne peut contredire une réponse
 attendue fausse**. C'est la difficulté centrale, et elle commande tout le
 dispositif.
 
-1. **Contrôle mécanique** ([tools/verifier-epreuves.py](../bench/tools/verifier-epreuves.py)).
+1. **Contrôle mécanique** (`bench-llm:bench/tools/verifier-epreuves.py`).
    Chaque épreuve est vérifiée cohérente avec elle-même : le motif d'extraction
    reconnaît sa propre réponse attendue, la phrase témoin satisfait ses propres
    contraintes, les identifiants sont uniques. Ce contrôle a rattrapé 24 épreuves
@@ -104,8 +106,8 @@ dispositif.
    Deux campagnes avaient été perdues faute de ce contrôle, mortes à la
    vingt-cinquième épreuve sur quatre-vingt-quinze, après deux heures de GPU.
 
-3. **Résolution à l'aveugle par un tiers** ([tools/extraire-enonces.py](../bench/tools/extraire-enonces.py)
-   et [tools/comparer-aveugle.py](../bench/tools/comparer-aveugle.py)). Un second
+3. **Résolution à l'aveugle par un tiers** (`bench-llm:bench/tools/extraire-enonces.py`
+   et `bench-llm:bench/tools/comparer-aveugle.py`). Un second
    solveur reçoit les énoncés seuls, jamais les réponses ni le code de l'auteur,
    et résout tout. L'extracteur vérifie qu'aucune valeur sensible ne fuit dans ce
    qu'il produit. Sur 191 épreuves confrontées : 187 accords, 4 désaccords.
@@ -120,7 +122,7 @@ dispositif.
    La famille de génération sous contrainte se vérifie autrement, car ses
    épreuves n'ont pas une réponse unique : le solveur produit une phrase depuis
    le seul énoncé, et on la passe au correcteur
-   ([tools/verifier-f5.py](../bench/tools/verifier-f5.py)). Si elle échoue,
+   (`bench-llm:bench/tools/verifier-f5.py`). Si elle échoue,
    l'énoncé et la règle ne disent pas la même chose. Les 48 sont passées.
 
 4. **Relecture des épreuves ratées par tous les modèles.** C'est là que se cache
@@ -233,7 +235,7 @@ et demie par épreuve, et plus de vingt heures pour les quatre modèles. La pass
 **Ce qu'il faut en retenir** : sur un banc de raisonnement, la réflexion se
 laisse active, et le plafond de jetons doit être dimensionné pour elle, pas pour
 la réponse finale. Le paramètre existe dans le correcteur
-([bench/banc-inedit.ps1](../bench/banc-inedit.ps1), `-Reflexion`), il n'est pas
+(`bench-llm:bench/banc-inedit.ps1`, `-Reflexion`), il n'est pas
 le défaut, et le chiffre qu'il faut budgéter est de l'ordre de 16 000 jetons.
 
 ### Une clarification d'énoncé a rendu une clé fausse
@@ -268,11 +270,11 @@ dire quelque chose.
 
 ## Où vit la vérité
 
-Le correcteur, [bench/banc-inedit.ps1](../bench/banc-inedit.ps1), implémente le
+Le correcteur, `bench-llm:bench/banc-inedit.ps1`, implémente le
 schéma et ne doit jamais en diverger. Son autotest, `-SelfTest`, tourne 21 cas
 sans contacter un modèle : un correcteur qui n'a jamais vu de mauvaise réponse
 n'est pas connu pour en rejeter une.
 
-La comparaison entre modèles, [bench/comparer-inedit.ps1](../bench/comparer-inedit.ps1),
+La comparaison entre modèles, `bench-llm:bench/comparer-inedit.ps1`,
 rend les tests appariés et le pouvoir discriminant du jeu. Ce dernier chiffre
 décide s'il faut agrandir le jeu ; il ne se devine pas.

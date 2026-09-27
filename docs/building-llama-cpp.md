@@ -8,6 +8,11 @@ compiled here from source; the last sections say why each had to be. Counted on
 the machine 2026-09-26, nine directories under `D:\LLM-Setup`, the table below
 naming all nine.
 
+Since the evening of 2026-09-26, every build that serves a profile runs from a
+`-toolorder` copy next to it, rebuilt with one fix to the Anthropic endpoint.
+The originals stay on disk, untouched. The "Serves" column below still says which
+source each profile runs; see [The tool_result order fix](#the-tool_result-order-fix).
+
 | Build                      | Date              | CUDA | Serves                                                      | Why it exists                                                                                                                                                                                                                                                                                                                                                 |
 | -------------------------- | ----------------- | ---- | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `llama-cpp-turboquant-win` | frozen 2026-04-07 | 12.8 | `embed`                                                     | A custom fork kept for a cache-quant feature of a model since removed. It has no remaining technical justification and could be retired once the embedder is validated on upstream.                                                                                                                                                                           |
@@ -250,3 +255,46 @@ prose, to the token.
 
 Retire this directory once the fork merges upstream DFlash2 and publishes an
 archive carrying it.
+
+## The tool_result order fix
+
+Every engine here, and llama.cpp master on 2026-09-26 (81bc6b8), turned an
+Anthropic user message holding `tool_result` blocks and then text into a user
+message with the text followed by the tool messages
+(`server_chat_convert_anthropic_to_oai` in `tools/server/server-chat.cpp`).
+The model therefore read the text before the results it follows. Claude Code
+appends its compaction request to the last tool result, so the model often
+answered that tool result with another tool call, and Claude Code reported
+"summarization produced empty response". On one captured compaction request, a
+summary came back 2 times out of 12 before the fix and 7 out of 8 after.
+Upstream pull request: ggml-org/llama.cpp#29482.
+
+The fix emits the tool messages first. `outils\fix-toolorder.ps1` applies it to
+a source tree and refuses a tree that does not carry the unpatched code exactly
+once, so it never patches twice. The copies:
+
+| Copy                                                 | Source                         | Build                                                 |
+| ---------------------------------------------------- | ------------------------------ | ----------------------------------------------------- |
+| `llama-cpp-upstream-toolorder`                       | commit 153d324, git worktree   | Visual Studio generator, same options as the original |
+| `llama-cpp-20260827-toolorder`                       | commit 192067b72, git worktree | `build-llama.bat`, shared libs, sm_120, all FA quants |
+| `llama-cpp-b10826-toolorder`, `-b10883-`, `-b11156-` | release tags, git worktrees    | `build-llama.bat`, static, sm_120a                    |
+| `llama-cpp-xing-pr29012-toolorder`                   | commit 63c16fb97, git worktree | `build-llama.bat`, static, sm_120a                    |
+| `llama-cpp-prism-dflash2-toolorder\llama`            | copy of the tree, no build dir | `build-llama.bat`, tests off                          |
+
+The three releases were zips with their own cudart; their rebuilds take cudart
+and cuBLAS from the CUDA 13.3 directory the control script puts on the PATH.
+Speed on one request, three runs each: qwen 105.1 tok/s before and 105.5 after,
+tiel 207.0 on the official binary and 208.0 on the rebuild, occamy 238.5 and
+232.3 with runs spread over 7.6 tok/s.
+
+The Visual Studio generator picks CUDA 13.4 on this machine unless told
+otherwise (`-T cuda=<13.3 path>`), and on the 2026-08-27 tree it fails even
+then, nvcc rejecting the host headers; `build-llama.bat` builds it.
+
+The 16 GB box has no compiler. Its two engines, BeeLlama commit 78af83265 and
+release b11156, were built here with `-DCMAKE_CUDA_ARCHITECTURES=89` and copied
+there into `beellama-v0.4.6-toolorder` and `llama-cpp-b11156-toolorder`, next
+to the cudart and cuBLAS DLLs of the originals.
+
+Once a llama.cpp release carries the fix, these copies can give way to it,
+after the same speed check.

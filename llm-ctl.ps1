@@ -1,5 +1,5 @@
 param(
-  [ValidateSet('bonsai','bonsai2','embed','hemmingway','kat','katapex','muse','nex','occamy','ornith','qwen','qwen36apex','qwenf','qwent','qwenu','spark','tiel','veriloop','xing','stop','status','logs')]
+  [ValidateSet('bench','profile','bonsai','bonsai2','embed','hemmingway','kat','katapex','muse','nex','occamy','orca','ornith','qwen','qwen36apex','qwenf','qwent','qwenu','spark','tiel','veriloop','xing','stop','status','logs')]
   [string]$Action,
   [string]$Name,  # optional: for 'stop' and 'logs', targets a named instance
   [int]$Tail = 40, # for 'logs': history lines to show before following live
@@ -18,7 +18,13 @@ param(
   # -Extra alone cannot do: --spec-type accumulates rather than replaces, so
   # asking for another type on a profile that already has one runs BOTH. That is
   # not academic, it cost 36% of tiel's decode on 2026-09-10.
-  [switch]$NoSpec
+  [switch]$NoSpec,
+  # Path to a bench launch spec (JSON: name, exe, workDir, cudaBin, args, env).
+  # Written by benchrun, never by hand. See bench-llm:bench/benchrun/config.py
+  # (dépôt privé bench-llm).
+  [string]$Spec = '',
+  # With -Action bench: print the command line and start nothing.
+  [switch]$DryRun
 )
 
 # ---------------------------------------------------------------------------
@@ -49,8 +55,15 @@ $exe       = "$RootDir\llama-cpp-turboquant-win\build-win\bin\llama-server.exe"
 $workDir   = "$RootDir\llama-cpp-turboquant-win\build-win\bin"
 $cudaBin   = "$CudaRoot\v12.8\bin"
 
-$exeUp     = "$RootDir\llama-cpp-upstream\build-win\bin\Release\llama-server.exe"
-$workDirUp = "$RootDir\llama-cpp-upstream\build-win\bin\Release"
+# Commit 153d324 plus one fix, built 2026-09-26 in its own worktree: the
+# Anthropic endpoint put a user message's text before its tool results, so a
+# compaction request sent right after a tool call ended on the tool result and
+# the model called another tool instead of summarising. Replaying one captured
+# request: summary 2 times out of 12 before, 6 out of 8 in the fixed order.
+# The fix is still missing upstream on that day. The unpatched build stays in
+# llama-cpp-upstream.
+$exeUp     = "$RootDir\llama-cpp-upstream-toolorder\build-win\bin\Release\llama-server.exe"
+$workDirUp = "$RootDir\llama-cpp-upstream-toolorder\build-win\bin\Release"
 $cudaBinUp = "$CudaRoot\v13.3\bin"
 
 # Build of 2026-08-27 (0.3.0-dev, build 479, commit 192067b72), in a SEPARATE
@@ -76,9 +89,18 @@ $cudaBinUp = "$CudaRoot\v13.3\bin"
 #    launched from its own directory, which Start-LLM does via workDirPath.
 #  - Linking FAILS if an instance is still running on this build (LNK1104,
 #    cannot open ggml-cuda.dll). Stop the server before recompiling.
-$exeNew     = "$RootDir\llama-cpp-20260827\build-win\bin\Release\llama-server.exe"
-$workDirNew = "$RootDir\llama-cpp-20260827\build-win\bin\Release"
+# Rebuilt 2026-09-26 as llama-cpp-20260827-toolorder, same commit plus the
+# tool_result order fix described at $exeUp, through build-llama.bat (Ninja):
+# the Visual Studio generator now fails on this tree. Same options otherwise.
+$exeNew     = "$RootDir\llama-cpp-20260827-toolorder\build-win\bin\llama-server.exe"
+$workDirNew = "$RootDir\llama-cpp-20260827-toolorder\build-win\bin"
 
+# Since 2026-09-26 every engine below runs from a "-toolorder" copy: the same
+# source (release tag, fork commit or tree) rebuilt with the tool_result order
+# fix described at $exeUp, by outils\build-all-toolorder.cmd on the box. The
+# releases were zips; their rebuilds are static, Ninja, sm_120a, CUDA 13.3, and
+# take cudart and cuBLAS from the CUDA bin directory on the PATH. The original
+# directories stay in place.
 # Official binary b10826 (2026-09-06), CUDA 13.3, flat layout like llama-cpp-b10740: the zip and
 # its cudart unpacked into one directory, no compilation. Serves 'tiel' since 2026-09-06. Control
 # against the 2026-08-27 build, same 65,615-token prompt, 400 tokens, seed 42, 3 runs, temperature
@@ -86,8 +108,8 @@ $workDirNew = "$RootDir\llama-cpp-20260827\build-win\bin\Release"
 # 31,550 MiB, MTP counters within noise (339/229 against 341/228). Two behaviour changes it brings, both logged at startup:
 # preserve_reasoning is on by default (turn off with --no-reasoning-preserve if prompts grow), and
 # it recommends --image-min-tokens 1024 for this vision model.
-$exeB10826     = "$RootDir\llama-cpp-b10826\llama-server.exe"
-$workDirB10826 = "$RootDir\llama-cpp-b10826"
+$exeB10826     = "$RootDir\llama-cpp-b10826-toolorder\build-win\bin\llama-server.exe"
+$workDirB10826 = "$RootDir\llama-cpp-b10826-toolorder\build-win\bin"
 
 # Official binary b10883 (2026-09-09), CUDA 13.3, same flat layout: release zip and its cudart
 # unpacked into one directory, no compilation. Installed 2026-09-10 for three candidate models that
@@ -101,8 +123,8 @@ $workDirB10826 = "$RootDir\llama-cpp-b10826"
 # It has NOT been benchmarked against b10826 on the production models. Do not move tiel, ornith or
 # kat here on the assumption that newer is faster; the 2026-08-27 build taught that lesson at a
 # cost of two full compilations for a gain of nothing.
-$exeB10883     = "$RootDir\llama-cpp-b10883\llama-server.exe"
-$workDirB10883 = "$RootDir\llama-cpp-b10883"
+$exeB10883     = "$RootDir\llama-cpp-b10883-toolorder\build-win\bin\llama-server.exe"
+$workDirB10883 = "$RootDir\llama-cpp-b10883-toolorder\build-win\bin"
 
 # A FORK BUILT ON THIS BOX, and the second binary compiled here. It is PrismML's
 # fork of llama.cpp, which alone undoes Bonsai 2's Hadamard rotation, carrying
@@ -114,24 +136,31 @@ $workDirB10883 = "$RootDir\llama-cpp-b10883"
 # transform the patch adds, so the patch applies it twice and acceptance collapses.
 # Build recipe, the measurement behind that warning, and the archive kept on disk
 # as the reference for what the published fork can read: docs/building-llama-cpp.md.
-$exeDflash2     = "$RootDir\llama-cpp-prism-dflash2\llama\build-win\bin\llama-server.exe"
-$workDirDflash2 = "$RootDir\llama-cpp-prism-dflash2\llama\build-win\bin"
+$exeDflash2     = "$RootDir\llama-cpp-prism-dflash2-toolorder\llama\build-win\bin\llama-server.exe"
+$workDirDflash2 = "$RootDir\llama-cpp-prism-dflash2-toolorder\llama\build-win\bin"
 
 # Official release b11156 (2026-09-24), the CUDA 13.4 Windows zip plus its own flat cudart,
-# unpacked into one directory, no compilation. Serves the five models added on 2026-09-26,
-# 'hemmingway', 'veriloop', 'qwen36apex', 'katapex' and 'occamy', each on the build it was
-# measured on. Nothing older was moved here.
-$exeB11156     = "$RootDir\llama-cpp-b11156\llama-server.exe"
-$workDirB11156 = "$RootDir\llama-cpp-b11156"
+# unpacked into one directory, no compilation, for phase 0 of the bench (task 14): ancestor
+# of bfd73a876 checked ahead/identical via the GitHub compare API before the download. Serves
+# the five models added on 2026-09-26, 'hemmingway', 'veriloop', 'qwen36apex', 'katapex' and
+# 'occamy', each on the build it was measured on. Nothing older was moved here.
+$exeB11156     = "$RootDir\llama-cpp-b11156-toolorder\build-win\bin\llama-server.exe"
+$workDirB11156 = "$RootDir\llama-cpp-b11156-toolorder\build-win\bin"
 
 # Compiled on this box from llama.cpp pull request #29012 (branch xing4_0-port), the only
 # engine that reads Xing 4.0's architecture. Serves 'xing' only. Build recipe in
 # docs/building-llama-cpp.md.
-$exeXing     = "$RootDir\llama-cpp-xing-pr29012\build-win\bin\llama-server.exe"
-$workDirXing = "$RootDir\llama-cpp-xing-pr29012\build-win\bin"
+$exeXing     = "$RootDir\llama-cpp-xing-pr29012-toolorder\build-win\bin\llama-server.exe"
+$workDirXing = "$RootDir\llama-cpp-xing-pr29012-toolorder\build-win\bin"
 
 $instDir   = "$RootDir\instances"
 New-Item -ItemType Directory -Force -Path $instDir | Out-Null
+
+# Where python -m benchrun profiles writes one JSON file per (machine, model,
+# variant) bench config, named "<model>-r<N>.json" (bench-llm:bench/benchrun/profiles.py).
+# 'profile' below reads from here; 'bench' still reads whatever -Spec points
+# to, unchanged.
+$profilesDir = "$RootDir\profiles"
 
 # Logs live in their own directory since 2026-09-10. They used to sit at the root
 # of $RootDir, where they were indistinguishable from the scripts, the model
@@ -180,6 +209,9 @@ $builds = @{
   katapex    = @{ Exe = $exeB11156; WorkDir = $workDirB11156; CudaBin = $cudaBinUp }
   occamy     = @{ Exe = $exeB11156; WorkDir = $workDirB11156; CudaBin = $cudaBinUp }
   xing       = @{ Exe = $exeXing;   WorkDir = $workDirXing;   CudaBin = $cudaBinUp }
+  # Added 2026-09-27. b11156 and not the upstream build of 'qwenu': DFlash2, the
+  # speculation its card recommends, reached llama.cpp on 2026-08-27 (PR #27342).
+  orca       = @{ Exe = $exeB11156; WorkDir = $workDirB11156; CudaBin = $cudaBinUp }
 }
 
 function Quote($s) {
@@ -335,7 +367,7 @@ function Show-Logs($name, $tail) {
   Get-Content $errLog -Tail $tail -Wait
 }
 
-function Start-LLM($name, $modelArgs, $cudaDevices = $null, $exePath = $null, $workDirPath = $null, $cudaBinPath = $null) {
+function Start-LLM($name, $modelArgs, $cudaDevices = $null, $exePath = $null, $workDirPath = $null, $cudaBinPath = $null, $envVars = @{}) {
   # Every profile is served under its own name. Without this flag /v1/models
   # reports the model id as the full Windows path of the GGUF, backslashes
   # included: callers store that string, and it breaks the day the file moves.
@@ -425,7 +457,19 @@ function Start-LLM($name, $modelArgs, $cudaDevices = $null, $exePath = $null, $w
   # CPU-only instances: hide the GPU to avoid a pointless CUDA init.
   if ($null -ne $cudaDevices) { $env:CUDA_VISIBLE_DEVICES = $cudaDevices }
   $inner = "cd /d `"$workDirPath`" && `"$exePath`" $quoted > NUL 2> `"$errLog`""
-  $r = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{ CommandLine = "cmd.exe /c $inner"; CurrentDirectory = $workDirPath }
+  $createArgs = @{ CommandLine = "cmd.exe /c $inner"; CurrentDirectory = $workDirPath }
+  # Caller-supplied env vars (the 'bench' action). A process created through
+  # Win32_Process.Create does not inherit this session's Env: (measured
+  # 2026-09-23: LLAMA_ARG_CTX_SIZE=4096 set in Env: gave n_ctx=689920), so they
+  # go in an explicit Win32_ProcessStartup block, as in llm-ctl-16gb.ps1. That
+  # block replaces the child's whole environment: copy the current one, then
+  # lay the caller's variables over it.
+  if ($envVars.Count -gt 0) {
+    $vars = @(Get-ChildItem Env: | Where-Object { -not $envVars.ContainsKey($_.Name) } | ForEach-Object { "$($_.Name)=$($_.Value)" })
+    foreach ($k in $envVars.Keys) { $vars += "$k=$($envVars[$k])"; Write-Output "ENV $k=$($envVars[$k])" }
+    $createArgs.ProcessStartupInformation = New-CimInstance -ClassName Win32_ProcessStartup -ClientOnly -Property @{ EnvironmentVariables = [string[]]$vars }
+  }
+  $r = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments $createArgs
   $env:PATH = $savedPath
   if ($null -eq $savedCuda) { Remove-Item Env:\CUDA_VISIBLE_DEVICES -ErrorAction SilentlyContinue }
   else { $env:CUDA_VISIBLE_DEVICES = $savedCuda }
@@ -464,6 +508,28 @@ function Get-Status {
   if (-not $any) { Write-Output "NOT_RUNNING" }
 }
 
+# The one line -Action bench -DryRun prints, isolated so it can be tested
+# without touching a station: no path here is resolved on disk, everything
+# comes from the already-parsed spec object.
+function Format-DryRunLine($exe, $name, $benchArgs) {
+  return "DRYRUN " + $exe + " " + ((@('--alias', $name) + @($benchArgs)) -join ' ')
+}
+
+# Shared by 'bench' and 'profile': both start a JSON launch spec (name, exe,
+# workDir, cudaBin, args, env) the same way Start-LLM starts any other
+# profile. 'bench' spec comes from benchrun (bench-llm:bench/benchrun/config.py),
+# 'profile' spec from benchrun.profiles; this function does not care which.
+function Invoke-Spec($s) {
+  $benchArgs = @($s.args)
+  if ($DryRun) {
+    Write-Output (Format-DryRunLine $s.exe $s.name $benchArgs)
+    return
+  }
+  $envVars = @{}
+  foreach ($p in $s.env.PSObject.Properties) { $envVars[$p.Name] = $p.Value }
+  Start-LLM $s.name $benchArgs $null $s.exe $s.workDir $s.cudaBin $envVars
+}
+
 # Shared by the three APEX requantisations added on 2026-09-26, 'qwen36apex',
 # 'katapex' and 'occamy': q8_0 cache as the APEX card's recipe gives it, no
 # speculation, and the thinking-mode sampling their three base cards agree on,
@@ -482,6 +548,23 @@ switch ($Action) {
   'stop'   { if ($Name) { Stop-One $Name } else { Stop-All }; break }
   'status' { Get-Status; break }
   'logs'   { Show-Logs $Name $Tail; break }
+
+  'bench' {
+    if (-not $Spec -or -not (Test-Path $Spec)) { Write-Output "ERROR spec not found: $Spec"; exit 2 }
+    Invoke-Spec (Get-Content -Raw $Spec | ConvertFrom-Json)
+    break
+  }
+
+  'profile' {
+    # Not the bench action: a profile started this way is tracked, logged and
+    # stopped exactly like any hand-written profile above, and 'bench' itself
+    # is untouched.
+    if (-not $Name) { Write-Output "ERROR -Name required for -Action profile"; exit 2 }
+    $profilePath = Join-Path $profilesDir "$Name.json"
+    if (-not (Test-Path $profilePath)) { Write-Output "ERROR profile not found: $profilePath"; exit 2 }
+    Invoke-Spec (Get-Content -Raw $profilePath | ConvertFrom-Json)
+    break
+  }
 
   'muse' {
     # Muse Glimmer 30B: dense backbone + perception encoder + DFlash drafter
@@ -1252,7 +1335,7 @@ switch ($Action) {
   # -------------------------------------------------------------------------
   # The six models added on 2026-09-26, first compared on the bench. Weights,
   # build, cache and batch are those of each model's bench reference profile
-  # (bench/configs/99/<model>/R1.yaml on the bench branch), the one proven to sit
+  # (bench-llm:bench/configs/99/<model>/R1.yaml, private repository bench-llm), the one proven to sit
   # entirely on this card at 262144. Sampling and thinking settings are the
   # authors', each with the page it was read on.
   # -------------------------------------------------------------------------
@@ -1342,6 +1425,31 @@ switch ($Action) {
       '--chat-template-file',"$ModelsDir\occamy\chat-template-system-anywhere.jinja",
       '--chat-template-kwargs','{"enable_thinking":true,"preserve_thinking":true}'
     ) + $apexRecipe)
+  }
+
+  'orca' {
+    # OrcaSAQ2 27B Cyber Uncensored (orcarouter, Apache 2.0), added 2026-09-27: Qwen3.8-27B
+    # abliterated by orcarouter (orcarouter/Qwen3.8-27B-Uncensored), then requantised by their
+    # OrcaSAQ2 mixed-precision method. The method is undisclosed but the file is plain ggml
+    # types, read in the GGUF header on 2026-09-27: IQ4_XS for 439 tensors, Q5_K for the
+    # attention inputs, Q6_K for embeddings and output, 15,676,553,472 bytes. Any engine
+    # loads it. Text only, no vision projector published. The MTP head is inside the file
+    # (qwen35.nextn_predict_layers 1, blk.64.nextn), like every Qwen3.8-27B build here.
+    # Measured 2026-09-27: 196.8 tok/s decode (577 of 666 drafted tokens accepted),
+    # 3,385 tok/s prefill on 22,519 tokens, 30,947 of 32,607 MiB at load, no spill.
+    Start-LLM 'orca' @(
+      '-m',"$ModelsDir\orcasaq2-cyber-27b\OrcaSAQ-2-27B-Uncensored.gguf",
+      '--spec-type','draft-dflash',
+      '--spec-draft-model',"$ModelsDir\orcasaq2-cyber-27b\Qwen3.8-27B-DFlash2-Q8_0.gguf",
+      '--spec-draft-ngl','99',
+      '--n-gpu-layers','99','--load-mode','mlock','--flash-attn','on','--jinja',
+      '--chat-template-file',"$ModelsDir\orcasaq2-cyber-27b\chat-template-system-anywhere.jinja",
+      '--host','0.0.0.0','--port','8080','--parallel','1','--ctx-size','262144',
+      '-b','4096','-ub','2048',
+      '--cache-type-k','q8_0','--cache-type-v','q8_0',
+      '-cram','24576',
+      '--temp','1.0','--top-p','0.95','--top-k','20','--min-p','0'
+    )
   }
 
   'embed' {

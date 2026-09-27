@@ -1,7 +1,7 @@
 # Documentation index
 
-Twelve documents, each answering a different question. Read them in this order
-the first time; jump straight to one afterwards.
+Fifteen documents, each answering a different question. Read them in this
+order the first time; jump straight to one afterwards.
 
 | Document                                                             | Answers                                                                                                                                                                                                                                                                                     |
 | -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -17,6 +17,9 @@ the first time; jump straight to one afterwards.
 | [campagne-mesures-2026-09-10.md](campagne-mesures-2026-09-10.md)     | Campaign of 2026-09-10, in French: nine models through one bench in one day, what it says about the parc, and the four method errors that each produced a false and credible result. **Supersedes every quality figure published before it.**                                               |
 | [jeu-inedit-2026-09-11.md](jeu-inedit-2026-09-11.md)                 | Campaign of 2026-09-11, in French, on a 16 GB box: 235 never-published questions against four models, why two of them lose fifteen points the moment the questions are new, and the four protocol faults found on the way. Read it for those faults even if the models do not interest you. |
 | [schema-jeu-inedit.md](schema-jeu-inedit.md)                         | The contract that question set obeys, in French: field layout, the five correction modes and no others, the reading rule, and the four verification stages. Enough to rebuild an equivalent set; the questions themselves are deliberately absent from this repository.                     |
+| [phase0-2026-09.md](phase0-2026-09.md)                               | Phase 0 of the bench refonte, in French, task by task: the 42 configurations checked against their source cards, the arbitrations that followed, and the real file names behind each one.                                                                                                   |
+| [pilote-2026-09.md](pilote-2026-09.md)                               | The pilot run of the new bench, in French: why it was cut short, the truncated-answer bug that invalidated its LiveCodeBench numbers, and the incident that took station 97 offline mid-run.                                                                                                |
+| [campagne-2026-09.md](campagne-2026-09.md)                           | Dated log of the bench campaign, in French, most recent entry first: what ran at each date, the mini/medium/large levels against the full bench, and the placement rule decided along the way.                                                                                              |
 
 ## Where the truth lives
 
@@ -28,13 +31,15 @@ and the script disagree, the script wins and the document is the bug.
 There are two of them, one per machine, and they are not interchangeable.
 `llm-ctl.ps1` drives the 32 GB box this repository was built around.
 [../llm-ctl-16gb.ps1](../llm-ctl-16gb.ps1) drives a second box, an RTX 4080 SUPER
-with 32 GB of host RAM. Since 2026-09-14 it serves `tiel` and `qwen36`, both
-35B-A3B in UD-IQ3_XXS at the full 262,144 window, on the BeeLlama fork for its
-KVarN cache, with one card recipe shared by both profiles; it refuses `mlock`
-because of that host RAM. Its profiles were tuned separately because the same
-flags land differently on half the memory. Copying a profile from one box to the
-other is how the 16 GB box once served half the window its weights offer, and
-how it locked 10 GB of host RAM the 32 GB box could spare.
+with 32 GB of host RAM. Since 2026-09-14 it serves `tiel` and `qwen36` as
+production profiles, both 35B-A3B in UD-IQ3_XXS at the full 262,144 window, on
+the BeeLlama fork for its KVarN cache, with one card recipe shared by both
+profiles; it refuses `mlock` because of that host RAM. Its profiles were tuned
+separately because the same flags land differently on half the memory.
+Copying a profile from one box to the other is how the 16 GB box once served
+half the window its weights offer, and how it locked 10 GB of host RAM the
+32 GB box could spare. It also runs bench-only profiles for `bonsai2`,
+`occamy`, `katapex` and `qwen36apex` (`bench-llm:bench/configs/97/`).
 
 The per-model notes live next to the weights they describe, under
 [../models/](../models/), and carry provenance, checksums and the traps specific

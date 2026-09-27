@@ -1,0 +1,8 @@
+# Vulnerabilities and misconfigurations ignored, each with its reason and its
+# re-audit date. Trivy's plain .trivyignore has no per-path scoping (only
+# .trivyignore.yaml does, and scripts/security-scan.sh never passes
+# --ignorefile, so only the default ".trivyignore", this file, is read): an
+# ID listed here is silenced repository-wide, not just for the one file that
+# earned the exception. Read the reason before reusing one of these ids for
+# a DIFFERENT Dockerfile: a new suite harness needs its OWN non-root user,
+# never a free ride on this entry.

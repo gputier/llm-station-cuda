@@ -1,5 +1,7 @@
 # Campagne de mesures du 10/09/2026
 
+Depuis le 27/09/2026, les chemins bench/ de ce document vivent dans le dépôt privé bench-llm.
+
 Neuf modèles passés au même banc, dans la même journée, sur la même machine. Ce
 document remplace tous les chiffres de qualité qui circulaient avant lui.
 
@@ -14,7 +16,7 @@ versionné nulle part. Seul le jeu de questions avait survécu.
 
 Deux nombres obtenus par deux méthodes inconnues ne se comparent pas, et un
 classement bâti dessus est de la décoration. Le banc a donc été réécrit, versé au
-dépôt sous [../bench/banc.ps1](../bench/banc.ps1), et les neuf modèles y sont
+dépôt sous bench-llm:bench/banc.ps1, et les neuf modèles y sont
 repassés.
 
 La suite a donné raison à cette prudence : `ornith` ne fait pas 73,0 % mais
@@ -222,7 +224,7 @@ n'est pas mesuré.
 ## Le rappel de `nex` tient jusqu'à la fenêtre annoncée
 
 Aiguille dans la botte de foin, remplissage de code source réel et varié, phrase
-arbitraire plantée à 10, 50 et 90 % de profondeur, par [`bench/aiguille.ps1`](../bench/aiguille.ps1).
+arbitraire plantée à 10, 50 et 90 % de profondeur, par `bench-llm:bench/aiguille.ps1`.
 
 | Longueur du contexte | Résultat |
 |---|---|
@@ -245,7 +247,7 @@ aiguille et rester incapable de synthétiser ce qui l'entoure.
 ## Ce qui reste à mesurer
 
 La température sur `kat`, `nex` et `spark`, en cours. Le script est
-[../bench/banc-sampling.ps1](../bench/banc-sampling.ps1) et il balaie un facteur
+bench-llm:bench/banc-sampling.ps1 et il balaie un facteur
 à la fois.
 
 Le rappel en contexte long de `spark` et `bonsai`. Celui de `nex` est prouvé,

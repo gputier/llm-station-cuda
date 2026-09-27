@@ -12,7 +12,21 @@
 
 source "$(dirname "${BASH_SOURCE[0]}")/llm-launch.sh"
 
-llm_variant "Occamy sur la machine 32 Go, fenêtre 262k" "${LLM_HOST:-your-32gb-box}" occamy occamy-1.0.apex-i-miniplus '' occamy-1.0 262144
-llm_variant "Occamy, version allégée, sur la machine 16 Go, fenêtre 262k" "${LLM_HOST_16GB:-your-16gb-box}" occamy occamy-1.0.apex-i-nanoplus '' occamy-1.0 262144
+llm_variant "Occamy sur la machine 32 Go" "${LLM_HOST:-your-32gb-box}" occamy occamy-1.0.apex-i-miniplus '' occamy-1.0 262144
+llm_variant "Occamy, version allégée, sur la machine 16 Go" "${LLM_HOST_16GB:-your-16gb-box}" occamy occamy-1.0.apex-i-nanoplus '' occamy-1.0 262144
+
+# Profils du banc (bench-llm:bench/benchrun/profiles.py, dépôt privé bench-llm), un par config bench-llm:bench/configs.
+llm_variant "R1, réglage de base, encodeur d'image chargé, machine 32 Go" \
+  "${LLM_HOST:-your-32gb-box}" "profile -Name occamy-r1" occamy-r1 '' occamy-r1 262144 32768
+llm_variant "R2, réglage précis contre les boucles de raisonnement, sourcé, machine 32 Go" \
+  "${LLM_HOST:-your-32gb-box}" "profile -Name occamy-r2" occamy-r2 '' occamy-r2 262144 32768
+llm_variant "R3, cache mémoire réduit, non confirmé, machine 32 Go" \
+  "${LLM_HOST:-your-32gb-box}" "profile -Name occamy-r3" occamy-r3 '' occamy-r3 262144 32768
+llm_variant "R1, réglage de base, encodeur d'image chargé, version allégée, machine 16 Go" \
+  "${LLM_HOST_16GB:-your-16gb-box}" "profile -Name occamy-r1" occamy-r1 '' occamy-r1 262144 32768
+llm_variant "R2, réglage précis contre les boucles de raisonnement, sourcé, version allégée, machine 16 Go" \
+  "${LLM_HOST_16GB:-your-16gb-box}" "profile -Name occamy-r2" occamy-r2 '' occamy-r2 262144 32768
+llm_variant "R3, cache mémoire réduit, non confirmé, version allégée, machine 16 Go" \
+  "${LLM_HOST_16GB:-your-16gb-box}" "profile -Name occamy-r3" occamy-r3 '' occamy-r3 262144 32768
 
 llm_launch "$@"

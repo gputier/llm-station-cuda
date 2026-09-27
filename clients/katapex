@@ -12,7 +12,21 @@
 
 source "$(dirname "${BASH_SOURCE[0]}")/llm-launch.sh"
 
-llm_variant "KAT APEX sur la machine 32 Go, fenêtre 262k" "${LLM_HOST:-your-32gb-box}" katapex kat-coder-v2.5-dev.apex-i-miniplus '' kat-coder-v25-apex 262144
-llm_variant "KAT APEX, version allégée, sur la machine 16 Go, fenêtre 262k" "${LLM_HOST_16GB:-your-16gb-box}" katapex kat-coder-v2.5-dev-apex-dynamic '' kat-coder-v25-apex 262144
+llm_variant "KAT APEX sur la machine 32 Go" "${LLM_HOST:-your-32gb-box}" katapex kat-coder-v2.5-dev.apex-i-miniplus '' kat-coder-v25-apex 262144
+llm_variant "KAT APEX, version allégée, sur la machine 16 Go" "${LLM_HOST_16GB:-your-16gb-box}" katapex kat-coder-v2.5-dev-apex-dynamic '' kat-coder-v25-apex 262144
+
+# Profils du banc (bench-llm:bench/benchrun/profiles.py, dépôt privé bench-llm), un par config bench-llm:bench/configs.
+llm_variant "R1, sampling de base, réflexion active, machine 32 Go" \
+  "${LLM_HOST:-your-32gb-box}" "profile -Name katapex-r1" katapex-r1 '' katapex-r1 262144 81920
+llm_variant "R2, réflexion préservée après réponse, sourcé, machine 32 Go" \
+  "${LLM_HOST:-your-32gb-box}" "profile -Name katapex-r2" katapex-r2 '' katapex-r2 262144 32768
+llm_variant "R3, cache mémoire réduit, non confirmé, machine 32 Go" \
+  "${LLM_HOST:-your-32gb-box}" "profile -Name katapex-r3" katapex-r3 '' katapex-r3 262144 81920
+llm_variant "R1, sampling de base, réflexion active, version allégée, machine 16 Go" \
+  "${LLM_HOST_16GB:-your-16gb-box}" "profile -Name katapex-r1" katapex-r1 '' katapex-r1 262144 81920
+llm_variant "R2, réflexion préservée après réponse, sourcé, version allégée, machine 16 Go" \
+  "${LLM_HOST_16GB:-your-16gb-box}" "profile -Name katapex-r2" katapex-r2 '' katapex-r2 262144 32768
+llm_variant "R3, cache mémoire réduit, non confirmé, version allégée, machine 16 Go" \
+  "${LLM_HOST_16GB:-your-16gb-box}" "profile -Name katapex-r3" katapex-r3 '' katapex-r3 262144 81920
 
 llm_launch "$@"

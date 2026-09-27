@@ -101,6 +101,13 @@ d'échantillonnage, détaillé dans [tuning-log.md](tuning-log.md), mais aucun n
 passé la campagne MMLU et GSM8K du 10/09 : aucune ligne du tableau ci-dessus ne
 les concerne, et rien ici ne dit où ils se classent.
 
+**`orca`, ajouté le 27/09/2026, hors de ce tableau lui aussi.** Même rôle que
+`qwenu` : recours quand le modèle aligné refuse une tâche légitime, rien de
+plus. Aucun banc de qualité ne l'a mesuré, ni sur la machine 32 Go (OrcaSAQ2 27B
+Cyber Uncensored d'orcarouter) ni sur la 16 Go (Qwen3.8-27B Uncensored
+d'orcarouter en IQ3_XXS) : ne pas lui prêter un classement qu'aucune mesure ne
+soutient.
+
 ## Ce qu'il faudrait mesurer pour combler les deux trous
 
 **Un banc agentique.** Une tâche multi-tours avec appels d'outils, où l'on compte

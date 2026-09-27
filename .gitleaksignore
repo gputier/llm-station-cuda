@@ -1,0 +1,4 @@
+# Reviewed false positives, one fingerprint per line (commit:file:rule:line).
+# phase0-2026-09.md:546 quotes a model file name returned by the Hugging Face
+# API, not a token.
+1ab4c3d80cfa2120eb01f1e52f761e05323f3023:docs/phase0-2026-09.md:generic-api-key:546

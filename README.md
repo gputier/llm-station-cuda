@@ -30,15 +30,16 @@ did not transpose either.
 
 ## Models served
 
-All nineteen share port 8080 and are mutually exclusive on the GPU: loading one
+All twenty share port 8080 and are mutually exclusive on the GPU: loading one
 unloads the others.
 
 One profile was served here and is gone: `whittle`, rejected on 2026-09-19. Its
 weights were deleted the same evening, and on 2026-09-21 its profile left the
 control script rather than sit there offering a load that cannot happen.
 `xing` was rejected the same day for the same reason, but it is back: its
-weights were reposed for the 2026-09-26 bench and its engine rebuilt on
-2026-09-24. What `whittle` measured is kept in
+weights were reposed and its engine rebuilt on 2026-09-24 for the bench, which
+added three bench profiles under `bench-llm:bench/configs/99/xing`, and since 2026-09-26
+it has a permanent profile in `llm-ctl.ps1` as well. What both measured is kept in
 [docs/tuning-log.md](docs/tuning-log.md), which is the point of having measured
 it.
 
@@ -52,6 +53,7 @@ it.
 | `qwenu`      | Qwen3.8-27B Uncensored, Q5_K_M                             | 262,144 | Used only when the aligned model refuses a legitimate task                                                                   |
 | `qwenf`      | Qwen3.8-27B TURBO Fable Cold-Fusion Heretic, MTP Q5_K_M    | 262,144 | Candidate, benched 2026-09-19: ties `qwenu` on the unpublished set, not adopted                                              |
 | `qwent`      | Qwen3.8-27B TWIN-TURBO Fable Cold-Fusion 709-L, MTP Q5_K_M | 262,144 | Candidate, benched 2026-09-19: best of the three on the unpublished set (225/235), long-context speed not yet measured       |
+| `orca`       | OrcaSAQ2 27B Cyber Uncensored by orcarouter, IQ4_XS/Q5_K/Q6_K mix | 262,144 | Since 2026-09-27. Same role as `qwenu`, used only when the aligned model refuses a legitimate task; also served on the 16 GB box, as orcarouter's plain Qwen3.8-27B Uncensored in IQ3_XXS; quality not benched |
 | `embed`      | nomic-embed-text-v1.5, Q8_0                                | 131,072 | 768-dimension embeddings                                                                                                     |
 | `nex`        | Nex-N2.5-mini, i1-Q4_K_M                                   | 262,144 | Candidate since 2026-09-10. Vision, no speculation                                                                           |
 | `spark`      | Spark-X2.5-4B, Q8_0                                        | 262,144 | Candidate since 2026-09-10. Agentic, text only                                                                               |
@@ -68,9 +70,10 @@ it.
 day. They run on their own engine, `b10883`, which serves nothing else, and each
 carries a known defect written at the top of its page under [models/](models/).
 
-`hemmingway`, `veriloop`, `qwen36apex`, `katapex` and `occamy` run on engine
-`b11156`. `xing` needs the engine built for llama.cpp pull request #29012,
-since no released build reads its architecture.
+`hemmingway`, `veriloop`, `qwen36apex`, `katapex`, `occamy` and, on the 32 GB
+box, `orca` run on engine `b11156`. `xing` needs the engine built for
+llama.cpp pull request #29012, since no released build reads its
+architecture.
 
 One profile runs an engine compiled on this box rather than an official
 llama.cpp release, documented in
@@ -109,7 +112,12 @@ Tiel-Coder in UD-IQ3_XXS, and `qwen36`, Qwen3.6-35B-A3B in UD-IQ3_XXS, both at
 the full 262,144 window. Since 2026-09-26 it also serves the lighter builds of
 the three APEX profiles, `qwen36apex`, `katapex` and `occamy`, at the same
 window. `tiel` and `qwen36`'s pages: [models/tiel-coder-35b-a3b/](models/tiel-coder-35b-a3b/)
-and [models/qwen3.6-35b-a3b/](models/qwen3.6-35b-a3b/).
+and [models/qwen3.6-35b-a3b/](models/qwen3.6-35b-a3b/). Since 2026-09-27 it
+also serves `orca`, orcarouter's plain Qwen3.8-27B Uncensored in IQ3_XXS on
+`beellama` `v0.4.6-toolorder`: the OrcaSAQ2 build served under the same action
+on the 32 GB box does not fit here. It also carries bench-only profiles,
+`bonsai2` among them (`bench-llm:bench/configs/97/`), covered in the Bench section
+below.
 
 ## Quick start
 
@@ -139,23 +147,71 @@ export LLM_SSH_USER=your-ssh-user
 ./clients/tiel        # asks which box, loads Tiel there if needed, then runs Claude Code
 ```
 
-There is one launcher per model family, fourteen in all, listed with what each
-is good at in [clients/README.md](clients/README.md). Six open with a menu.
-`tiel`, `qwen`, `qwen36apex`, `katapex` and `occamy` do it because their models
-are served on both boxes: `qwen` also covers the aligned and the uncensored
-Qwen3.8 here, and Qwen3.6 on the 16 GB box. `bonsai` does it for another
-reason, both its generations sitting on this box on two different engines.
-`embed` has none on purpose: it serves embeddings, not a chat endpoint.
+There is one launcher per model family, fifteen in all, listed with what each
+is good at in [clients/README.md](clients/README.md). `embed` has none on
+purpose: it serves embeddings, not a chat endpoint.
+
+Six launchers open with a hand-written menu regardless of the bench. `tiel`,
+`qwen`, `qwen36apex`, `katapex` and `occamy` do it because their models are
+served on both boxes: `qwen` covers the aligned and the uncensored Qwen3.8
+here, Qwen3.6 on the 16 GB box, and, since 2026-09-27, orcarouter's Qwen3.8-27B
+builds on both boxes. `bonsai` does it for another reason, both its
+generations sitting on this box on two different engines.
+
+Every model the bench compared also carries an R1/R2/R3 menu entry per box,
+after the hand-written entries, deployed by
+`bench-llm:bench/scripts/deploy-profiles.sh` and
+started with `llm-ctl -Action profile -Name <model>-r<N>`, the exact
+configuration a bench run measured, tracked and stopped like any other
+profile (Bonsai 1 is the one exception, its R2 retired on 2026-09-25 for
+running no engine that reads its draft model). One launcher exists only for
+that purpose, `qwen36` on the 16 GB box, with nothing but bench entries: its
+model's permanent profile sits in `qwen`'s menu. Full detail is in
+[clients/README.md](clients/README.md).
 
 The three paths at the top of `llm-ctl.ps1` (`$RootDir`, `$ModelsDir`,
 `$CudaRoot`) are the only installation-specific values. Everything else is
 portable.
 
+## Bench
+
+Every model above went through the same bench. Since 2026-09-27 the bench's
+code lives in a private repository, `bench-llm` (`bench-llm:bench/`), not in
+this one: a published test set ends up in training data and stops measuring
+anything. Two ways to run it:
+
+- `python -m benchrun bench --preset mini|medium|large --machine <machine>
+--out <dir>` for day-to-day follow-up. `medium` and `large` run a fixed,
+  deterministic question count per suite; `mini` draws one question per
+  suite instead, the same one for a model's R1, R2 and R3 so the three stay
+  comparable, and writes it to `seed.txt` for a reproducible relaunch. Each
+  level writes under its own `<dir>/<preset>/<machine>` subtree; `mini` also
+  writes a `rapport.md` there.
+- `python -m benchrun run` for the full campaign, the reference run, launched
+  from time to time on a given model rather than on every change.
+
+Placement across the two boxes follows one rule, applied on 2026-09-25 to
+`occamy`, `katapex` and `qwen36apex`: a model runs entirely on its card at the
+262,144-token window, with no overflow into shared memory, or it moves to the
+other machine or to a lighter quantization. Those three spilled out of the
+16 GB card at that window (about 30 tokens/s instead of 130); their full quant
+now runs on the 32 GB box, and the 16 GB box keeps a lighter quant of the same
+weights.
+
+`bench-llm:bench/scripts/deploy-profiles.sh --machine 99|97 --env <file>`, run
+from the `bench-llm` checkout, turns each bench config into a launch profile
+and a launcher menu entry, and refuses to run against a station a campaign is
+still using; the environment file must carry a `LLM_STATION_CUDA` key pointing
+at this repository's checkout, since the script reads the `llm-ctl` scripts
+from here. Method notes and every harness-level decision are in
+`bench-llm:bench/harness/README.md`; the dated log of what ran and what it
+found is [docs/campagne-2026-09.md](docs/campagne-2026-09.md).
+
 ## Documentation
 
 | File                                                                       | What it covers                                                                                       |
 | -------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| [docs/INDEX.md](docs/INDEX.md)                                             | The twelve documents of this folder, each with the question it answers                               |
+| [docs/INDEX.md](docs/INDEX.md)                                             | The fifteen documents of this folder, each with the question it answers                              |
 | [docs/prerequisites.md](docs/prerequisites.md)                             | Everything that must be installed before a first build                                               |
 | [docs/building-llama-cpp.md](docs/building-llama-cpp.md)                   | The nine CUDA builds, why five are official releases and the four others forks or local compilations |
 | [docs/claude-code-integration.md](docs/claude-code-integration.md)         | How a local server replaces the Anthropic API, and what that costs                                   |

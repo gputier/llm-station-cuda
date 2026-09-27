@@ -1,5 +1,5 @@
 param(
-  [ValidateSet('katapex','occamy','qwen36','qwen36apex','tiel','stop','status','logs')]
+  [ValidateSet('bench','profile','katapex','occamy','orca','qwen36','qwen36apex','tiel','stop','status','logs')]
   [string]$Action,
   [string]$Name,   # optional: for 'stop' and 'logs', targets a named instance
   [int]$Tail = 40, # for 'logs': history lines to show before following live
@@ -15,7 +15,13 @@ param(
   # -Extra alone cannot do: --spec-type accumulates rather than replaces, so
   # asking for another type on a profile that already has one runs BOTH. That
   # cost 36% of tiel's decode on the 5090 box on 2026-09-10.
-  [switch]$NoSpec
+  [switch]$NoSpec,
+  # Path to a bench launch spec (JSON: name, exe, workDir, cudaBin, args, env).
+  # Written by benchrun, never by hand. See bench-llm:bench/benchrun/config.py
+  # (dépôt privé bench-llm).
+  [string]$Spec = '',
+  # With -Action bench: print the command line and start nothing.
+  [switch]$DryRun
 )
 
 # ---------------------------------------------------------------------------
@@ -37,23 +43,49 @@ param(
 $RootDir   = 'D:\LLM-Setup'
 $ModelsDir = 'D:\models'
 
+# Official release b11156 (2026-09-24), the CUDA 13.4 Windows zip plus its own
+# flat cudart, laid down at $RootDir\llama-cpp-b11156, beside beellama-v0.4.6,
+# for phase 0 of the bench (task 14). No BeeLlama release newer than
+# 2026-09-22 was found (checked by repository search and by the binary's own
+# --version, no canonical BeeLlama repository with releases was located):
+# this is the upstream build, not a BeeLlama update. BeeLlama's KVarN cache
+# stays the one that fits tiel and qwen36 on this 16 GB card; b11156 serves
+# only the three models added on 2026-09-26, see $builds below.
+
 $instDir    = "$RootDir\instances"
 $logDir     = "$RootDir\logs"
 $serverPort = 8080
+# Where python -m benchrun profiles writes one JSON file per (machine, model,
+# variant) bench config, named "<model>-r<N>.json" (bench-llm:bench/benchrun/profiles.py).
+# 'profile' below reads from here; 'bench' still reads whatever -Spec points
+# to, unchanged.
+$profilesDir = "$RootDir\profiles"
 
 New-Item -ItemType Directory -Force -Path $instDir, $logDir | Out-Null
 
 # Which build serves which profile, and nothing else: a model's own settings
 # live in its switch branch.
+#
+# Since 2026-09-26 both builds run from a "-toolorder" copy: the same source
+# (BeeLlama commit 78af83265, release tag b11156) rebuilt ON THIS BOX for sm_89
+# with the fix that makes the Anthropic endpoint put tool results before the
+# text of the same user message (see $exeUp in llm-ctl.ps1). Sources under
+# D:\LLM-Setup\src. Each copy holds the static llama-server.exe and the CUDA
+# runtime DLLs of the original, which stays in place. Built on the .99 first,
+# they crashed here (0xc000001d): a native build there uses AVX-512, which
+# this i7-14700KF lacks. Same speed as the originals, measured 2026-09-26.
 $builds = @{
-  tiel   = @{ Exe = "$RootDir\beellama-v0.4.6\llama-server.exe"; WorkDir = "$RootDir\beellama-v0.4.6" }
-  qwen36 = @{ Exe = "$RootDir\beellama-v0.4.6\llama-server.exe"; WorkDir = "$RootDir\beellama-v0.4.6" }
+  tiel   = @{ Exe = "$RootDir\beellama-v0.4.6-toolorder\llama-server.exe"; WorkDir = "$RootDir\beellama-v0.4.6-toolorder" }
+  qwen36 = @{ Exe = "$RootDir\beellama-v0.4.6-toolorder\llama-server.exe"; WorkDir = "$RootDir\beellama-v0.4.6-toolorder" }
   # The three models added on 2026-09-26, on the upstream release b11156 (2026-09-24,
   # CUDA 13.4 zip plus its own cudart, unpacked flat) they were proven on at the full
   # window. They need no KVarN cache: a lighter quantisation keeps them on the card.
-  qwen36apex = @{ Exe = "$RootDir\llama-cpp-b11156\llama-server.exe"; WorkDir = "$RootDir\llama-cpp-b11156" }
-  katapex    = @{ Exe = "$RootDir\llama-cpp-b11156\llama-server.exe"; WorkDir = "$RootDir\llama-cpp-b11156" }
-  occamy     = @{ Exe = "$RootDir\llama-cpp-b11156\llama-server.exe"; WorkDir = "$RootDir\llama-cpp-b11156" }
+  qwen36apex = @{ Exe = "$RootDir\llama-cpp-b11156-toolorder\llama-server.exe"; WorkDir = "$RootDir\llama-cpp-b11156-toolorder" }
+  katapex    = @{ Exe = "$RootDir\llama-cpp-b11156-toolorder\llama-server.exe"; WorkDir = "$RootDir\llama-cpp-b11156-toolorder" }
+  occamy     = @{ Exe = "$RootDir\llama-cpp-b11156-toolorder\llama-server.exe"; WorkDir = "$RootDir\llama-cpp-b11156-toolorder" }
+  # Added 2026-09-27: a dense Qwen3.8-27B again, on the KVarN recipe measured on that
+  # very architecture, see $cardRecipe.
+  orca       = @{ Exe = "$RootDir\beellama-v0.4.6-toolorder\llama-server.exe"; WorkDir = "$RootDir\beellama-v0.4.6-toolorder" }
 }
 
 function Quote($s) {
@@ -277,6 +309,28 @@ function Get-Status {
   if (-not $any) { Write-Output "NOT_RUNNING" }
 }
 
+# The one line -Action bench -DryRun prints, isolated so it can be tested
+# without touching a station: no path here is resolved on disk, everything
+# comes from the already-parsed spec object.
+function Format-DryRunLine($exe, $name, $benchArgs) {
+  return "DRYRUN " + $exe + " " + ((@('--alias', $name) + @($benchArgs)) -join ' ')
+}
+
+# Shared by 'bench' and 'profile': both start a JSON launch spec (name, exe,
+# workDir, args, env) the same way Start-LLM starts any other profile.
+# 'bench' spec comes from benchrun (bench-llm:bench/benchrun/config.py), 'profile' spec
+# from benchrun.profiles; this function does not care which.
+function Invoke-Spec($s) {
+  $benchArgs = @($s.args)
+  if ($DryRun) {
+    Write-Output (Format-DryRunLine $s.exe $s.name $benchArgs)
+    return
+  }
+  $envVars = @{}
+  foreach ($p in $s.env.PSObject.Properties) { $envVars[$p.Name] = $p.Value }
+  Start-LLM $s.name $benchArgs $s.exe $s.workDir $envVars
+}
+
 # ---------------------------------------------------------------------------
 # Profiles.
 #
@@ -290,7 +344,7 @@ function Get-Status {
 # whatever the model. Each profile adds its weights, its template if it needs
 # one, and its sampling. Everything here was measured on Qwen3.8-27B, the model
 # this box served from 2026-09-13 to 2026-09-14, at the full 262,144 window
-# (bench/vitesse.ps1, 6,018-token prompt, then 45k). Both A3B profiles run on it
+# (bench-llm:bench/vitesse.ps1, 6,018-token prompt, then 45k). Both A3B profiles run on it
 # unchanged, and their first reading held, figures below.
 #
 #   UD-IQ4_XS, cache in host RAM (--no-kv-offload) ... decode 14.5 tok/s short,
@@ -360,8 +414,8 @@ switch ($Action) {
   # the attention cache is 3.2x smaller per token (10 full-attention layers x 2
   # KV heads x 256 x 2, against 16 x 4 x 256 x 2, GGUF headers read 2026-09-14).
   #
-  # Measured that day on the card recipe: bench/vitesse.ps1, 6,018-token prompt,
-  # decode median of 3; then bench/banc.ps1, 500 MMLU and 60 GSM8K, temperature 0.
+  # Measured that day on the card recipe: bench-llm:bench/vitesse.ps1, 6,018-token prompt,
+  # decode median of 3; then bench-llm:bench/banc.ps1, 500 MMLU and 60 GSM8K, temperature 0.
   #
   #   profile        decode       prefill      VRAM         spill     MMLU    GSM8K
   #   27B, retired   72.1 tok/s   1,394 tok/s  15,851 MiB   650 MiB
@@ -446,8 +500,8 @@ switch ($Action) {
   # same weights that keeps each entirely on this card at 262144: at the full
   # quant all three spilled out of it (about 30 tok/s instead of 130). Their full
   # quant runs on the 5090 box. Weights, cache and batch are those of each
-  # model's bench reference profile (bench/configs/97/<model>/R1.yaml on the
-  # bench branch); sampling and thinking are the authors', as on the 5090 box,
+  # model's bench reference profile (bench-llm:bench/configs/97/<model>/R1.yaml,
+  # private repository bench-llm); sampling and thinking are the authors', as on the 5090 box,
   # where each block cites its source. The shared part is $apexRecipe.
   # ---------------------------------------------------------------------------
 
@@ -480,8 +534,40 @@ switch ($Action) {
     break
   }
 
+  'orca' {
+    # Qwen3.8-27B Uncensored by orcarouter (orcarouter/Qwen3.8-27B-Uncensored-GGUF,
+    # IQ3_XXS, 11,637,692,000 bytes, sha256 matching the X-Linked-Etag Hugging Face
+    # serves), added 2026-09-27. The OrcaSAQ2 build of the 32 GB box does not fit here.
+    # Measured 2026-09-27: 72.9 tok/s decode (498 of 601 drafted tokens accepted),
+    # 1,297 tok/s prefill on 22,519 tokens, 15,814 of 16,376 MiB at load, no spill.
+    Start-LLM 'orca' (@(
+      '-m',"$ModelsDir\qwen3.8-27b-uncensored-orca\Qwen3.8-27B-Uncensored-IQ3_XXS.gguf",
+      '--chat-template-file',"$ModelsDir\qwen3.8-27b-uncensored-orca\chat-template-system-anywhere.jinja"
+    ) + $cardRecipe + @(
+      '--temp','1.0','--top-p','0.95','--top-k','20','--min-p','0'
+    )) -envVars $cardEnv
+    break
+  }
+
   'stop'   { if ($Name) { Stop-One $Name } else { Stop-All }; break }
   'status' { Get-Status; break }
   'logs'   { Show-Logs $Name $Tail; break }
-  default  { Write-Output "USAGE: llm-ctl.ps1 -Action tiel|qwen36|qwen36apex|katapex|occamy|stop|status|logs" }
+
+  'bench' {
+    if (-not $Spec -or -not (Test-Path $Spec)) { Write-Output "ERROR spec not found: $Spec"; exit 2 }
+    Invoke-Spec (Get-Content -Raw $Spec | ConvertFrom-Json)
+    break
+  }
+
+  'profile' {
+    # Not the bench action: a profile started this way is tracked and logged
+    # exactly like 'tiel' or 'qwen36' above, and 'bench' itself is untouched.
+    if (-not $Name) { Write-Output "ERROR -Name required for -Action profile"; exit 2 }
+    $profilePath = Join-Path $profilesDir "$Name.json"
+    if (-not (Test-Path $profilePath)) { Write-Output "ERROR profile not found: $profilePath"; exit 2 }
+    Invoke-Spec (Get-Content -Raw $profilePath | ConvertFrom-Json)
+    break
+  }
+
+  default  { Write-Output "USAGE: llm-ctl.ps1 -Action tiel|qwen36|qwen36apex|katapex|occamy|orca|bench|profile|stop|status|logs" }
 }

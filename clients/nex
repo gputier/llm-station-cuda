@@ -19,6 +19,14 @@
 
 source "$(dirname "${BASH_SOURCE[0]}")/llm-launch.sh"
 
-llm_variant "Nex-N2.5-mini sur la machine 32 Go, fenêtre 262k" "${LLM_HOST:-your-32gb-box}" nex nex-n2.5 '' nex-n2.5-mini 262144
+llm_variant "Nex-N2.5-mini sur la machine 32 Go" "${LLM_HOST:-your-32gb-box}" nex nex-n2.5 '' nex-n2.5-mini 262144
+
+# Profils du banc (bench-llm:bench/benchrun/profiles.py, dépôt privé bench-llm), un par config bench-llm:bench/configs.
+llm_variant "R1, réglage de référence, effort de réflexion moyen, machine 32 Go" \
+  "${LLM_HOST:-your-32gb-box}" "profile -Name nex-r1" nex-r1 '' nex-r1 262144 65536
+llm_variant "R2, répartition mémoire ajustée, machine 32 Go" \
+  "${LLM_HOST:-your-32gb-box}" "profile -Name nex-r2" nex-r2 '' nex-r2 262144 65536
+llm_variant "R3, cache mémoire mixte, fenêtre étendue, non confirmé, machine 32 Go" \
+  "${LLM_HOST:-your-32gb-box}" "profile -Name nex-r3" nex-r3 '' nex-r3 393216 65536
 
 llm_launch "$@"

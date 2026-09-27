@@ -40,8 +40,6 @@ test-images/
 # So the scripts, the method and the numbers are published, and the questions
 # never are. Anyone can rebuild a set from the schema in docs; nobody can train
 # on ours.
-bench/epreuves.jsonl
-bench/inedit/
 *.jsonl
 
 # Local secrets.
@@ -50,3 +48,9 @@ bench/inedit/
 api-key.txt
 *.key
 *.pem
+
+# Python caches and build metadata.
+__pycache__/
+*.pyc
+*.egg-info/
+.pytest_cache/

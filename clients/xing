@@ -10,6 +10,14 @@
 
 source "$(dirname "${BASH_SOURCE[0]}")/llm-launch.sh"
 
-llm_variant "Xing 4.0 sur la machine 32 Go, fenêtre 262k" "${LLM_HOST:-your-32gb-box}" xing xing4_0-29b '' xing-4.0-29b-a4b 262144
+llm_variant "Xing 4.0 sur la machine 32 Go" "${LLM_HOST:-your-32gb-box}" xing xing4_0-29b '' xing-4.0-29b-a4b 262144
+
+# Profils du banc (bench-llm:bench/benchrun/profiles.py, dépôt privé bench-llm), un par config bench-llm:bench/configs.
+llm_variant "R1, réglage de référence de l'éditeur, sans réflexion accélérée, machine 32 Go" \
+  "${LLM_HOST:-your-32gb-box}" "profile -Name xing-r1" xing-r1 '' xing-r1 262144 65536
+llm_variant "R2, réflexion accélérée activée, sourcé, machine 32 Go" \
+  "${LLM_HOST:-your-32gb-box}" "profile -Name xing-r2" xing-r2 '' xing-r2 262144 65536
+llm_variant "R3, réflexion accélérée et cache mémoire réduit, non confirmé, machine 32 Go" \
+  "${LLM_HOST:-your-32gb-box}" "profile -Name xing-r3" xing-r3 '' xing-r3 262144 65536
 
 llm_launch "$@"
