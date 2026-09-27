@@ -1,4 +1,5 @@
 # Reviewed false positives, one fingerprint per line (commit:file:rule:line).
-# phase0-2026-09.md:546 quotes a model file name returned by the Hugging Face
-# API, not a token.
-1ab4c3d80cfa2120eb01f1e52f761e05323f3023:docs/phase0-2026-09.md:generic-api-key:546
+# phase0-2026-09.md:558 quotes a model file name returned by the Hugging Face
+# API, not a token. It was line 546 under commit 1ab4c3d, which only the
+# private bench history carries since the bench left on 2026-09-27.
+8b4ab58ba07ae4fc48ae01cdc3d9cca592d90965:docs/phase0-2026-09.md:generic-api-key:558
