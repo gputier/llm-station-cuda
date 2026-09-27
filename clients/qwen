@@ -71,5 +71,17 @@ llm_variant "R2, Qwen candidat qwenf, réflexion désactivée, machine 32 Go" \
   "${LLM_HOST:-your-32gb-box}" "profile -Name qwenf-r2" qwenf-r2 '' qwenf-r2 262144 8192
 llm_variant "R3, Qwen candidat qwenf, modèle brouillon renforcé, non mesuré jusqu'ici, machine 32 Go" \
   "${LLM_HOST:-your-32gb-box}" "profile -Name qwenf-r3" qwenf-r3 '' qwenf-r3 262144 81920
+llm_variant "R1, OrcaSAQ2, réglage quotidien, réflexion active, machine 32 Go" \
+  "${LLM_HOST:-your-32gb-box}" "profile -Name orca-r1" orca-r1 '' orca-r1 262144 81920
+llm_variant "R2, OrcaSAQ2, réflexion désactivée, machine 32 Go" \
+  "${LLM_HOST:-your-32gb-box}" "profile -Name orca-r2" orca-r2 '' orca-r2 262144 8192
+llm_variant "R3, OrcaSAQ2, sans modèle brouillon, machine 32 Go" \
+  "${LLM_HOST:-your-32gb-box}" "profile -Name orca-r3" orca-r3 '' orca-r3 262144 81920
+llm_variant "R1, Qwen Uncensored orcarouter, réglage quotidien, réflexion active, machine 16 Go" \
+  "${LLM_HOST_16GB:-your-16gb-box}" "profile -Name orca-r1" orca-r1 '' orca-r1 262144 81920
+llm_variant "R2, Qwen Uncensored orcarouter, réflexion désactivée, machine 16 Go" \
+  "${LLM_HOST_16GB:-your-16gb-box}" "profile -Name orca-r2" orca-r2 '' orca-r2 262144 8192
+llm_variant "R3, Qwen Uncensored orcarouter, sans tête spéculative, machine 16 Go" \
+  "${LLM_HOST_16GB:-your-16gb-box}" "profile -Name orca-r3" orca-r3 '' orca-r3 262144 81920
 
 llm_launch "$@"
