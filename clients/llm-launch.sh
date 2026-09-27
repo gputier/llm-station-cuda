@@ -61,8 +61,19 @@ err() { printf '%s\n' "$*" >&2; }
 # until 2026-09-26, for Qwen3.6-35B-A3B at 180,000. It went when an 81,920
 # output budget put the default trigger near 147,000; with 32,768 the default
 # trigger is near 196,000 again, above that old value.
+#
+# LABEL never states the window: llm_variant appends it from WINDOW, so a menu
+# line cannot announce a size the server does not serve. Until 2026-09-27 the
+# hand-written entries wrote it into their label and the bench entries not at
+# all.
 llm_variant() {
-  _llm_labels+=("$1"); _llm_hosts+=("$2"); _llm_actions+=("$3"); _llm_match+=("$4")
+  local window_label
+  if (( $7 % 1048576 == 0 )); then
+    window_label="$(( $7 / 1048576 ))M"
+  else
+    window_label="$(( $7 / 1000 ))k"
+  fi
+  _llm_labels+=("$1, fenêtre ${window_label}"); _llm_hosts+=("$2"); _llm_actions+=("$3"); _llm_match+=("$4")
   _llm_exclude+=("$5"); _llm_ids+=("$6"); _llm_windows+=("$7"); _llm_output_tokens+=("${8:-}")
 }
 
@@ -262,7 +273,7 @@ llm_launch() {
   # cache instead of re-reading the whole context.
   export CLAUDE_CODE_ATTRIBUTION_HEADER=0
 
-  err "Claude Code sur ${_llm_labels[$i]}, fenêtre annoncée ${context_tokens}."
+  err "Claude Code sur ${_llm_labels[$i]}, ${context_tokens} jetons annoncés au client."
   # At most one mail server. The others stay dropped: measured on muse, their 70
   # tool schemas weigh 108 KB of prompt, overhead that bites hard on a local
   # window. Skills, commands, memory and CLAUDE.md are untouched.

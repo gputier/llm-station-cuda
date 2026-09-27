@@ -17,7 +17,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/llm-launch.sh"
 # Muse loads faster than the 240 s the others are given.
 LLM_LOAD_TIMEOUT=180
 
-llm_variant "Muse Glimmer 30B sur la machine 32 Go, fenêtre 262k" "${LLM_HOST:-your-32gb-box}" muse muse-glimmer '' muse-glimmer-30b 262144
+llm_variant "Muse Glimmer 30B sur la machine 32 Go" "${LLM_HOST:-your-32gb-box}" muse muse-glimmer '' muse-glimmer-30b 262144
 
 # Profils du banc (bench/benchrun/profiles.py), un par config bench/configs.
 llm_variant "R1, réglage de référence, tel que publié, machine 32 Go" \

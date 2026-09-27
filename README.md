@@ -30,7 +30,7 @@ did not transpose either.
 
 ## Models served
 
-All nineteen share port 8080 and are mutually exclusive on the GPU: loading one
+All twenty share port 8080 and are mutually exclusive on the GPU: loading one
 unloads the others.
 
 One profile was served here and is gone: `whittle`, rejected on 2026-09-19. Its
@@ -53,6 +53,7 @@ it.
 | `qwenu`      | Qwen3.8-27B Uncensored, Q5_K_M                             | 262,144 | Used only when the aligned model refuses a legitimate task                                                                   |
 | `qwenf`      | Qwen3.8-27B TURBO Fable Cold-Fusion Heretic, MTP Q5_K_M    | 262,144 | Candidate, benched 2026-09-19: ties `qwenu` on the unpublished set, not adopted                                              |
 | `qwent`      | Qwen3.8-27B TWIN-TURBO Fable Cold-Fusion 709-L, MTP Q5_K_M | 262,144 | Candidate, benched 2026-09-19: best of the three on the unpublished set (225/235), long-context speed not yet measured       |
+| `orca`       | OrcaSAQ2 27B Cyber Uncensored by orcarouter, IQ4_XS/Q5_K/Q6_K mix | 262,144 | Since 2026-09-27. Same role as `qwenu`, used only when the aligned model refuses a legitimate task; also served on the 16 GB box, as orcarouter's plain Qwen3.8-27B Uncensored in IQ3_XXS; quality not benched |
 | `embed`      | nomic-embed-text-v1.5, Q8_0                                | 131,072 | 768-dimension embeddings                                                                                                     |
 | `nex`        | Nex-N2.5-mini, i1-Q4_K_M                                   | 262,144 | Candidate since 2026-09-10. Vision, no speculation                                                                           |
 | `spark`      | Spark-X2.5-4B, Q8_0                                        | 262,144 | Candidate since 2026-09-10. Agentic, text only                                                                               |
@@ -69,9 +70,10 @@ it.
 day. They run on their own engine, `b10883`, which serves nothing else, and each
 carries a known defect written at the top of its page under [models/](models/).
 
-`hemmingway`, `veriloop`, `qwen36apex`, `katapex` and `occamy` run on engine
-`b11156`. `xing` needs the engine built for llama.cpp pull request #29012,
-since no released build reads its architecture.
+`hemmingway`, `veriloop`, `qwen36apex`, `katapex`, `occamy` and, on the 32 GB
+box, `orca` run on engine `b11156`. `xing` needs the engine built for
+llama.cpp pull request #29012, since no released build reads its
+architecture.
 
 One profile runs an engine compiled on this box rather than an official
 llama.cpp release, documented in
@@ -110,9 +112,12 @@ Tiel-Coder in UD-IQ3_XXS, and `qwen36`, Qwen3.6-35B-A3B in UD-IQ3_XXS, both at
 the full 262,144 window. Since 2026-09-26 it also serves the lighter builds of
 the three APEX profiles, `qwen36apex`, `katapex` and `occamy`, at the same
 window. `tiel` and `qwen36`'s pages: [models/tiel-coder-35b-a3b/](models/tiel-coder-35b-a3b/)
-and [models/qwen3.6-35b-a3b/](models/qwen3.6-35b-a3b/). It also carries
-bench-only profiles, `bonsai2` among them (`bench/configs/97/`), covered in the
-Bench section below.
+and [models/qwen3.6-35b-a3b/](models/qwen3.6-35b-a3b/). Since 2026-09-27 it
+also serves `orca`, orcarouter's plain Qwen3.8-27B Uncensored in IQ3_XXS on
+`beellama` `v0.4.6-toolorder`: the OrcaSAQ2 build served under the same action
+on the 32 GB box does not fit here. It also carries bench-only profiles,
+`bonsai2` among them (`bench/configs/97/`), covered in the Bench section
+below.
 
 ## Quick start
 
@@ -149,8 +154,9 @@ purpose: it serves embeddings, not a chat endpoint.
 Six launchers open with a hand-written menu regardless of the bench. `tiel`,
 `qwen`, `qwen36apex`, `katapex` and `occamy` do it because their models are
 served on both boxes: `qwen` covers the aligned and the uncensored Qwen3.8
-here, and Qwen3.6 on the 16 GB box. `bonsai` does it for another reason, both
-its generations sitting on this box on two different engines.
+here, Qwen3.6 on the 16 GB box, and, since 2026-09-27, orcarouter's Qwen3.8-27B
+builds on both boxes. `bonsai` does it for another reason, both its
+generations sitting on this box on two different engines.
 
 Every model the bench compared also carries an R1/R2/R3 menu entry per box,
 after the hand-written entries, deployed by

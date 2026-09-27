@@ -19,7 +19,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/llm-launch.sh"
 # Four billion parameters load faster than the 240 s the others are given.
 LLM_LOAD_TIMEOUT=180
 
-llm_variant "Spark-X2.5-4B sur la machine 32 Go, fenêtre 262k" "${LLM_HOST:-your-32gb-box}" spark spark-x2.5 '' spark-x2.5-4b 262144
+llm_variant "Spark-X2.5-4B sur la machine 32 Go" "${LLM_HOST:-your-32gb-box}" spark spark-x2.5 '' spark-x2.5-4b 262144
 
 # Profils du banc (bench/benchrun/profiles.py), un par config bench/configs.
 llm_variant "R1, réglage de référence, comme la fiche, machine 32 Go" \

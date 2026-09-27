@@ -9,7 +9,7 @@
 
 source "$(dirname "${BASH_SOURCE[0]}")/llm-launch.sh"
 
-llm_variant "VeriLoop-E2 sur la machine 32 Go, fenêtre 262k" "${LLM_HOST:-your-32gb-box}" veriloop veriloop-e2 '' veriloop-e2 262144
+llm_variant "VeriLoop-E2 sur la machine 32 Go" "${LLM_HOST:-your-32gb-box}" veriloop veriloop-e2 '' veriloop-e2 262144
 
 # Profils du banc (bench/benchrun/profiles.py), un par config bench/configs.
 llm_variant "R1, réglage de référence de l'éditeur, effort de réflexion élevé, sans modèle brouillon, machine 32 Go" \

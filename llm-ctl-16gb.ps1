@@ -1,5 +1,5 @@
 param(
-  [ValidateSet('bench','profile','katapex','occamy','qwen36','qwen36apex','tiel','stop','status','logs')]
+  [ValidateSet('bench','profile','katapex','occamy','orca','qwen36','qwen36apex','tiel','stop','status','logs')]
   [string]$Action,
   [string]$Name,   # optional: for 'stop' and 'logs', targets a named instance
   [int]$Tail = 40, # for 'logs': history lines to show before following live
@@ -82,6 +82,9 @@ $builds = @{
   qwen36apex = @{ Exe = "$RootDir\llama-cpp-b11156-toolorder\llama-server.exe"; WorkDir = "$RootDir\llama-cpp-b11156-toolorder" }
   katapex    = @{ Exe = "$RootDir\llama-cpp-b11156-toolorder\llama-server.exe"; WorkDir = "$RootDir\llama-cpp-b11156-toolorder" }
   occamy     = @{ Exe = "$RootDir\llama-cpp-b11156-toolorder\llama-server.exe"; WorkDir = "$RootDir\llama-cpp-b11156-toolorder" }
+  # Added 2026-09-27: a dense Qwen3.8-27B again, on the KVarN recipe measured on that
+  # very architecture, see $cardRecipe.
+  orca       = @{ Exe = "$RootDir\beellama-v0.4.6-toolorder\llama-server.exe"; WorkDir = "$RootDir\beellama-v0.4.6-toolorder" }
 }
 
 function Quote($s) {
@@ -530,6 +533,21 @@ switch ($Action) {
     break
   }
 
+  'orca' {
+    # Qwen3.8-27B Uncensored by orcarouter (orcarouter/Qwen3.8-27B-Uncensored-GGUF,
+    # IQ3_XXS, 11,637,692,000 bytes, sha256 matching the X-Linked-Etag Hugging Face
+    # serves), added 2026-09-27. The OrcaSAQ2 build of the 32 GB box does not fit here.
+    # Measured 2026-09-27: 72.9 tok/s decode (498 of 601 drafted tokens accepted),
+    # 1,297 tok/s prefill on 22,519 tokens, 15,814 of 16,376 MiB at load, no spill.
+    Start-LLM 'orca' (@(
+      '-m',"$ModelsDir\qwen3.8-27b-uncensored-orca\Qwen3.8-27B-Uncensored-IQ3_XXS.gguf",
+      '--chat-template-file',"$ModelsDir\qwen3.8-27b-uncensored-orca\chat-template-system-anywhere.jinja"
+    ) + $cardRecipe + @(
+      '--temp','1.0','--top-p','0.95','--top-k','20','--min-p','0'
+    )) -envVars $cardEnv
+    break
+  }
+
   'stop'   { if ($Name) { Stop-One $Name } else { Stop-All }; break }
   'status' { Get-Status; break }
   'logs'   { Show-Logs $Name $Tail; break }
@@ -550,5 +568,5 @@ switch ($Action) {
     break
   }
 
-  default  { Write-Output "USAGE: llm-ctl.ps1 -Action tiel|qwen36|qwen36apex|katapex|occamy|bench|profile|stop|status|logs" }
+  default  { Write-Output "USAGE: llm-ctl.ps1 -Action tiel|qwen36|qwen36apex|katapex|occamy|orca|bench|profile|stop|status|logs" }
 }

@@ -15,6 +15,12 @@
 #   4. Qwen3.8-27B TWIN-TURBO 709-L on the 32 GB box, on trial since 2026-09-19:
 #      225/235 on the unpublished set against 221 for the uncensored build, but
 #      31.6 GB of VRAM at load, so long-context speed is unproven. 262,144 window.
+#   5. OrcaSAQ2 27B Cyber Uncensored on the 32 GB box, since 2026-09-27: the
+#      orcarouter abliteration of Qwen3.8-27B, requantised by their OrcaSAQ2
+#      method, DFlash2 speculation. 196.8 tok/s decode, 3,385 tok/s prefill on
+#      22,519 tokens, 30.9 of 32.6 GB at load, 262,144 window.
+#   6. Qwen3.8-27B Uncensored by orcarouter, IQ3_XXS, on the 16 GB box, since
+#      2026-09-27, 262,144 window.
 #
 # Every Qwen3.8-27B build carries "qwen3.8" in its path, so each variant matches
 # on its own model directory. Matching "qwen3.8" minus "uncensored" took the
@@ -25,15 +31,17 @@
 # APEX build served by qwen36apex carries "qwen3.6-35b" as well.
 #
 # LLM_HOST names the 32 GB box and LLM_HOST_16GB the second one. LLM_CHOICE=1
-# to 4 skips the menu, which a run without a terminal requires. Everything else
+# to 6 skips the menu, which a run without a terminal requires. Everything else
 # lives in llm-launch.sh.
 
 source "$(dirname "${BASH_SOURCE[0]}")/llm-launch.sh"
 
-llm_variant "Qwen3.8-27B sur la machine 32 Go, fenêtre 262k" "${LLM_HOST:-your-32gb-box}" qwen qwen3.8-27b-nvfp4 '' qwen3.8-27b 262144
-llm_variant "Qwen3.8-27B Uncensored sur la machine 32 Go, si l'aligné refuse, fenêtre 262k" "${LLM_HOST:-your-32gb-box}" qwenu qwen3.8-27b-uncensored '' qwen3.8-27b-uncensored 262144
-llm_variant "Qwen3.6-35B-A3B sur la machine 16 Go, fenêtre 262k" "${LLM_HOST_16GB:-your-16gb-box}" qwen36 qwen3.6-35b-a3b-mtp '' qwen3.6-35b-a3b 262144
-llm_variant "Qwen3.8-27B TWIN-TURBO sur la machine 32 Go, à l'essai, fenêtre 262k" "${LLM_HOST:-your-32gb-box}" qwent qwen3.8-27b-twin-turbo-709l '' qwen3.8-27b-twin-turbo 262144
+llm_variant "Qwen3.8-27B sur la machine 32 Go" "${LLM_HOST:-your-32gb-box}" qwen qwen3.8-27b-nvfp4 '' qwen3.8-27b 262144
+llm_variant "Qwen3.8-27B Uncensored sur la machine 32 Go, si l'aligné refuse" "${LLM_HOST:-your-32gb-box}" qwenu qwen3.8-27b-uncensored '' qwen3.8-27b-uncensored 262144
+llm_variant "Qwen3.6-35B-A3B sur la machine 16 Go" "${LLM_HOST_16GB:-your-16gb-box}" qwen36 qwen3.6-35b-a3b-mtp '' qwen3.6-35b-a3b 262144
+llm_variant "Qwen3.8-27B TWIN-TURBO sur la machine 32 Go, à l'essai" "${LLM_HOST:-your-32gb-box}" qwent qwen3.8-27b-twin-turbo-709l '' qwen3.8-27b-twin-turbo 262144
+llm_variant "OrcaSAQ2 27B Cyber Uncensored sur la machine 32 Go" "${LLM_HOST:-your-32gb-box}" orca orcasaq2-cyber-27b '' orca 262144
+llm_variant "Qwen3.8-27B Uncensored orcarouter sur la machine 16 Go" "${LLM_HOST_16GB:-your-16gb-box}" orca qwen3.8-27b-uncensored-orca '' orca 262144
 
 # Profils du banc (bench/benchrun/profiles.py), un par config bench/configs.
 # qwenu, qwent et qwenf rejoignent ici qwen, la famille couvre déjà les quatre

@@ -12,8 +12,8 @@
 
 source "$(dirname "${BASH_SOURCE[0]}")/llm-launch.sh"
 
-llm_variant "Occamy sur la machine 32 Go, fenêtre 262k" "${LLM_HOST:-your-32gb-box}" occamy occamy-1.0.apex-i-miniplus '' occamy-1.0 262144
-llm_variant "Occamy, version allégée, sur la machine 16 Go, fenêtre 262k" "${LLM_HOST_16GB:-your-16gb-box}" occamy occamy-1.0.apex-i-nanoplus '' occamy-1.0 262144
+llm_variant "Occamy sur la machine 32 Go" "${LLM_HOST:-your-32gb-box}" occamy occamy-1.0.apex-i-miniplus '' occamy-1.0 262144
+llm_variant "Occamy, version allégée, sur la machine 16 Go" "${LLM_HOST_16GB:-your-16gb-box}" occamy occamy-1.0.apex-i-nanoplus '' occamy-1.0 262144
 
 # Profils du banc (bench/benchrun/profiles.py), un par config bench/configs.
 llm_variant "R1, réglage de base, encodeur d'image chargé, machine 32 Go" \

@@ -17,7 +17,7 @@ export LLM_SSH_KEY=~/.ssh/id_ed25519     # optional, see below
 ./bonsai      # 27B in 7 GiB, the best quality per byte, asks which generation
 ./spark       # 4B, last on every measure
 ./muse        # agentic, vision, faithful OCR
-./qwen        # Qwen3.8 aligned, uncensored, TWIN-TURBO or the qwenf candidate on the 32 GB box, Qwen3.6 on the 16 GB one
+./qwen        # Qwen3.8 aligned, uncensored, TWIN-TURBO, the qwenf candidate or orcarouter's OrcaSAQ2 on the 32 GB box, Qwen3.6 or orcarouter's Qwen3.8-27B Uncensored on the 16 GB one
 ./hemmingway  # Altworld Hemmingway-1, candidate since 2026-09-26
 ./veriloop    # VeriLoop-E2, no speculation, candidate since 2026-09-26
 ./xing        # Xing 4.0 29B-A4B, candidate since 2026-09-26, its own engine
@@ -87,9 +87,9 @@ Every model the bench compared now has an R1/R2/R3 entry in a launcher's menu,
 Bonsai 1 the one exception: its R2 was retired on 2026-09-25, no engine on the
 station able to read its draft model. These entries sit after the
 hand-written entries already there for `tiel`, `kat`, `muse`, `nex`, `ornith`,
-`spark`, `bonsai` (bonsai and bonsai2) and `qwen` (qwen, qwenu, qwent and the
-qwenf candidate, all four Qwen3.8-27B builds sharing one file, per the
-one-launcher-per-family rule above), and, since 2026-09-26, `hemmingway`,
+`spark`, `bonsai` (bonsai and bonsai2) and `qwen` (qwen, qwenu, qwent, qwenf
+and, since 2026-09-27, orca, all five Qwen3.8-27B builds sharing one file, per
+the one-launcher-per-family rule above), and, since 2026-09-26, `hemmingway`,
 `veriloop` and `xing` on the 32 GB box and `qwen36apex`, `katapex` and
 `occamy` on both boxes. `qwen36` alone keeps a launcher with bench entries
 only, on the 16 GB box: its permanent profile sits in `qwen`'s menu. `tiel`,
@@ -119,6 +119,14 @@ what changed, which box. `ACTION` is `profile -Name <model>-r<N>`, a two-word
 string `llm_launch` passes whole into the remote command, exactly like a
 one-word action. `MODEL_ID` and `MATCH` are both the profile's own alias
 (`<model>-r<N>`), and `WINDOW` its config's `--ctx-size`.
+
+Since 2026-09-27, `llm_variant` appends the window itself to the label it is
+given: it reads the seventh argument, WINDOW, and adds `, fenêtre Nk` (or `NM`
+when the window is a multiple of 1,048,576). Hand-written labels no longer
+spell the window out on their own, and the bench entries (R1/R2/R3) now show
+it too, though they did not before. The line printed at launch still names the
+figure that matters most, the tokens actually announced to the client, as "N
+jetons annoncés au client".
 
 MATCH here targets the alias, not `model_path`: several R-variants of the same
 model can share the exact same weights file, differing only in sampling or
@@ -171,7 +179,7 @@ was taken for the aligned one in turn. Each `qwen` variant now matches on its
 own model directory, and needs no EXCLUDE field:
 
 ```bash
-llm_variant "Qwen3.8-27B sur la machine 32 Go, fenêtre 262k" "${LLM_HOST:-your-32gb-box}" qwen qwen3.8-27b-nvfp4 '' qwen3.8-27b 262144
+llm_variant "Qwen3.8-27B sur la machine 32 Go" "${LLM_HOST:-your-32gb-box}" qwen qwen3.8-27b-nvfp4 '' qwen3.8-27b 262144
 ```
 
 Checked on 2026-09-19 against the live `/props` of the 32 GB box and the paths

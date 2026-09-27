@@ -1,5 +1,5 @@
 param(
-  [ValidateSet('bench','profile','bonsai','bonsai2','embed','hemmingway','kat','katapex','muse','nex','occamy','ornith','qwen','qwen36apex','qwenf','qwent','qwenu','spark','tiel','veriloop','xing','stop','status','logs')]
+  [ValidateSet('bench','profile','bonsai','bonsai2','embed','hemmingway','kat','katapex','muse','nex','occamy','orca','ornith','qwen','qwen36apex','qwenf','qwent','qwenu','spark','tiel','veriloop','xing','stop','status','logs')]
   [string]$Action,
   [string]$Name,  # optional: for 'stop' and 'logs', targets a named instance
   [int]$Tail = 40, # for 'logs': history lines to show before following live
@@ -208,6 +208,9 @@ $builds = @{
   katapex    = @{ Exe = $exeB11156; WorkDir = $workDirB11156; CudaBin = $cudaBinUp }
   occamy     = @{ Exe = $exeB11156; WorkDir = $workDirB11156; CudaBin = $cudaBinUp }
   xing       = @{ Exe = $exeXing;   WorkDir = $workDirXing;   CudaBin = $cudaBinUp }
+  # Added 2026-09-27. b11156 and not the upstream build of 'qwenu': DFlash2, the
+  # speculation its card recommends, reached llama.cpp on 2026-08-27 (PR #27342).
+  orca       = @{ Exe = $exeB11156; WorkDir = $workDirB11156; CudaBin = $cudaBinUp }
 }
 
 function Quote($s) {
@@ -1421,6 +1424,31 @@ switch ($Action) {
       '--chat-template-file',"$ModelsDir\occamy\chat-template-system-anywhere.jinja",
       '--chat-template-kwargs','{"enable_thinking":true,"preserve_thinking":true}'
     ) + $apexRecipe)
+  }
+
+  'orca' {
+    # OrcaSAQ2 27B Cyber Uncensored (orcarouter, Apache 2.0), added 2026-09-27: Qwen3.8-27B
+    # abliterated by orcarouter (orcarouter/Qwen3.8-27B-Uncensored), then requantised by their
+    # OrcaSAQ2 mixed-precision method. The method is undisclosed but the file is plain ggml
+    # types, read in the GGUF header on 2026-09-27: IQ4_XS for 439 tensors, Q5_K for the
+    # attention inputs, Q6_K for embeddings and output, 15,676,553,472 bytes. Any engine
+    # loads it. Text only, no vision projector published. The MTP head is inside the file
+    # (qwen35.nextn_predict_layers 1, blk.64.nextn), like every Qwen3.8-27B build here.
+    # Measured 2026-09-27: 196.8 tok/s decode (577 of 666 drafted tokens accepted),
+    # 3,385 tok/s prefill on 22,519 tokens, 30,947 of 32,607 MiB at load, no spill.
+    Start-LLM 'orca' @(
+      '-m',"$ModelsDir\orcasaq2-cyber-27b\OrcaSAQ-2-27B-Uncensored.gguf",
+      '--spec-type','draft-dflash',
+      '--spec-draft-model',"$ModelsDir\orcasaq2-cyber-27b\Qwen3.8-27B-DFlash2-Q8_0.gguf",
+      '--spec-draft-ngl','99',
+      '--n-gpu-layers','99','--load-mode','mlock','--flash-attn','on','--jinja',
+      '--chat-template-file',"$ModelsDir\orcasaq2-cyber-27b\chat-template-system-anywhere.jinja",
+      '--host','0.0.0.0','--port','8080','--parallel','1','--ctx-size','262144',
+      '-b','4096','-ub','2048',
+      '--cache-type-k','q8_0','--cache-type-v','q8_0',
+      '-cram','24576',
+      '--temp','1.0','--top-p','0.95','--top-k','20','--min-p','0'
+    )
   }
 
   'embed' {

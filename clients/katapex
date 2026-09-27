@@ -12,8 +12,8 @@
 
 source "$(dirname "${BASH_SOURCE[0]}")/llm-launch.sh"
 
-llm_variant "KAT APEX sur la machine 32 Go, fenêtre 262k" "${LLM_HOST:-your-32gb-box}" katapex kat-coder-v2.5-dev.apex-i-miniplus '' kat-coder-v25-apex 262144
-llm_variant "KAT APEX, version allégée, sur la machine 16 Go, fenêtre 262k" "${LLM_HOST_16GB:-your-16gb-box}" katapex kat-coder-v2.5-dev-apex-dynamic '' kat-coder-v25-apex 262144
+llm_variant "KAT APEX sur la machine 32 Go" "${LLM_HOST:-your-32gb-box}" katapex kat-coder-v2.5-dev.apex-i-miniplus '' kat-coder-v25-apex 262144
+llm_variant "KAT APEX, version allégée, sur la machine 16 Go" "${LLM_HOST_16GB:-your-16gb-box}" katapex kat-coder-v2.5-dev-apex-dynamic '' kat-coder-v25-apex 262144
 
 # Profils du banc (bench/benchrun/profiles.py), un par config bench/configs.
 llm_variant "R1, sampling de base, réflexion active, machine 32 Go" \
