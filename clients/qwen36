@@ -3,14 +3,15 @@
 #
 # Bench-only entries: no hand-written production profile exists for this
 # model's launcher, only the three profiles the bench compared
-# (bench/configs/97/qwen36). The menu below asks which one to load.
+# (bench-llm:bench/configs/97/qwen36, private repository bench-llm). The menu
+# below asks which one to load.
 #
 # Scope: the exported variables live in this process only. A plain `claude` in
 # another shell keeps talking to Anthropic.
 
 source "$(dirname "${BASH_SOURCE[0]}")/llm-launch.sh"
 
-# Profils du banc (bench/benchrun/profiles.py), un par config bench/configs.
+# Profils du banc (bench-llm:bench/benchrun/profiles.py), un par config bench-llm:bench/configs.
 llm_variant "R1, réglage complet de la fiche, pénalité de répétition restaurée, machine 16 Go" \
   "${LLM_HOST_16GB:-your-16gb-box}" "profile -Name qwen36-r1" qwen36-r1 '' qwen36-r1 262144 81920
 llm_variant "R2, répartition mémoire ciblée, lancé sans le réglage d'origine, machine 16 Go" \

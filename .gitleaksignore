@@ -1,7 +1,4 @@
 # Reviewed false positives, one fingerprint per line (commit:file:rule:line).
-# lcb_run.py:100 passes the pinned client's own api_key attribute through to a
-# new client; no literal value is written.
-7aa9c9ffd903b32715f0fa98006ef96cafb87ab6:bench/harness/lcb_run.py:generic-api-key:100
 # phase0-2026-09.md:546 quotes a model file name returned by the Hugging Face
 # API, not a token.
 1ab4c3d80cfa2120eb01f1e52f761e05323f3023:docs/phase0-2026-09.md:generic-api-key:546

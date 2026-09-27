@@ -1,5 +1,7 @@
 # Campagne du banc LLM, septembre 2026
 
+Depuis le 27/09/2026, les chemins bench/ de ce document vivent dans le dépôt privé bench-llm.
+
 Relevés datés, le plus récent en tête. Le classement est la moyenne simple des taux de réussite des épreuves terminées, vitesse exclue. Une configuration ne se compare aux autres qu'une fois toutes ses épreuves finies.
 
 ## 25/09/2026, quatre niveaux et un correctif de placement

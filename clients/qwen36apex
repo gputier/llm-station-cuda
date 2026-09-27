@@ -15,7 +15,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/llm-launch.sh"
 llm_variant "Qwen3.6 APEX sur la machine 32 Go" "${LLM_HOST:-your-32gb-box}" qwen36apex qwen3.6-35b-a3b.apex-i-miniplus '' qwen3.6-35b-a3b-apex 262144
 llm_variant "Qwen3.6 APEX, version allégée, sur la machine 16 Go" "${LLM_HOST_16GB:-your-16gb-box}" qwen36apex qwen3.6-35b-a3b.apex-i-nanoplus '' qwen3.6-35b-a3b-apex 262144
 
-# Profils du banc (bench/benchrun/profiles.py), un par config bench/configs.
+# Profils du banc (bench-llm:bench/benchrun/profiles.py, dépôt privé bench-llm), un par config bench-llm:bench/configs.
 llm_variant "R1, réglage de base, sans modèle brouillon, machine 32 Go" \
   "${LLM_HOST:-your-32gb-box}" "profile -Name qwen36apex-r1" qwen36apex-r1 '' qwen36apex-r1 262144 81920
 llm_variant "R2, modèle brouillon embarqué, sourcé, machine 32 Go" \

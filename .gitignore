@@ -40,14 +40,7 @@ test-images/
 # So the scripts, the method and the numbers are published, and the questions
 # never are. Anyone can rebuild a set from the schema in docs; nobody can train
 # on ours.
-bench/epreuves.jsonl
-bench/inedit/
 *.jsonl
-
-# Exception: a real captured LiveBench judgment file used as a test fixture
-# (task 10). It carries question_id, task and score only, no problem text or
-# model answer, so publishing it does not defeat the policy above.
-!bench/tests/fixtures/livebench_judgment_sample.jsonl
 
 # Local secrets.
 .env
@@ -55,10 +48,6 @@ bench/inedit/
 api-key.txt
 *.key
 *.pem
-
-# Bench: station addresses and run journals stay local.
-bench/.env
-bench/runs/
 
 # Python caches and build metadata.
 __pycache__/

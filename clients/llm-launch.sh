@@ -53,9 +53,10 @@ err() { printf '%s\n' "$*" >&2; }
 #   WINDOW      the window the server really serves, n_ctx in /props
 #   OUTPUT_TOKENS  optional: this variant's own output budget, replacing
 #                  LLM_OUTPUT_TOKENS. A bench profile carries the max_tokens
-#                  its own config asks for (bench/benchrun/profiles.py), which
-#                  a single global constant cannot express for every profile
-#                  at once.
+#                  its own config asks for
+#                  (bench-llm:bench/benchrun/profiles.py, private repository
+#                  bench-llm), which a single global constant cannot express
+#                  for every profile at once.
 #
 # A per-variant compaction trigger (CLAUDE_CODE_AUTO_COMPACT_WINDOW) lived here
 # until 2026-09-26, for Qwen3.6-35B-A3B at 180,000. It went when an 81,920

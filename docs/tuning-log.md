@@ -1,5 +1,8 @@
 # Tuning log
 
+Since 2026-09-27, the bench/ paths in this document live in the private
+repository bench-llm.
+
 Every campaign run on this box, including the ones that found nothing. The
 negative results are the more useful half: they tell you which hypotheses are
 already spent.

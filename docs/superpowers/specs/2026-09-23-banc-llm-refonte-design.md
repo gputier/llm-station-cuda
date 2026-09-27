@@ -1,5 +1,7 @@
 # Refonte du banc d'essai LLM, spec de conception
 
+Depuis le 27/09/2026, les chemins bench/ de ce document vivent dans le dépôt privé bench-llm.
+
 Date : 23/09/2026. Statut : spec à relire, rien n'est modifié sur le dépôt ni sur les machines.
 Périmètre d'écriture futur : dépôt `Tools/LLM` et wiki du projet.
 

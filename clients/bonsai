@@ -41,7 +41,7 @@ llm_variant "Bonsai 1, Ternary-Bonsai-27B sur la machine 32 Go" \
 llm_variant "Bonsai 2, ingestion soixante fois plus rapide" \
   "${LLM_HOST:-your-32gb-box}" bonsai2 ternary-bonsai-2-27b '' ternary-bonsai-2-27b 262144
 
-# Profils du banc (bench/benchrun/profiles.py), un par config bench/configs.
+# Profils du banc (bench-llm:bench/benchrun/profiles.py, dépôt privé bench-llm), un par config bench-llm:bench/configs.
 # bonsai2 tourne sur les deux machines, pas bonsai : entrées pour les deux.
 llm_variant "R1, Bonsai 1, seule valeur publiée par la fiche, machine 32 Go" \
   "${LLM_HOST:-your-32gb-box}" "profile -Name bonsai-r1" bonsai-r1 '' bonsai-r1 262144 65536

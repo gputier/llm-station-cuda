@@ -1,5 +1,7 @@
 # Refonte du banc LLM, plan d'exécution
 
+Depuis le 27/09/2026, les chemins bench/ de ce document vivent dans le dépôt privé bench-llm.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Repasser chaque LLM de la 97 et de la 99 au banc, avec trois configurations par modèle, sur un banc reconstruit (épreuves publiques + épreuve maison agentique), puis publier un tableau comparatif, une convention d'entrée et une doc à jour.

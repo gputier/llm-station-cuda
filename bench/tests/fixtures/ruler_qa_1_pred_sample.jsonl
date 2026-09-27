@@ -1,4 +1,0 @@
-{"index": 0, "pred": "France", "input": "<omitted: not redistributed>", "outputs": ["France", "France", "France", "France"], "others": {}, "truncation": -1, "length": 31773}
-{"index": 1, "pred": "10th and 11th centuries", "input": "<omitted: not redistributed>", "outputs": ["10th and 11th centuries", "in the 10th and 11th centuries", "10th and 11th centuries", "10th and 11th centuries"], "others": {}, "truncation": -1, "length": 31642}
-{"index": 2, "pred": "Denmark, Iceland, and Norway", "input": "<omitted: not redistributed>", "outputs": ["Denmark, Iceland and Norway", "Denmark, Iceland and Norway", "Denmark, Iceland and Norway", "Denmark, Iceland and Norway"], "others": {}, "truncation": -1, "length": 31253}
-{"index": 3, "pred": "Rollo", "input": "<omitted: not redistributed>", "outputs": ["Rollo", "Rollo", "Rollo", "Rollo"], "others": {}, "truncation": -1, "length": 32037}

@@ -38,7 +38,7 @@ weights were deleted the same evening, and on 2026-09-21 its profile left the
 control script rather than sit there offering a load that cannot happen.
 `xing` was rejected the same day for the same reason, but it is back: its
 weights were reposed and its engine rebuilt on 2026-09-24 for the bench, which
-added three bench profiles under `bench/configs/99/xing`, and since 2026-09-26
+added three bench profiles under `bench-llm:bench/configs/99/xing`, and since 2026-09-26
 it has a permanent profile in `llm-ctl.ps1` as well. What both measured is kept in
 [docs/tuning-log.md](docs/tuning-log.md), which is the point of having measured
 it.
@@ -116,7 +116,7 @@ and [models/qwen3.6-35b-a3b/](models/qwen3.6-35b-a3b/). Since 2026-09-27 it
 also serves `orca`, orcarouter's plain Qwen3.8-27B Uncensored in IQ3_XXS on
 `beellama` `v0.4.6-toolorder`: the OrcaSAQ2 build served under the same action
 on the 32 GB box does not fit here. It also carries bench-only profiles,
-`bonsai2` among them (`bench/configs/97/`), covered in the Bench section
+`bonsai2` among them (`bench-llm:bench/configs/97/`), covered in the Bench section
 below.
 
 ## Quick start
@@ -160,7 +160,7 @@ generations sitting on this box on two different engines.
 
 Every model the bench compared also carries an R1/R2/R3 menu entry per box,
 after the hand-written entries, deployed by
-[bench/scripts/deploy-profiles.sh](bench/scripts/deploy-profiles.sh) and
+`bench-llm:bench/scripts/deploy-profiles.sh` and
 started with `llm-ctl -Action profile -Name <model>-r<N>`, the exact
 configuration a bench run measured, tracked and stopped like any other
 profile (Bonsai 1 is the one exception, its R2 retired on 2026-09-25 for
@@ -175,8 +175,10 @@ portable.
 
 ## Bench
 
-Every model above went through the same bench, under `bench/`. Two ways to run
-it:
+Every model above went through the same bench. Since 2026-09-27 the bench's
+code lives in a private repository, `bench-llm` (`bench-llm:bench/`), not in
+this one: a published test set ends up in training data and stops measuring
+anything. Two ways to run it:
 
 - `python -m benchrun bench --preset mini|medium|large --machine <machine>
 --out <dir>` for day-to-day follow-up. `medium` and `large` run a fixed,
@@ -196,12 +198,14 @@ other machine or to a lighter quantization. Those three spilled out of the
 now runs on the 32 GB box, and the 16 GB box keeps a lighter quant of the same
 weights.
 
-`bench/scripts/deploy-profiles.sh --machine 99|97 --env <file>` turns each
-bench config into a launch profile and a launcher menu entry, and refuses to
-run against a station a campaign is still using. Method notes and every
-harness-level decision are in [bench/harness/README.md](bench/harness/README.md);
-the dated log of what ran and what it found is
-[docs/campagne-2026-09.md](docs/campagne-2026-09.md).
+`bench-llm:bench/scripts/deploy-profiles.sh --machine 99|97 --env <file>`, run
+from the `bench-llm` checkout, turns each bench config into a launch profile
+and a launcher menu entry, and refuses to run against a station a campaign is
+still using; the environment file must carry a `LLM_STATION_CUDA` key pointing
+at this repository's checkout, since the script reads the `llm-ctl` scripts
+from here. Method notes and every harness-level decision are in
+`bench-llm:bench/harness/README.md`; the dated log of what ran and what it
+found is [docs/campagne-2026-09.md](docs/campagne-2026-09.md).
 
 ## Documentation
 

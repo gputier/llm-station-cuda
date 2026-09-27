@@ -39,7 +39,7 @@ separately because the same flags land differently on half the memory.
 Copying a profile from one box to the other is how the 16 GB box once served
 half the window its weights offer, and how it locked 10 GB of host RAM the
 32 GB box could spare. It also runs bench-only profiles for `bonsai2`,
-`occamy`, `katapex` and `qwen36apex` (`../bench/configs/97/`).
+`occamy`, `katapex` and `qwen36apex` (`bench-llm:bench/configs/97/`).
 
 The per-model notes live next to the weights they describe, under
 [../models/](../models/), and carry provenance, checksums and the traps specific

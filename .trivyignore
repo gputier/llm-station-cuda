@@ -6,25 +6,3 @@
 # earned the exception. Read the reason before reusing one of these ids for
 # a DIFFERENT Dockerfile: a new suite harness needs its OWN non-root user,
 # never a free ride on this entry.
-#
-# AVD-DS-0002 (HIGH, "Specify at least 1 USER command in Dockerfile with
-# non-root user"): bench/harness/benchrun.Dockerfile only. Its containers
-# (runner-99/runner-97, gateway-99/gateway-97, bench/harness/compose.yaml)
-# talk to the HOST docker daemon over /var/run/docker.sock, bind-mounted in.
-# Measured live on this station (2026-09-26): the socket is owned root:root,
-# mode 0660 (Docker Desktop's own VM); a Linux station's socket is root:docker
-# instead, with a GID that is not the same number on every host. A non-root
-# user baked into the image at build time cannot know either GID in advance,
-# and there is no clean way to join it at build time: the alternatives are
-# either bind-mounting the socket world-writable (worse than running the
-# container as root, since it widens the hole to every process on the box,
-# not just this one), or an entrypoint script that chmod/chgrp's the socket
-# or re-execs into the right group at container start, which is exactly the
-# kind of workaround this fix intentionally avoids (it would also mutate a
-# HOST resource shared with the real Docker daemon, from inside a container,
-# on every run). Every other Dockerfile under bench/harness/ got a real
-# non-root USER instead (agent, aider, bfcl, lcb, livebench, longbench,
-# ruler); this is the one exception, not a precedent.
-# Re-audit: 2027-03-01, or sooner if Docker ships a portable way to join an
-# arbitrary host GID from a Dockerfile without an entrypoint script.
-AVD-DS-0002

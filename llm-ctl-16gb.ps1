@@ -17,7 +17,8 @@ param(
   # cost 36% of tiel's decode on the 5090 box on 2026-09-10.
   [switch]$NoSpec,
   # Path to a bench launch spec (JSON: name, exe, workDir, cudaBin, args, env).
-  # Written by benchrun, never by hand. See bench/benchrun/config.py.
+  # Written by benchrun, never by hand. See bench-llm:bench/benchrun/config.py
+  # (dépôt privé bench-llm).
   [string]$Spec = '',
   # With -Action bench: print the command line and start nothing.
   [switch]$DryRun
@@ -55,7 +56,7 @@ $instDir    = "$RootDir\instances"
 $logDir     = "$RootDir\logs"
 $serverPort = 8080
 # Where python -m benchrun profiles writes one JSON file per (machine, model,
-# variant) bench config, named "<model>-r<N>.json" (bench/benchrun/profiles.py).
+# variant) bench config, named "<model>-r<N>.json" (bench-llm:bench/benchrun/profiles.py).
 # 'profile' below reads from here; 'bench' still reads whatever -Spec points
 # to, unchanged.
 $profilesDir = "$RootDir\profiles"
@@ -317,7 +318,7 @@ function Format-DryRunLine($exe, $name, $benchArgs) {
 
 # Shared by 'bench' and 'profile': both start a JSON launch spec (name, exe,
 # workDir, args, env) the same way Start-LLM starts any other profile.
-# 'bench' spec comes from benchrun (bench/benchrun/config.py), 'profile' spec
+# 'bench' spec comes from benchrun (bench-llm:bench/benchrun/config.py), 'profile' spec
 # from benchrun.profiles; this function does not care which.
 function Invoke-Spec($s) {
   $benchArgs = @($s.args)
@@ -343,7 +344,7 @@ function Invoke-Spec($s) {
 # whatever the model. Each profile adds its weights, its template if it needs
 # one, and its sampling. Everything here was measured on Qwen3.8-27B, the model
 # this box served from 2026-09-13 to 2026-09-14, at the full 262,144 window
-# (bench/vitesse.ps1, 6,018-token prompt, then 45k). Both A3B profiles run on it
+# (bench-llm:bench/vitesse.ps1, 6,018-token prompt, then 45k). Both A3B profiles run on it
 # unchanged, and their first reading held, figures below.
 #
 #   UD-IQ4_XS, cache in host RAM (--no-kv-offload) ... decode 14.5 tok/s short,
@@ -413,8 +414,8 @@ switch ($Action) {
   # the attention cache is 3.2x smaller per token (10 full-attention layers x 2
   # KV heads x 256 x 2, against 16 x 4 x 256 x 2, GGUF headers read 2026-09-14).
   #
-  # Measured that day on the card recipe: bench/vitesse.ps1, 6,018-token prompt,
-  # decode median of 3; then bench/banc.ps1, 500 MMLU and 60 GSM8K, temperature 0.
+  # Measured that day on the card recipe: bench-llm:bench/vitesse.ps1, 6,018-token prompt,
+  # decode median of 3; then bench-llm:bench/banc.ps1, 500 MMLU and 60 GSM8K, temperature 0.
   #
   #   profile        decode       prefill      VRAM         spill     MMLU    GSM8K
   #   27B, retired   72.1 tok/s   1,394 tok/s  15,851 MiB   650 MiB
@@ -499,8 +500,8 @@ switch ($Action) {
   # same weights that keeps each entirely on this card at 262144: at the full
   # quant all three spilled out of it (about 30 tok/s instead of 130). Their full
   # quant runs on the 5090 box. Weights, cache and batch are those of each
-  # model's bench reference profile (bench/configs/97/<model>/R1.yaml on the
-  # bench branch); sampling and thinking are the authors', as on the 5090 box,
+  # model's bench reference profile (bench-llm:bench/configs/97/<model>/R1.yaml,
+  # private repository bench-llm); sampling and thinking are the authors', as on the 5090 box,
   # where each block cites its source. The shared part is $apexRecipe.
   # ---------------------------------------------------------------------------
 

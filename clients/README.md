@@ -74,8 +74,9 @@ Which one to reach for, with the figures behind each line, is in
 
 ## The bench's own profiles, in the same menus
 
-`bench/benchrun/profiles.py` writes one launch-profile JSON per bench config
-(`bench/configs/<machine>/<model>/R{1,2,3}.yaml`), the sampling and
+`bench-llm:bench/benchrun/profiles.py` (private repository bench-llm) writes
+one launch-profile JSON per bench config
+(`bench-llm:bench/configs/<machine>/<model>/R{1,2,3}.yaml`), the sampling and
 chat-template settings the bench's own gateway would otherwise send per
 request turned into `llama-server` flags (there is no gateway day to day).
 `llm-ctl.ps1` and `llm-ctl-16gb.ps1` start one with `-Action profile -Name
@@ -140,7 +141,9 @@ sixty-three different profiles' own figures. It was the ninth until
 2026-09-26, when the per-variant compaction trigger that sat eighth went.
 
 These profile files are written and deployed by
-`bench/scripts/deploy-profiles.sh --machine 99|97 --env <file>`, which also
+`bench-llm:bench/scripts/deploy-profiles.sh --machine 99|97 --env <file>`, run
+from the private bench-llm repository (the environment file needs an
+`LLM_STATION_CUDA` key pointing at this checkout), which also
 sends the matching `llm-ctl` script to the station. It refuses to run against
 a station a bench campaign is using: a `runner-<machine>` container still up,
 or the station already serving an instance named `bench-*`, either one stops

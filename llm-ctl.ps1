@@ -20,7 +20,8 @@ param(
   # not academic, it cost 36% of tiel's decode on 2026-09-10.
   [switch]$NoSpec,
   # Path to a bench launch spec (JSON: name, exe, workDir, cudaBin, args, env).
-  # Written by benchrun, never by hand. See bench/benchrun/config.py.
+  # Written by benchrun, never by hand. See bench-llm:bench/benchrun/config.py
+  # (dépôt privé bench-llm).
   [string]$Spec = '',
   # With -Action bench: print the command line and start nothing.
   [switch]$DryRun
@@ -156,7 +157,7 @@ $instDir   = "$RootDir\instances"
 New-Item -ItemType Directory -Force -Path $instDir | Out-Null
 
 # Where python -m benchrun profiles writes one JSON file per (machine, model,
-# variant) bench config, named "<model>-r<N>.json" (bench/benchrun/profiles.py).
+# variant) bench config, named "<model>-r<N>.json" (bench-llm:bench/benchrun/profiles.py).
 # 'profile' below reads from here; 'bench' still reads whatever -Spec points
 # to, unchanged.
 $profilesDir = "$RootDir\profiles"
@@ -516,7 +517,7 @@ function Format-DryRunLine($exe, $name, $benchArgs) {
 
 # Shared by 'bench' and 'profile': both start a JSON launch spec (name, exe,
 # workDir, cudaBin, args, env) the same way Start-LLM starts any other
-# profile. 'bench' spec comes from benchrun (bench/benchrun/config.py),
+# profile. 'bench' spec comes from benchrun (bench-llm:bench/benchrun/config.py),
 # 'profile' spec from benchrun.profiles; this function does not care which.
 function Invoke-Spec($s) {
   $benchArgs = @($s.args)
@@ -1334,7 +1335,7 @@ switch ($Action) {
   # -------------------------------------------------------------------------
   # The six models added on 2026-09-26, first compared on the bench. Weights,
   # build, cache and batch are those of each model's bench reference profile
-  # (bench/configs/99/<model>/R1.yaml on the bench branch), the one proven to sit
+  # (bench-llm:bench/configs/99/<model>/R1.yaml, private repository bench-llm), the one proven to sit
   # entirely on this card at 262144. Sampling and thinking settings are the
   # authors', each with the page it was read on.
   # -------------------------------------------------------------------------

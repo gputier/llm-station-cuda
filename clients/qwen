@@ -43,7 +43,7 @@ llm_variant "Qwen3.8-27B TWIN-TURBO sur la machine 32 Go, à l'essai" "${LLM_HOS
 llm_variant "OrcaSAQ2 27B Cyber Uncensored sur la machine 32 Go" "${LLM_HOST:-your-32gb-box}" orca orcasaq2-cyber-27b '' orca 262144
 llm_variant "Qwen3.8-27B Uncensored orcarouter sur la machine 16 Go" "${LLM_HOST_16GB:-your-16gb-box}" orca qwen3.8-27b-uncensored-orca '' orca 262144
 
-# Profils du banc (bench/benchrun/profiles.py), un par config bench/configs.
+# Profils du banc (bench-llm:bench/benchrun/profiles.py, dépôt privé bench-llm), un par config bench-llm:bench/configs.
 # qwenu, qwent et qwenf rejoignent ici qwen, la famille couvre déjà les quatre
 # modèles Qwen3.8-27B de la machine 32 Go : un fichier par famille, pas un par
 # modèle (choix de conception du 2026-09-14, voir l'en-tête de llm-launch.sh).
